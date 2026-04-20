@@ -36,6 +36,7 @@ urlpatterns = [
     path('api/quality-checks/', include('apps.quality_checks.urls')),
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/teams/', include('apps.teams.urls')),
+    path('api/projects/', include('apps.projects.urls')),
     path('api/dashboard/', include('apps.core.urls')),
 
     # API Documentation

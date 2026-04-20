@@ -18,6 +18,9 @@ import {
   QualityCheck,
   Teams,
   Settings,
+  Projects,
+  ProjectDetail,
+  NewProject,
 } from '@/pages';
 
 // Protected Route wrapper
@@ -78,6 +81,20 @@ function App() {
           <Route path="new" element={<NewProposal />} />
           <Route path=":id" element={<ProposalEditor />} />
           <Route path=":id/qc" element={<QualityCheck />} />
+        </Route>
+
+        {/* Projects */}
+        <Route
+          path="/projects"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Projects />} />
+          <Route path="new" element={<NewProject />} />
+          <Route path=":id" element={<ProjectDetail />} />
         </Route>
 
         {/* Teams */}

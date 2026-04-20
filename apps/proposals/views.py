@@ -2,6 +2,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -213,3 +214,47 @@ class ProposalViewSet(viewsets.ModelViewSet):
             serializer.data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='team/(?P<member_id>[^/.]+)/upload_cv',
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_cv(self, request, pk=None, member_id=None):
+        proposal = self.get_object()
+        try:
+            member = proposal.proposalteammember_set.get(pk=member_id)
+        except ProposalTeamMember.DoesNotExist:
+            return Response(
+                {'detail': 'Team member not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        file_obj = request.FILES.get('cv_document')
+        if not file_obj:
+            return Response(
+                {'detail': 'Nenhum ficheiro fornecido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        member.cv_document = file_obj
+        member.cv_attached = True
+        member.save(update_fields=['cv_document', 'cv_attached'])
+        serializer = ProposalTeamMemberSerializer(member)
+        return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=['delete'],
+        url_path='team/(?P<member_id>[^/.]+)',
+    )
+    def remove_team_member(self, request, pk=None, member_id=None):
+        proposal = self.get_object()
+        try:
+            member = proposal.proposalteammember_set.get(pk=member_id)
+        except ProposalTeamMember.DoesNotExist:
+            return Response(
+                {'detail': 'Team member not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        member.delete()
+        return Response({'detail': 'Membro removido com sucesso.'}, status=status.HTTP_204_NO_CONTENT)

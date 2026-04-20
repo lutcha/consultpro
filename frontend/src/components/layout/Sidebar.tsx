@@ -37,6 +37,11 @@ const navigationItems = [
     icon: FileText,
   },
   {
+    name: 'Projetos',
+    href: '/projects',
+    icon: Briefcase,
+  },
+  {
     name: 'Equipas',
     href: '/teams',
     icon: Users,

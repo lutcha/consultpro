@@ -11,6 +11,7 @@ import {
   Clock,
   Calendar,
   Plus,
+  FolderKanban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +25,7 @@ import {
   apiGetDashboardPipeline,
   apiGetDashboardAlerts,
   apiGetDashboardActivity,
+  apiGetProjectStats,
 } from '@/lib/api';
 import {
   mapApiDashboardStats,
@@ -39,6 +41,12 @@ export function Dashboard() {
   const { fetchOpportunities } = useOpportunityStore();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [projectStats, setProjectStats] = useState({
+    total_projects: 0,
+    active_projects: 0,
+    completed_projects: 0,
+    overdue_projects: 0,
+  });
   const [pipeline, setPipeline] = useState<PipelineItem[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -50,14 +58,16 @@ export function Dashboard() {
     async function loadDashboard() {
       setIsLoading(true);
       try {
-        const [statsData, pipelineData, alertsData, activityData] =
+        const [statsData, pipelineData, alertsData, activityData, projStats] =
           await Promise.all([
             apiGetDashboardStats(),
             apiGetDashboardPipeline(),
             apiGetDashboardAlerts(),
             apiGetDashboardActivity(),
+            apiGetProjectStats(),
           ]);
         setStats(mapApiDashboardStats(statsData));
+        setProjectStats(projStats);
         setPipeline(pipelineData.map(mapApiPipelineItem));
         setAlerts(alertsData.map(mapApiAlert));
         setActivities(activityData.map(mapApiActivity));
@@ -143,6 +153,12 @@ export function Dashboard() {
           icon={Clock}
           trend={{ value: 2, direction: 'down' }}
         />
+        <KPICard
+          title="Projetos Ativos"
+          value={projectStats.active_projects}
+          icon={FolderKanban}
+          trend={{ value: projectStats.total_projects, direction: 'up' }}
+        />
       </div>
 
       {/* Alerts */}
@@ -209,6 +225,14 @@ export function Dashboard() {
               >
                 <FileText className="h-4 w-4 mr-2" />
                 Continuar Proposta
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => navigate('/projects')}
+              >
+                <FolderKanban className="h-4 w-4 mr-2" />
+                Ver Projetos
               </Button>
             </CardContent>
           </Card>
