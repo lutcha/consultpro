@@ -39,3 +39,35 @@ class Certification(models.Model):
     expiry_date = models.DateField(null=True, blank=True)
     document = models.FileField(upload_to='certifications/', null=True, blank=True)
     verified = models.BooleanField(default=False)
+
+
+class ConsultantProfile(models.Model):
+    """Extended profile for consultants with professional details."""
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name='consultant_profile'
+    )
+    hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    daily_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency = models.CharField(max_length=3, default='USD')
+    specializations = models.JSONField(default=list)
+    education = models.TextField(blank=True)
+    linkedin_url = models.URLField(blank=True)
+    portfolio_url = models.URLField(blank=True)
+    cv_document = models.FileField(upload_to='consultants/cv/', null=True, blank=True)
+    is_available_for_hire = models.BooleanField(default=True)
+    total_projects_completed = models.PositiveIntegerField(default=0)
+    total_proposals_won = models.PositiveIntegerField(default=0)
+    performance_rating = models.DecimalField(
+        max_digits=3, decimal_places=2, default=0,
+        help_text='Rating from 0.00 to 5.00'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-performance_rating', '-total_projects_completed']
+
+    def __str__(self):
+        return f"Consultant Profile: {self.user.get_full_name() or self.user.username}"

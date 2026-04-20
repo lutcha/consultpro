@@ -16,7 +16,14 @@ import {
   Users,
   Flag,
   FileText,
+  Layers,
+  Circle,
+  CheckCircle2,
+  LayoutGrid,
+  BarChart3,
 } from 'lucide-react';
+import { KanbanBoard, type KanbanTask } from '@/components/projects/KanbanBoard';
+import { GanttChart, type GanttItem } from '@/components/projects/GanttChart';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -160,12 +167,102 @@ export function ProjectDetail() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto">
+        <TabsList className="grid w-full grid-cols-7 lg:w-auto">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="phases">Fases PMI</TabsTrigger>
+          <TabsTrigger value="kanban">Tarefas</TabsTrigger>
+          <TabsTrigger value="gantt">Timeline</TabsTrigger>
           <TabsTrigger value="team">Equipa</TabsTrigger>
           <TabsTrigger value="milestones">Marcos</TabsTrigger>
           <TabsTrigger value="risks">Riscos</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="phases">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Layers className="h-5 w-5" />
+                Fases do Projeto (PMI)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {project.phases?.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Nenhuma fase definida.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {project.phases?.map((phase, index) => (
+                    <div key={phase.id} className="relative">
+                      {/* Connector line */}
+                      {index < (project.phases?.length || 0) - 1 && (
+                        <div className="absolute left-5 top-10 w-0.5 h-full bg-muted" />
+                      )}
+                      <div className="flex items-start gap-4">
+                        <div
+                          className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            phase.is_completed
+                              ? 'bg-green-600 text-white'
+                              : phase.completion_percentage > 0
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {phase.is_completed ? (
+                            <CheckCircle2 className="h-5 w-5" />
+                          ) : (
+                            <Circle className="h-5 w-5" />
+                          )}
+                        </div>
+                        <div className="flex-1 pb-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold">{phase.name_display}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {phase.description || 'Sem descrição'}
+                              </p>
+                            </div>
+                            <Badge
+                              variant={phase.is_completed ? 'default' : 'outline'}
+                              className={phase.is_completed ? 'bg-green-600' : ''}
+                            >
+                              {phase.is_completed
+                                ? 'Concluída'
+                                : `${phase.completion_percentage}%`}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
+                            {phase.start_date && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                Início: {formatDate(new Date(phase.start_date))}
+                              </span>
+                            )}
+                            {phase.end_date && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                Fim: {formatDate(new Date(phase.end_date))}
+                              </span>
+                            )}
+                          </div>
+                          {!phase.is_completed && (
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between text-sm mb-1">
+                                <span className="text-muted-foreground">Progresso</span>
+                                <span className="font-medium">{phase.completion_percentage}%</span>
+                              </div>
+                              <Progress value={phase.completion_percentage} className="h-2" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -297,6 +394,111 @@ export function ProjectDetail() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="kanban">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <LayoutGrid className="h-5 w-5" />
+                Quadro de Tarefas
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const columns = [
+                  { id: 'todo', title: 'Por Fazer' },
+                  { id: 'in_progress', title: 'Em Curso' },
+                  { id: 'review', title: 'Revisão' },
+                  { id: 'done', title: 'Concluído' },
+                ];
+
+                const tasks: KanbanTask[] = [
+                  ...(project.milestones?.map((m) => ({
+                    id: `milestone-${m.id}`,
+                    title: m.title,
+                    description: m.description,
+                    status: m.status === 'completed' ? 'done' : m.status === 'in_progress' ? 'in_progress' : 'todo',
+                    priority: 'medium' as const,
+                    dueDate: m.due_date ? new Date(m.due_date).toLocaleDateString('pt-PT') : undefined,
+                  })) || []),
+                  ...(project.deliverables?.map((d) => ({
+                    id: `deliverable-${d.id}`,
+                    title: d.title,
+                    description: d.description,
+                    status: d.status === 'accepted' ? 'done' : d.status === 'under_review' ? 'review' : d.status === 'submitted' ? 'review' : d.status === 'approved' ? 'done' : 'todo',
+                    priority: 'medium' as const,
+                    dueDate: d.due_date ? new Date(d.due_date).toLocaleDateString('pt-PT') : undefined,
+                  })) || []),
+                ];
+
+                return tasks.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    Nenhuma tarefa disponível. Crie marcos e entregáveis para visualizar aqui.
+                  </p>
+                ) : (
+                  <KanbanBoard
+                    columns={columns}
+                    tasks={tasks}
+                    onTaskMove={(taskId, newStatus) => {
+                      console.log('Move task', taskId, 'to', newStatus);
+                    }}
+                    onTaskClick={(task) => {
+                      console.log('Clicked task', task);
+                    }}
+                  />
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="gantt">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Cronograma do Projeto
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const items: GanttItem[] = [
+                  ...(project.phases?.map((p) => ({
+                    id: `phase-${p.id}`,
+                    name: p.name_display,
+                    startDate: p.start_date ? new Date(p.start_date) : new Date(project.start_date || Date.now()),
+                    endDate: p.end_date ? new Date(p.end_date) : new Date(project.end_date || Date.now() + 30 * 24 * 60 * 60 * 1000),
+                    progress: p.completion_percentage,
+                    type: 'phase' as const,
+                    status: p.is_completed ? 'completed' : p.completion_percentage > 0 ? 'in_progress' : 'not_started',
+                  })) || []),
+                  ...(project.milestones?.map((m) => ({
+                    id: `milestone-${m.id}`,
+                    name: m.title,
+                    startDate: m.due_date ? new Date(m.due_date) : new Date(),
+                    endDate: m.due_date ? new Date(new Date(m.due_date).getTime() + 24 * 60 * 60 * 1000) : new Date(),
+                    progress: m.status === 'completed' ? 100 : 0,
+                    type: 'milestone' as const,
+                    status: m.status === 'completed' ? 'completed' : m.status === 'delayed' ? 'delayed' : 'not_started',
+                  })) || []),
+                ];
+
+                return items.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    Nenhum item para visualizar. Defina fases e marcos com datas.
+                  </p>
+                ) : (
+                  <GanttChart
+                    items={items}
+                    onItemClick={(item) => {
+                      console.log('Clicked item', item);
+                    }}
+                  />
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>

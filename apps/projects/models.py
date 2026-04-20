@@ -104,6 +104,46 @@ class Project(models.Model):
     def __str__(self):
         return self.title
 
+
+class ProjectPhase(models.Model):
+    """Project phases following PMI methodology."""
+
+    class PhaseName(models.TextChoices):
+        INITIATING = 'initiating', 'Iniciação'
+        PLANNING = 'planning', 'Planeamento'
+        EXECUTING = 'executing', 'Execução'
+        MONITORING = 'monitoring', 'Monitoramento e Controlo'
+        CLOSING = 'closing', 'Encerramento'
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='phases',
+    )
+    name = models.CharField(
+        max_length=20,
+        choices=PhaseName.choices,
+    )
+    description = models.TextField(blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    is_completed = models.BooleanField(default=False)
+    completion_percentage = models.PositiveIntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+    )
+    order = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order']
+        unique_together = ['project', 'name']
+
+    def __str__(self):
+        return f"{self.project.title} - {self.get_name_display()}"
+
     @property
     def days_remaining(self):
         from django.utils import timezone

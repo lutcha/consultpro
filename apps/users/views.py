@@ -6,11 +6,12 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from apps.core.permissions import IsConsultantOrManager, IsManager
-from apps.users.models import User, Certification
+from apps.users.models import User, Certification, ConsultantProfile
 from apps.users.serializers import (
     UserListSerializer,
     UserDetailSerializer,
     MeSerializer,
+    ConsultantProfileSerializer,
 )
 
 
@@ -31,6 +32,7 @@ class MeAPIView(APIView):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('-created_at')
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['role', 'availability']
     search_fields = ['email', 'first_name', 'last_name', 'username']
     ordering_fields = ['created_at', 'email', 'first_name', 'last_name']
 
@@ -71,3 +73,22 @@ class UserViewSet(viewsets.ModelViewSet):
     def availability(self, request, pk=None):
         user = self.get_object()
         return Response({'availability': user.availability})
+
+    @action(detail=False, methods=['get'])
+    def consultants(self, request):
+        """List all users with consultant role."""
+        consultants = User.objects.filter(role='consultant')
+        serializer = UserListSerializer(consultants, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get', 'put', 'patch'])
+    def consultant_profile(self, request, pk=None):
+        user = self.get_object()
+        profile, created = ConsultantProfile.objects.get_or_create(user=user)
+        if request.method == 'GET':
+            serializer = ConsultantProfileSerializer(profile)
+            return Response(serializer.data)
+        serializer = ConsultantProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

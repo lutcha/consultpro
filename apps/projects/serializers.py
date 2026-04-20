@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from apps.users.models import User
-from .models import Project, ProjectTeamMember, ProjectMilestone, ProjectRisk, ProjectDeliverable
+from .models import Project, ProjectTeamMember, ProjectMilestone, ProjectRisk, ProjectDeliverable, ProjectPhase
 
 
 class UserMiniSerializer(serializers.ModelSerializer):
@@ -49,6 +49,18 @@ class ProjectDeliverableSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class ProjectPhaseSerializer(serializers.ModelSerializer):
+    name_display = serializers.CharField(source='get_name_display', read_only=True)
+
+    class Meta:
+        model = ProjectPhase
+        fields = [
+            'id', 'name', 'name_display', 'description', 'start_date',
+            'end_date', 'is_completed', 'completion_percentage', 'order',
+            'created_at', 'updated_at',
+        ]
+
+
 class ProjectListSerializer(serializers.ModelSerializer):
     manager_name = serializers.SerializerMethodField()
     team_count = serializers.SerializerMethodField()
@@ -91,6 +103,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     milestones = ProjectMilestoneSerializer(many=True, read_only=True)
     risks = ProjectRiskSerializer(many=True, read_only=True)
     deliverables = ProjectDeliverableSerializer(many=True, read_only=True)
+    phases = ProjectPhaseSerializer(many=True, read_only=True)
     days_remaining = serializers.IntegerField(read_only=True)
     budget_utilization = serializers.IntegerField(read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)

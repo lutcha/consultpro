@@ -6,7 +6,7 @@ from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager, IsManager
 
-from .models import Project, ProjectTeamMember, ProjectMilestone, ProjectRisk, ProjectDeliverable
+from .models import Project, ProjectTeamMember, ProjectMilestone, ProjectRisk, ProjectDeliverable, ProjectPhase
 from .serializers import (
     ProjectListSerializer,
     ProjectDetailSerializer,
@@ -14,6 +14,7 @@ from .serializers import (
     ProjectMilestoneSerializer,
     ProjectRiskSerializer,
     ProjectDeliverableSerializer,
+    ProjectPhaseSerializer,
 )
 
 
@@ -36,6 +37,25 @@ class ProjectViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [IsConsultantOrManager]
         return [permission() for permission in permission_classes]
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        project = Project.objects.get(pk=response.data['id'])
+        # Auto-create PMI phases
+        phases = [
+            ('initiating', 0),
+            ('planning', 1),
+            ('executing', 2),
+            ('monitoring', 3),
+            ('closing', 4),
+        ]
+        for name, order in phases:
+            ProjectPhase.objects.get_or_create(
+                project=project,
+                name=name,
+                defaults={'order': order},
+            )
+        return response
 
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
@@ -155,3 +175,10 @@ class ProjectDeliverableViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectDeliverableSerializer
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'status']
+
+
+class ProjectPhaseViewSet(viewsets.ModelViewSet):
+    queryset = ProjectPhase.objects.all()
+    serializer_class = ProjectPhaseSerializer
+    permission_classes = [IsConsultantOrManager]
+    filterset_fields = ['project', 'name', 'is_completed']

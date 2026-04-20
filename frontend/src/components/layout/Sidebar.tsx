@@ -11,6 +11,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  UserCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,11 @@ const navigationItems = [
     name: 'Projetos',
     href: '/projects',
     icon: Briefcase,
+  },
+  {
+    name: 'Consultores',
+    href: '/consultants',
+    icon: UserCheck,
   },
   {
     name: 'Equipas',

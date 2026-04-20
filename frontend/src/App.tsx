@@ -21,6 +21,7 @@ import {
   Projects,
   ProjectDetail,
   NewProject,
+  Consultants,
 } from '@/pages';
 
 // Protected Route wrapper
@@ -95,6 +96,18 @@ function App() {
           <Route index element={<Projects />} />
           <Route path="new" element={<NewProject />} />
           <Route path=":id" element={<ProjectDetail />} />
+        </Route>
+
+        {/* Consultants */}
+        <Route
+          path="/consultants"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Consultants />} />
         </Route>
 
         {/* Teams */}
