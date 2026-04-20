@@ -1,0 +1,431 @@
+[
+  {
+    "model": "users.user",
+    "pk": 1,
+    "fields": {
+      "email": "ana.silva@consultpro.com",
+      "username": "ana.silva",
+      "first_name": "Ana",
+      "last_name": "Silva",
+      "role": "consultant",
+      "skills": ["Educação", "Género", "Monitoria", "Avaliação"],
+      "languages": ["PT", "EN", "FR"],
+      "availability": "available",
+      "password": "pbkdf2_sha256$600000$V/HWbKYoSEevGW4k3MvFMg$jSHcsvZ+M/UBPMYKpNjbaLVVWePi0cmkGdn6NyGcCtw",
+      "is_staff": true,
+      "is_superuser": true,
+      "is_active": true,
+      "date_joined": "2024-01-01T00:00:00Z",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "users.user",
+    "pk": 2,
+    "fields": {
+      "email": "carlos.mendes@consultpro.com",
+      "username": "carlos.mendes",
+      "first_name": "Carlos",
+      "last_name": "Mendes",
+      "role": "manager",
+      "skills": ["Gestão de Projetos", "Orçamentos", "Negociação"],
+      "languages": ["PT", "EN", "ES"],
+      "availability": "busy",
+      "password": "pbkdf2_sha256$600000$V/HWbKYoSEevGW4k3MvFMg$jSHcsvZ+M/UBPMYKpNjbaLVVWePi0cmkGdn6NyGcCtw",
+      "is_staff": true,
+      "is_superuser": false,
+      "is_active": true,
+      "date_joined": "2024-01-01T00:00:00Z",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "users.user",
+    "pk": 3,
+    "fields": {
+      "email": "maria.santos@consultpro.com",
+      "username": "maria.santos",
+      "first_name": "Maria",
+      "last_name": "Santos",
+      "role": "consultant",
+      "skills": ["Saúde Pública", "Sistemas de Saúde", "Formação"],
+      "languages": ["PT", "EN"],
+      "availability": "available",
+      "password": "pbkdf2_sha256$600000$V/HWbKYoSEevGW4k3MvFMg$jSHcsvZ+M/UBPMYKpNjbaLVVWePi0cmkGdn6NyGcCtw",
+      "is_staff": true,
+      "is_superuser": false,
+      "is_active": true,
+      "date_joined": "2024-01-01T00:00:00Z",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "opportunities.opportunity",
+    "pk": 1,
+    "fields": {
+      "title": "Formação de Professores Rurais - Moçambique",
+      "client": "UNICEF",
+      "sector": "Educação",
+      "country": "Moçambique",
+      "value": "450000.00",
+      "currency": "USD",
+      "deadline": "2024-05-15T00:00:00Z",
+      "status": "analyzing",
+      "description": "Oportunidade de consultoria para formação de professores em zonas rurais de Moçambique.",
+      "evaluation_criteria": "qcbs",
+      "technical_weight": 70,
+      "financial_weight": 30,
+      "reference_number": "UNICEF/MOZ/2024/001",
+      "created_by": null
+    }
+  },
+  {
+    "model": "opportunities.opportunity",
+    "pk": 2,
+    "fields": {
+      "title": "Fortalecimento dos Sistemas de Saúde - Angola",
+      "client": "Banco Mundial",
+      "sector": "Saúde",
+      "country": "Angola",
+      "value": "890000.00",
+      "currency": "USD",
+      "deadline": "2024-06-20T00:00:00Z",
+      "status": "go",
+      "description": "Consultoria para fortalecimento dos sistemas de saúde primária em Angola.",
+      "evaluation_criteria": "qcbs",
+      "technical_weight": 70,
+      "financial_weight": 30,
+      "reference_number": "WB/ANG/2024/002",
+      "created_by": null
+    }
+  },
+  {
+    "model": "opportunities.opportunity",
+    "pk": 3,
+    "fields": {
+      "title": "Avaliação de Impacto - Programa de Agricultura",
+      "client": "FAO",
+      "sector": "Agricultura",
+      "country": "Cabo Verde",
+      "value": "180000.00",
+      "currency": "USD",
+      "deadline": "2024-04-25T00:00:00Z",
+      "status": "proposal_draft",
+      "description": "Avaliação de impacto do programa de desenvolvimento agrícola em Cabo Verde.",
+      "evaluation_criteria": "qcbs",
+      "technical_weight": 70,
+      "financial_weight": 30,
+      "reference_number": "FAO/CVP/2024/003",
+      "created_by": null
+    }
+  },
+  {
+    "model": "opportunities.opportunity",
+    "pk": 4,
+    "fields": {
+      "title": "Desenvolvimento de Infraestruturas Rurais - Senegal",
+      "client": "AfDB",
+      "sector": "Infraestruturas",
+      "country": "Senegal",
+      "value": "1200000.00",
+      "currency": "USD",
+      "deadline": "2024-07-10T00:00:00Z",
+      "status": "new",
+      "description": "Projeto de desenvolvimento de infraestruturas rurais no Senegal financiado pelo AfDB.",
+      "evaluation_criteria": "qcbs",
+      "technical_weight": 70,
+      "financial_weight": 30,
+      "reference_number": "AfDB/SEN/2024/004",
+      "created_by": null
+    }
+  },
+  {
+    "model": "opportunities.requirement",
+    "pk": 1,
+    "fields": {
+      "opportunity": 1,
+      "category": "functional",
+      "description": "Experiência mínima de 10 anos em formação de professores em contextos rurais",
+      "priority": "mandatory",
+      "is_covered": false,
+      "covered_in": "",
+      "extracted_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.requirement",
+    "pk": 2,
+    "fields": {
+      "opportunity": 1,
+      "category": "technical",
+      "description": "Especialista em género e inclusão social",
+      "priority": "mandatory",
+      "is_covered": false,
+      "covered_in": "",
+      "extracted_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.requirement",
+    "pk": 3,
+    "fields": {
+      "opportunity": 1,
+      "category": "institutional",
+      "description": "Registro ativo como consultor em Moçambique",
+      "priority": "mandatory",
+      "is_covered": false,
+      "covered_in": "",
+      "extracted_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.requirement",
+    "pk": 4,
+    "fields": {
+      "opportunity": 2,
+      "category": "functional",
+      "description": "Experiência em sistemas de saúde em países de língua portuguesa",
+      "priority": "mandatory",
+      "is_covered": false,
+      "covered_in": "",
+      "extracted_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.requirement",
+    "pk": 5,
+    "fields": {
+      "opportunity": 2,
+      "category": "technical",
+      "description": "Conhecimento de PHC e UHC",
+      "priority": "preferred",
+      "is_covered": false,
+      "covered_in": "",
+      "extracted_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.requirement",
+    "pk": 6,
+    "fields": {
+      "opportunity": 3,
+      "category": "functional",
+      "description": "Metodologias de avaliação de impacto quantitativo e qualitativo",
+      "priority": "mandatory",
+      "is_covered": false,
+      "covered_in": "",
+      "extracted_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.requirement",
+    "pk": 7,
+    "fields": {
+      "opportunity": 3,
+      "category": "technical",
+      "description": "Econometria aplicada a projetos de desenvolvimento rural",
+      "priority": "preferred",
+      "is_covered": false,
+      "covered_in": "",
+      "extracted_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.requirement",
+    "pk": 8,
+    "fields": {
+      "opportunity": 4,
+      "category": "functional",
+      "description": "Engenheiro civil com experiência em infraestruturas rurais",
+      "priority": "mandatory",
+      "is_covered": false,
+      "covered_in": "",
+      "extracted_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.risk",
+    "pk": 1,
+    "fields": {
+      "opportunity": 1,
+      "description": "Prazo curto para mobilização da equipa técnica",
+      "severity": "high",
+      "mitigation": "Identificar consultores qualificados com antecedência",
+      "identified_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.risk",
+    "pk": 2,
+    "fields": {
+      "opportunity": 2,
+      "description": "Concorrência forte de empresas internacionais",
+      "severity": "medium",
+      "mitigation": "",
+      "identified_by_ai": false
+    }
+  },
+  {
+    "model": "opportunities.risk",
+    "pk": 3,
+    "fields": {
+      "opportunity": 4,
+      "description": "Requisito de certificação PPM não atendido pela equipa atual",
+      "severity": "high",
+      "mitigation": "",
+      "identified_by_ai": false
+    }
+  },
+  {
+    "model": "proposals.proposal",
+    "pk": 1,
+    "fields": {
+      "opportunity": 3,
+      "title": "Proposta - Avaliação de Impacto FAO Cabo Verde",
+      "version": 2,
+      "status": "draft",
+      "auto_save_status": "idle",
+      "last_saved_at": null,
+      "created_by": null,
+      "submitted_at": null
+    }
+  },
+  {
+    "model": "proposals.proposalsection",
+    "pk": 1,
+    "fields": {
+      "proposal": 1,
+      "section_type": "cover",
+      "title": "Capa",
+      "content": "",
+      "order": 1,
+      "is_complete": true
+    }
+  },
+  {
+    "model": "proposals.proposalsection",
+    "pk": 2,
+    "fields": {
+      "proposal": 1,
+      "section_type": "executive_summary",
+      "title": "Resumo Executivo",
+      "content": "",
+      "order": 2,
+      "is_complete": true
+    }
+  },
+  {
+    "model": "proposals.proposalsection",
+    "pk": 3,
+    "fields": {
+      "proposal": 1,
+      "section_type": "methodology",
+      "title": "Metodologia",
+      "content": "",
+      "order": 3,
+      "is_complete": false
+    }
+  },
+  {
+    "model": "proposals.proposalsection",
+    "pk": 4,
+    "fields": {
+      "proposal": 1,
+      "section_type": "team",
+      "title": "Equipa Tecnica",
+      "content": "",
+      "order": 4,
+      "is_complete": false
+    }
+  },
+  {
+    "model": "proposals.proposalsection",
+    "pk": 5,
+    "fields": {
+      "proposal": 1,
+      "section_type": "workplan",
+      "title": "Plano de Trabalho",
+      "content": "",
+      "order": 5,
+      "is_complete": false
+    }
+  },
+  {
+    "model": "proposals.proposalsection",
+    "pk": 6,
+    "fields": {
+      "proposal": 1,
+      "section_type": "budget",
+      "title": "Orcamento",
+      "content": "",
+      "order": 6,
+      "is_complete": false
+    }
+  },
+  {
+    "model": "proposals.proposalteammember",
+    "pk": 1,
+    "fields": {
+      "proposal": 1,
+      "user": 1,
+      "role": "Team Leader",
+      "hours": 240,
+      "hourly_rate": "0.00",
+      "cv_attached": false
+    }
+  },
+  {
+    "model": "proposals.proposalteammember",
+    "pk": 2,
+    "fields": {
+      "proposal": 1,
+      "user": 3,
+      "role": "Especialista em Saúde",
+      "hours": 120,
+      "hourly_rate": "0.00",
+      "cv_attached": false
+    }
+  },
+  {
+    "model": "proposals.budget",
+    "pk": 1,
+    "fields": {
+      "proposal": 1,
+      "total": "175000.00",
+      "currency": "USD"
+    }
+  },
+  {
+    "model": "proposals.budgetitem",
+    "pk": 1,
+    "fields": {
+      "budget": 1,
+      "category": "personnel",
+      "amount": "120000.00",
+      "description": "Pessoal"
+    }
+  },
+  {
+    "model": "proposals.budgetitem",
+    "pk": 2,
+    "fields": {
+      "budget": 1,
+      "category": "travel",
+      "amount": "25000.00",
+      "description": "Viagens"
+    }
+  },
+  {
+    "model": "proposals.budgetitem",
+    "pk": 3,
+    "fields": {
+      "budget": 1,
+      "category": "other",
+      "amount": "30000.00",
+      "description": "Outros"
+    }
+  }
+]
