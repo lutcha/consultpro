@@ -101,8 +101,12 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
         source='project_team_members', many=True, read_only=True
     )
     milestones = ProjectMilestoneSerializer(many=True, read_only=True)
-    risks = ProjectRiskSerializer(many=True, read_only=True)
-    deliverables = ProjectDeliverableSerializer(many=True, read_only=True)
+    risks = ProjectRiskSerializer(
+        source='project_risks', many=True, read_only=True
+    )
+    deliverables = ProjectDeliverableSerializer(
+        source='project_deliverables', many=True, read_only=True
+    )
     phases = ProjectPhaseSerializer(many=True, read_only=True)
     days_remaining = serializers.IntegerField(read_only=True)
     budget_utilization = serializers.IntegerField(read_only=True)
