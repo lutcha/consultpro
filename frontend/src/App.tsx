@@ -11,9 +11,13 @@ import {
   Dashboard,
   Opportunities,
   OpportunityDetail,
+  NewOpportunity,
   Proposals,
+  NewProposal,
   ProposalEditor,
   QualityCheck,
+  Teams,
+  Settings,
 } from '@/pages';
 
 // Protected Route wrapper
@@ -57,6 +61,7 @@ function App() {
           }
         >
           <Route index element={<Opportunities />} />
+          <Route path="new" element={<NewOpportunity />} />
           <Route path=":id" element={<OpportunityDetail />} />
         </Route>
 
@@ -70,8 +75,33 @@ function App() {
           }
         >
           <Route index element={<Proposals />} />
+          <Route path="new" element={<NewProposal />} />
           <Route path=":id" element={<ProposalEditor />} />
           <Route path=":id/qc" element={<QualityCheck />} />
+        </Route>
+
+        {/* Teams */}
+        <Route
+          path="/teams"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Teams />} />
+        </Route>
+
+        {/* Settings */}
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Settings />} />
         </Route>
 
         {/* Fallback */}

@@ -10,3 +10,7 @@ export { Proposals } from './Proposals';
 export { ProposalEditor } from './ProposalEditor';
 export { QualityCheck } from './QualityCheck';
 export { Login } from './Login';
+export { NewOpportunity } from './NewOpportunity';
+export { NewProposal } from './NewProposal';
+export { Teams } from './Teams';
+export { Settings } from './Settings';

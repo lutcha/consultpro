@@ -76,7 +76,7 @@ export function Proposals() {
             Gerencie as propostas em desenvolvimento.
           </p>
         </div>
-        <Button onClick={() => navigate('/opportunities')}>
+        <Button onClick={() => navigate('/proposals/new')}>
           <Plus className="h-4 w-4 mr-2" />
           Nova Proposta
         </Button>

@@ -205,6 +205,15 @@ export function Opportunities() {
                               <Calendar className="mr-2 h-4 w-4" />
                               Criar Proposta
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/proposals/new?opportunity=${opportunity.id}`);
+                              }}
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              Criar Proposta
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
