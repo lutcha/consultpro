@@ -169,7 +169,7 @@ def generate_proposal_docx(proposal: Proposal, output_path: Optional[str] = None
         doc.add_paragraph()  # Spacer between sections
     
     # --- TEAM SECTION ---
-    team_members = proposal.team_members.all()
+    team_members = proposal.proposalteammember_set.all()
     if team_members:
         doc.add_page_break()
         _add_heading(doc, "Equipa da Proposta", level=1)
@@ -196,7 +196,7 @@ def generate_proposal_docx(proposal: Proposal, output_path: Optional[str] = None
             row_cells[0].text = f"{user.first_name} {user.last_name}".strip() or user.username
             row_cells[1].text = member.role
             row_cells[2].text = str(member.hours)
-            row_cells[3].text = f"{member.hourly_rate} €" if member.hourly_rate else "N/A"
+            row_cells[3].text = f"{member.hourly_rate} EUR" if member.hourly_rate else "N/A"
     
     # --- BUDGET SECTION ---
     budget = getattr(proposal, 'budget', None)
@@ -375,7 +375,7 @@ def generate_proposal_pdf(proposal: Proposal, output_path: Optional[str] = None)
         story.append(Spacer(1, 0.5*cm))
     
     # --- TEAM SECTION ---
-    team_members = proposal.team_members.all()
+    team_members = proposal.proposalteammember_set.all()
     if team_members:
         story.append(PageBreak())
         story.append(Paragraph("Equipa da Proposta", heading1_style))
@@ -389,7 +389,7 @@ def generate_proposal_pdf(proposal: Proposal, output_path: Optional[str] = None)
                 name,
                 member.role,
                 str(member.hours),
-                f"{member.hourly_rate} €" if member.hourly_rate else "N/A"
+                f"{member.hourly_rate} EUR" if member.hourly_rate else "N/A"
             ])
         
         team_table = Table(team_data, colWidths=[6*cm, 4*cm, 3*cm, 3*cm])
