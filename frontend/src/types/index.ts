@@ -71,6 +71,9 @@ export interface Proposal {
   team: TeamMember[];
   budget: Budget;
   qualityScore?: number;
+  proponentLogoUrl?: string;
+  clientLogoUrl?: string;
+  consortiumMembers: string[];
   createdAt: Date;
   updatedAt: Date;
   submittedAt?: Date;

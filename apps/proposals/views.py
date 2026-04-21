@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -8,6 +9,7 @@ from rest_framework.response import Response
 
 from apps.core.permissions import IsOwnerOrAdmin
 from apps.users.models import User
+from .document_generator import generate_proposal_docx, generate_proposal_pdf
 from .models import (
     AISuggestion,
     Budget,
@@ -258,3 +260,66 @@ class ProposalViewSet(viewsets.ModelViewSet):
             )
         member.delete()
         return Response({'detail': 'Membro removido com sucesso.'}, status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['get'])
+    def download_word(self, request, pk=None):
+        """Download proposal as Word (.docx) document."""
+        proposal = self.get_object()
+        docx_bytes = generate_proposal_docx(proposal)
+        filename = f"Proposta_{proposal.id}_{proposal.title.replace(' ', '_')}.docx"
+        response = HttpResponse(
+            docx_bytes,
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    @action(detail=True, methods=['get'])
+    def download_pdf(self, request, pk=None):
+        """Download proposal as PDF document."""
+        proposal = self.get_object()
+        pdf_bytes = generate_proposal_pdf(proposal)
+        filename = f"Proposta_{proposal.id}_{proposal.title.replace(' ', '_')}.pdf"
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def upload_logo(self, request, pk=None):
+        """Upload proponent or client logo for the proposal."""
+        proposal = self.get_object()
+        logo_type = request.data.get('logo_type', 'proponent')
+        file_obj = request.FILES.get('logo')
+        
+        if not file_obj:
+            return Response(
+                {'detail': 'Nenhum ficheiro fornecido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if logo_type == 'client':
+            proposal.client_logo = file_obj
+            proposal.save(update_fields=['client_logo'])
+            return Response({
+                'detail': 'Logo do cliente atualizado.',
+                'url': request.build_absolute_uri(proposal.client_logo.url),
+            })
+        else:
+            proposal.proponent_logo = file_obj
+            proposal.save(update_fields=['proponent_logo'])
+            return Response({
+                'detail': 'Logo da empresa proponente atualizado.',
+                'url': request.build_absolute_uri(proposal.proponent_logo.url),
+            })
+
+    @action(detail=True, methods=['put', 'patch'])
+    def update_consortium(self, request, pk=None):
+        """Update consortium members list."""
+        proposal = self.get_object()
+        members = request.data.get('consortium_members', [])
+        proposal.consortium_members = members
+        proposal.save(update_fields=['consortium_members'])
+        return Response({
+            'detail': 'Membros do consórcio atualizados.',
+            'consortium_members': proposal.consortium_members,
+        })

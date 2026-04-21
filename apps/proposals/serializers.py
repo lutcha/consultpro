@@ -84,6 +84,7 @@ class ProposalListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'version', 'status', 'opportunity', 'opportunity_id',
             'created_by', 'created_at', 'updated_at', 'progress',
+            'proponent_logo', 'client_logo', 'consortium_members',
         ]
 
     def get_progress(self, obj):
@@ -100,7 +101,19 @@ class ProposalDetailSerializer(serializers.ModelSerializer):
         source='proposalteammember_set', many=True, read_only=True
     )
     budget = BudgetSerializer(read_only=True)
+    proponent_logo_url = serializers.SerializerMethodField()
+    client_logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Proposal
         fields = '__all__'
+
+    def get_proponent_logo_url(self, obj):
+        if obj.proponent_logo:
+            return self.context['request'].build_absolute_uri(obj.proponent_logo.url)
+        return None
+
+    def get_client_logo_url(self, obj):
+        if obj.client_logo:
+            return self.context['request'].build_absolute_uri(obj.client_logo.url)
+        return None

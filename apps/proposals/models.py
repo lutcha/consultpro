@@ -43,6 +43,26 @@ class Proposal(models.Model):
         related_name='proposals',
     )
     submitted_at = models.DateTimeField(null=True, blank=True)
+    
+    # Document branding
+    proponent_logo = models.ImageField(
+        upload_to='proposals/logos/proponent/',
+        blank=True,
+        null=True,
+        help_text='Logo da empresa proponente ou consórcio',
+    )
+    client_logo = models.ImageField(
+        upload_to='proposals/logos/client/',
+        blank=True,
+        null=True,
+        help_text='Logo do cliente',
+    )
+    consortium_members = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Lista de membros do consórcio (se aplicável)',
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

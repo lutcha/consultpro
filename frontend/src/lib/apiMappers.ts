@@ -242,6 +242,9 @@ export function mapApiProposal(proposal: ApiProposal): Proposal {
     team: (proposal.team || []).map(mapApiTeamMember),
     budget: mapApiBudget(proposal.budget),
     qualityScore: proposal.quality_score || undefined,
+    proponentLogoUrl: proposal.proponent_logo_url || undefined,
+    clientLogoUrl: proposal.client_logo_url || undefined,
+    consortiumMembers: proposal.consortium_members || [],
     createdAt: toDate(proposal.created_at),
     updatedAt: toDate(proposal.updated_at),
     submittedAt: proposal.submitted_at

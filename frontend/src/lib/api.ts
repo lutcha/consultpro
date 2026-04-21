@@ -356,6 +356,9 @@ export interface ApiProposal {
   created_at: string;
   updated_at: string;
   submitted_at: string | null;
+  proponent_logo_url: string | null;
+  client_logo_url: string | null;
+  consortium_members: string[];
 }
 
 export async function apiGetProposals(): Promise<
@@ -389,6 +392,42 @@ export async function apiUpdateProposalSection(
       body: JSON.stringify(data),
     }
   );
+}
+
+export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {
+  const token = localStorage.getItem('access_token');
+  const response = await fetch(`/api/proposals/${proposalId}/download_word/`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new Error('Erro ao gerar Word');
+  return response.blob();
+}
+
+export async function apiDownloadProposalPdf(proposalId: string): Promise<Blob> {
+  const token = localStorage.getItem('access_token');
+  const response = await fetch(`/api/proposals/${proposalId}/download_pdf/`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new Error('Erro ao gerar PDF');
+  return response.blob();
+}
+
+export async function apiUploadProposalLogo(
+  proposalId: string,
+  file: File,
+  logoType: 'proponent' | 'client'
+): Promise<{ url: string; detail: string }> {
+  const token = localStorage.getItem('access_token');
+  const formData = new FormData();
+  formData.append('logo', file);
+  formData.append('logo_type', logoType);
+  const response = await fetch(`/api/proposals/${proposalId}/upload_logo/`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!response.ok) throw new Error('Erro ao fazer upload do logo');
+  return response.json();
 }
 
 // ============================================

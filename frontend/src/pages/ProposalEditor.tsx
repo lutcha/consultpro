@@ -1,8 +1,8 @@
 // ============================================
-// PROPOSAL EDITOR PAGE
+// PROPOSAL EDITOR PAGE - Rich Text + Word/PDF Export
 // ============================================
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -14,27 +14,30 @@ import {
   FileText,
   CheckSquare,
   Lightbulb,
+  Download,
+  FileType,
+  FileDown,
+  Upload,
+  Building2,
+  UserCircle,
+  Plus,
+  X,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-// import { CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { SectionSidebar } from '@/components/proposals/SectionSidebar';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AIAssistButton } from '@/components/proposals/AIAssistButton';
+import { RichTextEditor } from '@/components/proposals/RichTextEditor';
 import { useProposalStore } from '@/stores';
-// import { cn } from '@/lib/utils';
-
-// Toolbar buttons for the editor
-const toolbarButtons = [
-  { label: 'B', action: 'bold', title: 'Negrito' },
-  { label: 'I', action: 'italic', title: 'Itálico' },
-  { label: 'U', action: 'underline', title: 'Sublinhado' },
-  { label: '•', action: 'bullet', title: 'Lista' },
-  { label: '1.', action: 'numbered', title: 'Lista Numerada' },
-  { label: '🔗', action: 'link', title: 'Link' },
-];
+import {
+  apiUpdateProposalSection,
+  apiDownloadProposalWord,
+  apiDownloadProposalPdf,
+  apiUploadProposalLogo,
+} from '@/lib/api';
 
 export function ProposalEditor() {
   const { id } = useParams<{ id: string }>();
@@ -43,6 +46,17 @@ export function ProposalEditor() {
     useProposalStore();
   const [activeSectionId, setActiveSectionId] = useState<string>('');
   const [editorContent, setEditorContent] = useState('');
+  const [isExporting, setIsExporting] = useState<'word' | 'pdf' | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [consortiumMembers, setConsortiumMembers] = useState<string[]>([]);
+  const [newMember, setNewMember] = useState('');
+  const [logos, setLogos] = useState<{
+    proponent?: string;
+    client?: string;
+  }>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadType, setUploadType] = useState<'proponent' | 'client'>('proponent');
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (id) {
@@ -51,75 +65,171 @@ export function ProposalEditor() {
   }, [id, selectProposal]);
 
   useEffect(() => {
-    if (selectedProposal && selectedProposal.sections.length > 0) {
-      if (!activeSectionId) {
+    if (selectedProposal) {
+      setConsortiumMembers(selectedProposal.consortium_members || []);
+      setLogos({
+        proponent: selectedProposal.proponent_logo_url || undefined,
+        client: selectedProposal.client_logo_url || undefined,
+      });
+      if (selectedProposal.sections.length > 0 && !activeSectionId) {
         setActiveSectionId(selectedProposal.sections[0].id);
       }
-      const section = selectedProposal.sections.find(
-        (s) => s.id === activeSectionId
-      );
+    }
+  }, [selectedProposal]);
+
+  useEffect(() => {
+    if (selectedProposal && activeSectionId) {
+      const section = selectedProposal.sections.find((s) => s.id === activeSectionId);
       if (section) {
-        setEditorContent(section.content);
+        setEditorContent(section.content || '');
       }
     }
   }, [selectedProposal, activeSectionId]);
 
+  const saveSection = useCallback(
+    (content: string) => {
+      if (selectedProposal && activeSectionId) {
+        updateSection(selectedProposal.id, activeSectionId, content);
+      }
+    },
+    [selectedProposal, activeSectionId, updateSection]
+  );
+
+  const handleContentChange = (content: string) => {
+    setEditorContent(content);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveSection(content);
+    }, 1500);
+  };
+
   const handleSectionChange = (sectionId: string) => {
-    // Save current section before switching
     if (activeSectionId && editorContent) {
-      updateSection(selectedProposal!.id, activeSectionId, editorContent);
+      saveSection(editorContent);
     }
     setActiveSectionId(sectionId);
   };
 
-  const handleContentChange = (content: string) => {
-    setEditorContent(content);
-    // Auto-save after delay
-    const timeoutId = setTimeout(() => {
-      if (selectedProposal) {
-        updateSection(selectedProposal.id, activeSectionId, content);
-      }
-    }, 1000);
-    return () => clearTimeout(timeoutId);
+  const handleExport = async (type: 'word' | 'pdf') => {
+    if (!id) return;
+    setIsExporting(type);
+    try {
+      const blob = type === 'word'
+        ? await apiDownloadProposalWord(id)
+        : await apiDownloadProposalPdf(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Proposta_${id}_${selectedProposal?.title?.replace(/\s+/g, '_') || 'document'}.${type === 'word' ? 'docx' : 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao exportar');
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id) return;
+    try {
+      const result = await apiUploadProposalLogo(id, file, uploadType);
+      setLogos((prev) => ({ ...prev, [uploadType]: result.url }));
+    } catch (err) {
+      alert('Erro ao fazer upload do logo');
+    }
+  };
+
+  const triggerUpload = (type: 'proponent' | 'client') => {
+    setUploadType(type);
+    fileInputRef.current?.click();
+  };
+
+  const handleAddConsortiumMember = () => {
+    if (newMember.trim()) {
+      setConsortiumMembers((prev) => [...prev, newMember.trim()]);
+      setNewMember('');
+    }
+  };
+
+  const handleRemoveConsortiumMember = (index: number) => {
+    setConsortiumMembers((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleAISuggestion = (action: string) => {
-    // Simulate AI processing
     const suggestions: Record<string, string> = {
       expand:
         editorContent +
-        '\n\n[Conteúdo expandido pela IA com mais detalhes e contexto relevante para esta secção.]',
+        '<p><br></p><p><em>[Conteúdo expandido pela IA com mais detalhes e contexto relevante para esta secção.]</em></p>',
       summarize:
-        '[Versão resumida do texto original, mantendo os pontos-chave e eliminando redundâncias.]',
+        '<p><em>[Versão resumida do texto original, mantendo os pontos-chave e eliminando redundâncias.]</em></p>',
       'tone-formal':
-        '[Versão com tom mais formal e profissional do texto original, adequada para submissão a organismos internacionais.]',
+        '<p><em>[Versão com tom mais formal e profissional do texto original, adequada para submissão a organismos internacionais.]</em></p>',
       'translate-en':
-        '[English translation of the original text, maintaining technical terminology and professional tone.]',
+        '<p><em>[English translation of the original text, maintaining technical terminology and professional tone.]</em></p>',
     };
-
-    setEditorContent(suggestions[action] || editorContent);
-    if (selectedProposal) {
-      updateSection(
-        selectedProposal.id,
-        activeSectionId,
-        suggestions[action] || editorContent
-      );
-    }
+    const newContent = suggestions[action] || editorContent;
+    setEditorContent(newContent);
+    handleContentChange(newContent);
   };
 
   const activeSection = selectedProposal?.sections.find(
     (s) => s.id === activeSectionId
   );
 
+  // Build preview HTML
+  const previewHtml = selectedProposal
+    ? `
+    <div style="font-family: Calibri, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; border-bottom: 2px solid #1A365D; padding-bottom: 20px;">
+        <div style="text-align: left;">
+          ${logos.proponent ? `<img src="${logos.proponent}" style="max-height: 60px; max-width: 150px;" />` : '<div style="color: #999; font-style: italic; font-size: 12px;">[LOGO EMPRESA PROPONENTE]</div>'}
+        </div>
+        <div style="text-align: right;">
+          ${logos.client ? `<img src="${logos.client}" style="max-height: 60px; max-width: 150px;" />` : '<div style="color: #999; font-style: italic; font-size: 12px;">[LOGO CLIENTE]</div>'}
+        </div>
+      </div>
+      
+      <h1 style="color: #1A365D; font-size: 24px; text-align: center; margin-bottom: 20px;">${selectedProposal.title}</h1>
+      
+      ${selectedProposal.opportunity ? `
+        <p style="text-align: center; color: #666;"><em>Referência: ${selectedProposal.opportunity.reference_number || 'N/A'}</em></p>
+        <p style="text-align: center; color: #666;"><em>Cliente: ${selectedProposal.opportunity.client}</em></p>
+      ` : ''}
+      
+      ${consortiumMembers.length > 0 ? `
+        <div style="margin: 30px 0; padding: 15px; background: #F7FAFC; border-radius: 8px;">
+          <h3 style="color: #1A365D; margin-bottom: 10px;">Membros do Consórcio</h3>
+          <ul style="margin: 0; padding-left: 20px;">
+            ${consortiumMembers.map(m => `<li>${m}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+      
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #E2E8F0;" />
+      
+      ${selectedProposal.sections.map(s => `
+        <div style="margin-bottom: 30px;">
+          <h2 style="color: #1A365D; font-size: 18px; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px;">${s.title}</h2>
+          <div style="line-height: 1.6; color: #333;">${s.content || '<em style="color: #999;">[Conteúdo em desenvolvimento...]</em>'}</div>
+        </div>
+      `).join('')}
+      
+      <div style="margin-top: 60px; text-align: center; color: #666; font-size: 10px; border-top: 1px solid #E2E8F0; padding-top: 20px;">
+        Documento gerado automaticamente pela plataforma ConsultPro — ${new Date().getFullYear()}
+      </div>
+    </div>
+  `
+    : '';
+
   if (!selectedProposal) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">Proposta não encontrada.</p>
-        <Button
-          variant="outline"
-          className="mt-4"
-          onClick={() => navigate('/proposals')}
-        >
+        <Button variant="outline" className="mt-4" onClick={() => navigate('/proposals')}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
         </Button>
@@ -129,14 +239,19 @@ export function ProposalEditor() {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
+      {/* Hidden file input for logo upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleLogoUpload}
+      />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/dashboard')}
-          >
+          <Button variant="ghost" size="sm" onClick={() => navigate('/proposals')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Voltar
           </Button>
@@ -145,9 +260,7 @@ export function ProposalEditor() {
             <div className="flex items-center gap-2 mt-1">
               <Badge variant="outline">v{selectedProposal.version}</Badge>
               <Badge
-                variant={
-                  autoSaveStatus === 'saved' ? 'default' : 'secondary'
-                }
+                variant={autoSaveStatus === 'saved' ? 'default' : 'secondary'}
                 className="text-xs"
               >
                 {autoSaveStatus === 'saving' && 'A guardar...'}
@@ -158,19 +271,30 @@ export function ProposalEditor() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 mr-4">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">3 online</span>
-          </div>
-          <Button variant="outline" size="sm">
-            <Save className="h-4 w-4 mr-2" />
-            Guardar
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
+            <Eye className="h-4 w-4 mr-2" />
+            Pré-visualizar
           </Button>
           <Button
+            variant="outline"
             size="sm"
-            onClick={() => navigate(`/proposals/${id}/qc`)}
+            onClick={() => handleExport('word')}
+            disabled={isExporting !== null}
           >
+            <FileType className="h-4 w-4 mr-2" />
+            {isExporting === 'word' ? 'A gerar...' : 'Word'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleExport('pdf')}
+            disabled={isExporting !== null}
+          >
+            <FileDown className="h-4 w-4 mr-2" />
+            {isExporting === 'pdf' ? 'A gerar...' : 'PDF'}
+          </Button>
+          <Button size="sm" onClick={() => navigate(`/proposals/${id}/qc`)}>
             <Send className="h-4 w-4 mr-2" />
             Submeter para QC
           </Button>
@@ -179,59 +303,153 @@ export function ProposalEditor() {
 
       {/* Main Editor Area */}
       <div className="flex-1 flex overflow-hidden mt-4">
-        {/* Left Sidebar - Sections */}
-        <SectionSidebar
-          sections={selectedProposal.sections}
-          activeSection={activeSectionId}
-          onSectionChange={handleSectionChange}
-        />
+        {/* Left Sidebar - Sections & Logos */}
+        <div className="w-64 flex-shrink-0 flex flex-col border-r border-border overflow-auto">
+          {/* Logos Section */}
+          <div className="p-3 border-b border-border">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Logos da Proposta
+            </h3>
+            <div className="space-y-2">
+              <button
+                onClick={() => triggerUpload('proponent')}
+                className="w-full flex items-center gap-2 p-2 rounded-lg border border-dashed border-border hover:bg-muted transition-colors text-left"
+              >
+                {logos.proponent ? (
+                  <img src={logos.proponent} alt="Proponent" className="h-8 w-8 object-contain" />
+                ) : (
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="text-xs text-muted-foreground truncate">
+                  {logos.proponent ? 'Logo Proponente' : 'Logo Proponente'}
+                </span>
+                <Upload className="h-3 w-3 ml-auto text-muted-foreground" />
+              </button>
+              <button
+                onClick={() => triggerUpload('client')}
+                className="w-full flex items-center gap-2 p-2 rounded-lg border border-dashed border-border hover:bg-muted transition-colors text-left"
+              >
+                {logos.client ? (
+                  <img src={logos.client} alt="Client" className="h-8 w-8 object-contain" />
+                ) : (
+                  <UserCircle className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="text-xs text-muted-foreground truncate">
+                  {logos.client ? 'Logo Cliente' : 'Logo Cliente'}
+                </span>
+                <Upload className="h-3 w-3 ml-auto text-muted-foreground" />
+              </button>
+            </div>
+          </div>
+
+          {/* Consortium Members */}
+          <div className="p-3 border-b border-border">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Consórcio
+            </h3>
+            <div className="space-y-1">
+              {consortiumMembers.map((member, idx) => (
+                <div key={idx} className="flex items-center gap-1 text-xs">
+                  <span className="flex-1 truncate">{member}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 w-5 p-0"
+                    onClick={() => handleRemoveConsortiumMember(idx)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              <div className="flex gap-1 mt-2">
+                <Input
+                  value={newMember}
+                  onChange={(e) => setNewMember(e.target.value)}
+                  placeholder="Nova empresa"
+                  className="h-7 text-xs"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddConsortiumMember()}
+                />
+                <Button size="sm" className="h-7 px-2" onClick={handleAddConsortiumMember}>
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Sections */}
+          <div className="flex-1 p-3">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Secções
+            </h3>
+            <div className="space-y-1">
+              {selectedProposal.sections.map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => handleSectionChange(section.id)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                    activeSectionId === section.id
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'hover:bg-muted text-muted-foreground'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {section.is_complete ? (
+                      <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground" />
+                    )}
+                    <span className="truncate">{section.title}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
         {/* Center - Editor */}
-        <div className="flex-1 flex flex-col bg-card border-x border-border">
-          {/* Toolbar */}
-          <div className="flex items-center gap-1 p-2 border-b border-border">
-            <TooltipProvider>
-              {toolbarButtons.map((btn) => (
-                <Tooltip key={btn.action}>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      {btn.label}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{btn.title}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
-            </TooltipProvider>
-            <Separator orientation="vertical" className="h-6 mx-2" />
+        <div className="flex-1 flex flex-col bg-card border-x border-border overflow-hidden">
+          <div className="flex items-center justify-between p-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">{activeSection?.title}</span>
+              {activeSection?.is_complete && (
+                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                  Completo
+                </Badge>
+              )}
+            </div>
             <AIAssistButton
               section={activeSection?.title || ''}
               onApply={handleAISuggestion}
             />
           </div>
 
-          {/* Editor Content */}
-          <div className="flex-1 p-6 overflow-auto">
-            <Textarea
+          <div className="flex-1 overflow-auto p-4">
+            <RichTextEditor
               value={editorContent}
-              onChange={(e) => handleContentChange(e.target.value)}
+              onChange={handleContentChange}
               placeholder={`Escreva o conteúdo para ${activeSection?.title}...`}
-              className="w-full h-full min-h-[400px] resize-none border-0 focus-visible:ring-0 text-base leading-relaxed"
+              className="h-full"
             />
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between p-3 border-t border-border">
+          <div className="flex items-center justify-between p-3 border-t border-border bg-muted/30">
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>{editorContent.length} caracteres</span>
-              <span>{editorContent.split(/\s+/).filter(Boolean).length} palavras</span>
+              <span>{editorContent.replace(/<[^>]*>/g, '').length} caracteres</span>
+              <span>{editorContent.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length} palavras</span>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                Rascunho
+              <Button variant="outline" size="sm" onClick={() => saveSection(editorContent)}>
+                <Save className="h-4 w-4 mr-2" />
+                Guardar
               </Button>
-              <Button size="sm">
+              <Button size="sm" onClick={() => {
+                if (activeSection) {
+                  const updated = { ...activeSection, is_complete: true };
+                  updateSection(selectedProposal.id, activeSectionId, editorContent);
+                }
+              }}>
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Marcar como Completo
               </Button>
@@ -240,9 +458,9 @@ export function ProposalEditor() {
         </div>
 
         {/* Right Sidebar - Context */}
-        <div className="w-80 bg-card flex flex-col overflow-auto">
+        <div className="w-72 flex-shrink-0 bg-card flex flex-col overflow-auto border-l border-border">
           <div className="p-4 border-b border-border">
-            <h3 className="font-semibold flex items-center gap-2">
+            <h3 className="font-semibold flex items-center gap-2 text-sm">
               <FileText className="h-4 w-4" />
               Requisitos do ToR
             </h3>
@@ -269,7 +487,7 @@ export function ProposalEditor() {
           </div>
 
           <div className="p-4 border-y border-border">
-            <h3 className="font-semibold flex items-center gap-2">
+            <h3 className="font-semibold flex items-center gap-2 text-sm">
               <CheckSquare className="h-4 w-4" />
               Checklist
             </h3>
@@ -282,10 +500,7 @@ export function ProposalEditor() {
               'Equipa qualificada',
               'Orçamento dentro do limite',
             ].map((item, index) => (
-              <label
-                key={index}
-                className="flex items-start gap-2 text-sm cursor-pointer"
-              >
+              <label key={index} className="flex items-start gap-2 text-sm cursor-pointer">
                 <input type="checkbox" className="mt-0.5" />
                 <span className="text-muted-foreground">{item}</span>
               </label>
@@ -293,7 +508,7 @@ export function ProposalEditor() {
           </div>
 
           <div className="p-4 border-y border-border">
-            <h3 className="font-semibold flex items-center gap-2">
+            <h3 className="font-semibold flex items-center gap-2 text-sm">
               <Lightbulb className="h-4 w-4" />
               Sugestões IA
             </h3>
@@ -311,6 +526,16 @@ export function ProposalEditor() {
           </div>
         </div>
       </div>
+
+      {/* Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Pré-visualização da Proposta</DialogTitle>
+          </DialogHeader>
+          <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
