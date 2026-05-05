@@ -27,6 +27,7 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 # Application definition
 DJANGO_APPS = [
+    'jazzmin',  # must be before django.contrib.admin
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -59,6 +60,78 @@ LOCAL_APPS = [
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+
+JAZZMIN_SETTINGS = {
+    'site_title': 'ConsultPro Admin',
+    'site_header': 'ConsultPro',
+    'site_brand': 'ConsultPro',
+    'site_logo': None,
+    'login_logo': None,
+    'welcome_sign': 'Bem-vindo ao ConsultPro',
+    'copyright': 'ConsultPro © 2026',
+    'search_model': ['users.User', 'opportunities.Opportunity', 'proposals.Proposal'],
+    'topmenu_links': [
+        {'name': 'Site', 'url': '/', 'new_window': True},
+        {'name': 'API Docs', 'url': '/api/docs/', 'new_window': True},
+    ],
+    'show_sidebar': True,
+    'navigation_expanded': True,
+    'icons': {
+        'auth': 'fas fa-users-cog',
+        'auth.user': 'fas fa-user',
+        'auth.Group': 'fas fa-users',
+        'users.User': 'fas fa-user-tie',
+        'opportunities.Opportunity': 'fas fa-briefcase',
+        'proposals.Proposal': 'fas fa-file-alt',
+        'projects.Project': 'fas fa-project-diagram',
+        'teams.Team': 'fas fa-users',
+        'curriculum.Curriculum': 'fas fa-id-card',
+        'scraping.ScrapingSource': 'fas fa-spider',
+        'notifications.Notification': 'fas fa-bell',
+        'quality_checks.QualityCheck': 'fas fa-check-circle',
+    },
+    'default_icon_parents': 'fas fa-folder',
+    'default_icon_children': 'fas fa-circle',
+    'related_modal_active': True,
+    'custom_css': None,
+    'custom_js': None,
+    'use_google_fonts_cdn': True,
+    'show_ui_builder': False,
+    'changeform_format': 'horizontal_tabs',
+    'language_chooser': False,
+}
+
+JAZZMIN_UI_TWEAKS = {
+    'navbar_small_text': False,
+    'footer_small_text': False,
+    'body_small_text': False,
+    'brand_small_text': False,
+    'brand_colour': 'navbar-primary',
+    'accent': 'accent-primary',
+    'navbar': 'navbar-dark',
+    'no_navbar_border': False,
+    'navbar_fixed': True,
+    'layout_boxed': False,
+    'footer_fixed': False,
+    'sidebar_fixed': True,
+    'sidebar': 'sidebar-dark-primary',
+    'sidebar_nav_small_text': False,
+    'sidebar_disable_expand': False,
+    'sidebar_nav_child_indent': True,
+    'sidebar_nav_compact_style': False,
+    'sidebar_nav_legacy_style': False,
+    'sidebar_nav_flat_style': False,
+    'theme': 'default',
+    'dark_mode_theme': None,
+    'button_classes': {
+        'primary': 'btn-primary',
+        'secondary': 'btn-secondary',
+        'info': 'btn-info',
+        'warning': 'btn-warning',
+        'danger': 'btn-danger',
+        'success': 'btn-success',
+    },
+}
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
