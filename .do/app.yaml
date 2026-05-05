@@ -1,6 +1,12 @@
 name: consultpro
 region: fra
 
+domains:
+- domain: consultpro.cv
+  type: PRIMARY
+- domain: www.consultpro.cv
+  type: ALIAS
+
 # ── Ingress routing ──────────────────────────────────────────
 ingress:
   rules:
