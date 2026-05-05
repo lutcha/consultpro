@@ -41,7 +41,6 @@ async function apiRequest<T>(
 
   if (response.status === 401) {
     clearTokens();
-    window.location.href = '/';
     throw new Error('Unauthorized');
   }
 
