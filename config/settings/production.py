@@ -26,6 +26,23 @@ DATABASES = {
     }
 }
 
+import ssl
+
+CELERY_BROKER_USE_SSL = {'ssl_cert_reqs': ssl.CERT_NONE}
+CELERY_REDIS_BACKEND_USE_SSL = {'ssl_cert_reqs': ssl.CERT_NONE}
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': os.getenv('REDIS_URL', 'redis://redis:6379/0'),
+        'OPTIONS': {
+            'connection_class_kwargs': {
+                'ssl_cert_reqs': ssl.CERT_NONE,
+            }
+        }
+    }
+}
+
 # Sentry
 SENTRY_DSN = os.getenv('SENTRY_DSN')
 if SENTRY_DSN:
@@ -39,3 +56,5 @@ if SENTRY_DSN:
         traces_sample_rate=0.5,
         send_default_pii=True,
     )
+
+
