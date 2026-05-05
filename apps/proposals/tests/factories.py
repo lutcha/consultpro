@@ -2,7 +2,7 @@ import factory
 
 from apps.opportunities.models import Opportunity
 from apps.users.models import User
-from ..models import (
+from apps.proposals.models import (
     AISuggestion,
     Budget,
     BudgetItem,
@@ -28,6 +28,10 @@ class OpportunityFactory(factory.django.DjangoModelFactory):
         model = Opportunity
 
     title = factory.Faker('sentence', nb_words=4)
+    client = factory.Faker('company')
+    sector = factory.Faker('word')
+    value = factory.Faker('pydecimal', left_digits=6, right_digits=2, positive=True)
+    deadline = factory.Faker('future_datetime')
     description = factory.Faker('paragraph')
 
 

@@ -48,9 +48,10 @@ class OpportunityViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def analyze_tor(self, request, pk=None):
         opportunity = self.get_object()
-        opportunity.ai_analysis_status = 'processing'
+        opportunity.ai_analysis_status = 'queued'
         opportunity.save()
-        return Response({'ai_analysis_status': 'processing'})
+        # TODO: trigger Celery task for AI analysis
+        return Response({'ai_analysis_status': 'queued'})
 
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def upload_tor(self, request, pk=None):

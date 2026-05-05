@@ -8,7 +8,7 @@ from .factories import ActivityLogFactory, NotificationFactory, UserFactory
 class NotificationModelTests(TestCase):
     def test_str_representation(self):
         notification = NotificationFactory(title='Test Notification', type='warning')
-        self.assertEqual(str(notification), 'warning - Test Notification')
+        self.assertEqual(str(notification), f'Test Notification ({notification.user.email})')
 
     def test_default_read_status(self):
         notification = NotificationFactory()
@@ -43,7 +43,7 @@ class NotificationModelTests(TestCase):
 class ActivityLogModelTests(TestCase):
     def test_str_representation(self):
         activity = ActivityLogFactory(description='A short description')
-        self.assertEqual(str(activity), 'proposal_created - A short description')
+        self.assertEqual(str(activity), f'Proposta Criada - {activity.user.email}')
 
     def test_ordering(self):
         older = ActivityLogFactory()

@@ -15,7 +15,7 @@ interface RichTextEditorProps {
   className?: string;
 }
 
-export function RichTextEditor({ value, onChange, placeholder, className }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder: _placeholder, className }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Update editor content when value prop changes (from outside)

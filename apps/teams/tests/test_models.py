@@ -1,7 +1,9 @@
+from datetime import timedelta
+
 from django.test import TestCase
 
-from ..models import Team
-from .factories import TeamFactory, UserFactory
+from apps.teams.models import Team
+from apps.teams.tests.factories import TeamFactory, UserFactory
 
 
 class TeamModelTests(TestCase):
@@ -23,7 +25,7 @@ class TeamModelTests(TestCase):
 
     def test_team_ordering(self):
         older = TeamFactory()
-        older.created_at = older.created_at.__class__.now() - older.created_at.__class__.timedelta(days=1)
+        older.created_at = older.created_at.__class__.now() - timedelta(days=1)
         older.save()
 
         newer = TeamFactory()

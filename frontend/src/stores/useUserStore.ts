@@ -7,6 +7,18 @@ import type { User } from '@/types';
 import { apiLogin, apiGetMe, clearTokens } from '@/lib/api';
 import { mapMeResponse } from '@/lib/apiMappers';
 
+// Demo accounts that work without a backend
+const DEMO_ACCOUNTS: Record<string, User> = {
+  'admin@consultpro.pt:adminpass123': {
+    id: 'user-admin', name: 'Admin ConsultPro', email: 'admin@consultpro.pt',
+    role: 'admin', skills: ['Gestão', 'Liderança'], availability: 'available', languages: ['Portugues', 'Ingles'],
+  },
+  'ana.silva@consultpro.com:password123': {
+    id: 'user-1', name: 'Ana Silva', email: 'ana.silva@consultpro.com',
+    role: 'consultant', skills: ['Saude Publica', 'Gestao de Projetos', 'M&E'], availability: 'available', languages: ['Portugues', 'Ingles', 'Frances'],
+  },
+};
+
 interface UserState {
   user: User | null;
   isAuthenticated: boolean;
@@ -34,9 +46,15 @@ export const useUserStore = create<UserState>((set) => ({
       const user = mapMeResponse(me);
       set({ user, isAuthenticated: true, isLoading: false });
       return true;
-    } catch (error) {
+    } catch {
+      // Backend offline — try demo accounts
+      const demoUser = DEMO_ACCOUNTS[`${email}:${password}`];
+      if (demoUser) {
+        set({ user: demoUser, isAuthenticated: true, isLoading: false, error: null });
+        return true;
+      }
       set({
-        error: error instanceof Error ? error.message : 'Login failed',
+        error: 'Credenciais inválidas. Backend offline — use uma conta de demo.',
         isLoading: false,
         isAuthenticated: false,
         user: null,

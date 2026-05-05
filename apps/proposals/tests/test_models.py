@@ -1,8 +1,8 @@
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from ..models import AISuggestion, Proposal, ProposalSection
-from .factories import (
+from apps.proposals.models import AISuggestion, BudgetItem, Proposal, ProposalSection
+from apps.proposals.tests.factories import (
     AISuggestionFactory,
     BudgetFactory,
     BudgetItemFactory,

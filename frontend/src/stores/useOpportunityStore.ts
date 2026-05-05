@@ -29,7 +29,7 @@ interface OpportunityState {
   fetchOpportunities: () => Promise<void>;
 }
 
-export const useOpportunityStore = create<OpportunityState>((set, get) => ({
+export const useOpportunityStore = create<OpportunityState>((set, _get) => ({
   opportunities: [],
   selectedOpportunity: null,
   isLoading: false,

@@ -203,34 +203,34 @@ export async function apiGetOpportunities(): Promise<
   PaginatedResponse<ApiOpportunityListItem>
 > {
   return apiRequest<PaginatedResponse<ApiOpportunityListItem>>(
-    '/opportunities/opportunities/'
+    '/opportunities/'
   );
 }
 
 export async function apiGetOpportunity(
   id: string
 ): Promise<ApiOpportunity> {
-  return apiRequest<ApiOpportunity>(`/opportunities/opportunities/${id}/`);
+  return apiRequest<ApiOpportunity>(`/opportunities/${id}/`);
 }
 
 export async function apiGetOpportunityRequirements(
   id: string
 ): Promise<ApiRequirement[]> {
   return apiRequest<ApiRequirement[]>(
-    `/opportunities/opportunities/${id}/requirements/`
+    `/opportunities/${id}/requirements/`
   );
 }
 
 export async function apiGetOpportunityRisks(
   id: string
 ): Promise<ApiRisk[]> {
-  return apiRequest<ApiRisk[]>(`/opportunities/opportunities/${id}/risks/`);
+  return apiRequest<ApiRisk[]>(`/opportunities/${id}/risks/`);
 }
 
 export async function apiCreateOpportunity(
   data: Partial<ApiOpportunity>
 ): Promise<ApiOpportunity> {
-  return apiRequest<ApiOpportunity>('/opportunities/opportunities/', {
+  return apiRequest<ApiOpportunity>('/opportunities/', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -243,7 +243,7 @@ export async function apiUploadToR(
   const formData = new FormData();
   formData.append('tor_document', file);
   return apiRequest<{ detail: string }>(
-    `/opportunities/opportunities/${id}/upload_tor/`,
+    `/opportunities/${id}/upload_tor/`,
     {
       method: 'POST',
       body: formData,
@@ -256,7 +256,7 @@ export async function apiUpdateOpportunityStatus(
   id: string,
   status: string
 ): Promise<ApiOpportunity> {
-  return apiRequest<ApiOpportunity>(`/opportunities/opportunities/${id}/`, {
+  return apiRequest<ApiOpportunity>(`/opportunities/${id}/`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),
   });
@@ -569,17 +569,17 @@ export interface ApiProjectDetail extends ApiProject {
 }
 
 export async function apiGetProjects(): Promise<PaginatedResponse<ApiProject>> {
-  return apiRequest<PaginatedResponse<ApiProject>>('/projects/projects/');
+  return apiRequest<PaginatedResponse<ApiProject>>('/projects/');
 }
 
 export async function apiGetProject(id: string): Promise<ApiProjectDetail> {
-  return apiRequest<ApiProjectDetail>(`/projects/projects/${id}/`);
+  return apiRequest<ApiProjectDetail>(`/projects/${id}/`);
 }
 
 export async function apiCreateProject(
   data: Partial<ApiProject>
 ): Promise<ApiProject> {
-  return apiRequest<ApiProject>('/projects/projects/', {
+  return apiRequest<ApiProject>('/projects/', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -589,7 +589,7 @@ export async function apiUpdateProjectStatus(
   id: string,
   action: 'activate' | 'complete' | 'close' | 'hold'
 ): Promise<{ status: string }> {
-  return apiRequest<{ status: string }>(`/projects/projects/${id}/${action}/`, {
+  return apiRequest<{ status: string }>(`/projects/${id}/${action}/`, {
     method: 'POST',
   });
 }
@@ -602,7 +602,7 @@ export async function apiGetProjectStats(): Promise<{
   on_hold_projects: number;
   overdue_projects: number;
 }> {
-  return apiRequest('/projects/projects/stats/');
+  return apiRequest('/projects/stats/');
 }
 
 export async function apiGetProjectPhases(projectId: string): Promise<ApiProjectPhase[]> {
@@ -704,5 +704,226 @@ export async function apiUpdateTeam(
 export async function apiDeleteTeam(id: number): Promise<void> {
   return apiRequest<void>(`/teams/${id}/`, {
     method: 'DELETE',
+  });
+}
+
+// ============================================
+// CURRICULUM / CV
+// ============================================
+
+export interface ApiCurriculum {
+  id: number;
+  user: any;
+  file_name: string;
+  file_type: string;
+  status: string;
+  analysis_score: number | null;
+  extracted_data: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiCVTemplate {
+  id: number;
+  name: string;
+  organization: string;
+  organization_name: string;
+  description: string;
+  required_sections: unknown[];
+  format_rules: unknown[];
+  max_length_pages: number | null;
+  file_template: string | null;
+  example_url: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ApiCVSuggestion {
+  id: number;
+  type: string;
+  priority: string;
+  message: string;
+  context: string;
+  auto_fixable: boolean;
+  fixed: boolean;
+  created_at: string;
+}
+
+export async function apiGetCurricula(): Promise<PaginatedResponse<ApiCurriculum>> {
+  return apiRequest<PaginatedResponse<ApiCurriculum>>('/curriculum/');
+}
+
+export async function apiUploadCV(file: File): Promise<ApiCurriculum> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('file_name', file.name);
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  formData.append('file_type', ext === 'pdf' ? 'pdf' : 'docx');
+
+  return apiRequest<ApiCurriculum>('/curriculum/', {
+    method: 'POST',
+    body: formData,
+    headers: {},
+  });
+}
+
+export async function apiAnalyzeCV(id: number): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>(`/curriculum/${id}/analyze/`, {
+    method: 'POST',
+  });
+}
+
+export async function apiGetCVExtracted(id: number): Promise<{ extracted_data: Record<string, unknown> }> {
+  return apiRequest<{ extracted_data: Record<string, unknown> }>(`/curriculum/${id}/extracted/`);
+}
+
+export async function apiGetCVSuggestions(id: number): Promise<ApiCVSuggestion[]> {
+  return apiRequest<ApiCVSuggestion[]>(`/curriculum/${id}/suggestions/`);
+}
+
+export async function apiApplyCVSuggestion(cvId: number, suggId: number): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>(`/curriculum/${cvId}/suggestions/${suggId}/apply/`, {
+    method: 'POST',
+  });
+}
+
+export async function apiGetCVTemplates(): Promise<PaginatedResponse<ApiCVTemplate>> {
+  return apiRequest<PaginatedResponse<ApiCVTemplate>>('/curriculum/templates/');
+}
+
+export async function apiDownloadCVTemplate(id: number): Promise<Blob> {
+  const response = await fetch(`${API_BASE}/curriculum/templates/${id}/download/`, {
+    headers: { Authorization: `Bearer ${getToken() || ''}` },
+  });
+  if (!response.ok) throw new Error('Download failed');
+  return response.blob();
+}
+
+// ============================================
+// SCRAPING
+// ============================================
+
+export interface ApiScrapingSource {
+  id: number;
+  name: string;
+  organization: string;
+  url: string;
+  logo: string;
+  source_type: string;
+  status: string;
+  scrape_frequency: string;
+  last_scraped_at: string | null;
+  next_scrape_at: string | null;
+  filters: Record<string, unknown>;
+  new_opportunities_count: number;
+  total_opportunities_count: number;
+  success_rate: number;
+  error_message: string;
+}
+
+export interface ApiScrapedOpportunity {
+  id: number;
+  source: number;
+  external_id: string;
+  external_url: string;
+  title: string;
+  organization: string;
+  client: string;
+  sector: string;
+  country: string;
+  description: string;
+  value: string;
+  currency: string;
+  deadline: string | null;
+  status: string;
+  published_at: string | null;
+  deadline_alert: boolean;
+  ai_summary: string;
+}
+
+export interface ApiScrapingJob {
+  id: number;
+  source: number;
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  items_found: number;
+  items_new: number;
+  items_imported: number;
+  error_log: string;
+  executed_by: string;
+}
+
+export interface ApiScrapingAlert {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  scraped_opportunity: number | null;
+  read: boolean;
+  created_at: string;
+}
+
+export async function apiGetScrapingSources(): Promise<PaginatedResponse<ApiScrapingSource>> {
+  return apiRequest<PaginatedResponse<ApiScrapingSource>>('/scraping/sources/');
+}
+
+export async function apiCreateScrapingSource(data: Partial<ApiScrapingSource>): Promise<ApiScrapingSource> {
+  return apiRequest<ApiScrapingSource>('/scraping/sources/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiRunScrapingSource(id: number): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>(`/scraping/sources/${id}/run/`, {
+    method: 'POST',
+  });
+}
+
+export async function apiToggleScrapingSource(id: number): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>(`/scraping/sources/${id}/toggle/`, {
+    method: 'POST',
+  });
+}
+
+export async function apiGetScrapedOpportunities(): Promise<PaginatedResponse<ApiScrapedOpportunity>> {
+  return apiRequest<PaginatedResponse<ApiScrapedOpportunity>>('/scraping/opportunities/');
+}
+
+export async function apiImportScrapedOpportunity(id: number): Promise<{ opportunity_id: number; status: string }> {
+  return apiRequest<{ opportunity_id: number; status: string }>(`/scraping/opportunities/${id}/import_opportunity/`, {
+    method: 'POST',
+  });
+}
+
+export async function apiIgnoreScrapedOpportunity(id: number): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>(`/scraping/opportunities/${id}/ignore/`, {
+    method: 'POST',
+  });
+}
+
+export async function apiGetScrapingJobs(): Promise<PaginatedResponse<ApiScrapingJob>> {
+  return apiRequest<PaginatedResponse<ApiScrapingJob>>('/scraping/jobs/');
+}
+
+export async function apiGetScrapingStats(): Promise<{
+  total_sources: number;
+  active_sources: number;
+  total_opportunities: number;
+  imported_opportunities: number;
+  new_opportunities: number;
+  success_rate: number;
+}> {
+  return apiRequest('/scraping/sources/stats/');
+}
+
+export async function apiGetScrapingAlerts(): Promise<PaginatedResponse<ApiScrapingAlert>> {
+  return apiRequest<PaginatedResponse<ApiScrapingAlert>>('/scraping/alerts/');
+}
+
+export async function apiMarkScrapingAlertRead(id: number): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>(`/scraping/alerts/${id}/mark_read/`, {
+    method: 'POST',
   });
 }

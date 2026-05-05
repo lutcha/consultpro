@@ -70,8 +70,19 @@ export function NewProject() {
 
     try {
       const project = await apiCreateProject({
-        ...formData,
+        title: formData.title,
+        proposal_id: formData.proposal_id ? Number(formData.proposal_id) : undefined,
+        client: formData.client,
+        client_contact_name: formData.client_contact_name,
+        client_contact_email: formData.client_contact_email,
+        description: formData.description,
+        sector: formData.sector,
+        country: formData.country,
         budget_total: formData.budget_total,
+        budget_currency: formData.budget_currency,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        risk_level: formData.risk_level,
         status: 'planning',
       });
       navigate(`/projects/${project.id}`);

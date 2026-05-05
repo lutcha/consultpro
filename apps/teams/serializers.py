@@ -10,10 +10,14 @@ class TeamMemberSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'name', 'role']
+        fields = [
+            'id', 'email', 'username', 'first_name', 'last_name', 'name',
+            'role', 'avatar', 'availability', 'skills', 'languages',
+            'years_experience',
+        ]
 
     def get_name(self, obj: User) -> str:
-        return f"{obj.first_name} {obj.last_name}"
+        return f"{obj.first_name} {obj.last_name}".strip() or obj.username
 
 
 class TeamSerializer(serializers.ModelSerializer):

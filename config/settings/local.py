@@ -30,6 +30,21 @@ CELERY_BROKER_URL = 'memory://'
 CELERY_RESULT_BACKEND = 'cache'
 CELERY_CACHE_BACKEND = 'memory'
 
+# Use local memory cache instead of Redis
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
+
+# Disable throttling in local dev to avoid cache dependencies
+REST_FRAMEWORK = globals().get('REST_FRAMEWORK', {})
+REST_FRAMEWORK['DEFAULT_THROTTLE_CLASSES'] = []
+REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {}
+
+# Use mock AI service in local dev (avoids quota/billing issues)
+AI_ALWAYS_MOCK = True
+
 # Logging to console only
 LOGGING = {
     'version': 1,

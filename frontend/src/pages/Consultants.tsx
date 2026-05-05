@@ -8,20 +8,18 @@ import {
   Search,
   Filter,
   Star,
-  MapPin,
   Briefcase,
   DollarSign,
   GraduationCap,
   Linkedin,
   Mail,
-  Phone,
   Calendar,
   CheckCircle2,
   XCircle,
   Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -251,10 +249,10 @@ export function Consultants() {
                       /hora
                     </div>
                   )}
-                  {consultant.consultant_profile?.total_projects_completed > 0 && (
+                  {(consultant.consultant_profile?.total_projects_completed ?? 0) > 0 && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Star className="h-4 w-4" />
-                      {consultant.consultant_profile.total_projects_completed} projetos
+                      {consultant.consultant_profile?.total_projects_completed} projetos
                     </div>
                   )}
                 </div>
@@ -385,11 +383,11 @@ export function Consultants() {
                       </div>
                     </div>
                   )}
-                  {selectedConsultant.consultant_profile?.specializations.length > 0 && (
+                  {(selectedConsultant.consultant_profile?.specializations?.length ?? 0) > 0 && (
                     <div>
                       <h4 className="font-medium mb-2">Especializações</h4>
                       <div className="flex flex-wrap gap-2">
-                        {selectedConsultant.consultant_profile.specializations.map((spec) => (
+                        {selectedConsultant.consultant_profile?.specializations.map((spec) => (
                           <Badge key={spec} variant="default">
                             {spec}
                           </Badge>

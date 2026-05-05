@@ -92,6 +92,11 @@ export function Login() {
               <p>Contas de demo:</p>
               <p className="mt-1">
                 <code className="bg-muted px-1 py-0.5 rounded text-xs">
+                  admin@consultpro.pt / adminpass123
+                </code>
+              </p>
+              <p className="mt-1">
+                <code className="bg-muted px-1 py-0.5 rounded text-xs">
                   ana.silva@consultpro.com / password123
                 </code>
               </p>

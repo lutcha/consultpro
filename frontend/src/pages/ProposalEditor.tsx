@@ -8,13 +8,11 @@ import {
   ArrowLeft,
   Save,
   Send,
-  Users,
   CheckCircle,
   ChevronRight,
   FileText,
   CheckSquare,
   Lightbulb,
-  Download,
   FileType,
   FileDown,
   Upload,
@@ -26,14 +24,13 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AIAssistButton } from '@/components/proposals/AIAssistButton';
 import { RichTextEditor } from '@/components/proposals/RichTextEditor';
 import { useProposalStore } from '@/stores';
 import {
-  apiUpdateProposalSection,
   apiDownloadProposalWord,
   apiDownloadProposalPdf,
   apiUploadProposalLogo,
@@ -56,7 +53,7 @@ export function ProposalEditor() {
   }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadType, setUploadType] = useState<'proponent' | 'client'>('proponent');
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -66,10 +63,10 @@ export function ProposalEditor() {
 
   useEffect(() => {
     if (selectedProposal) {
-      setConsortiumMembers(selectedProposal.consortium_members || []);
+      setConsortiumMembers(selectedProposal.consortiumMembers || []);
       setLogos({
-        proponent: selectedProposal.proponent_logo_url || undefined,
-        client: selectedProposal.client_logo_url || undefined,
+        proponent: selectedProposal.proponentLogoUrl || undefined,
+        client: selectedProposal.clientLogoUrl || undefined,
       });
       if (selectedProposal.sections.length > 0 && !activeSectionId) {
         setActiveSectionId(selectedProposal.sections[0].id);
@@ -195,10 +192,7 @@ export function ProposalEditor() {
       
       <h1 style="color: #1A365D; font-size: 24px; text-align: center; margin-bottom: 20px;">${selectedProposal.title}</h1>
       
-      ${selectedProposal.opportunity ? `
-        <p style="text-align: center; color: #666;"><em>Referência: ${selectedProposal.opportunity.reference_number || 'N/A'}</em></p>
-        <p style="text-align: center; color: #666;"><em>Cliente: ${selectedProposal.opportunity.client}</em></p>
-      ` : ''}
+      <p style="text-align: center; color: #666;"><em>ID Oportunidade: ${selectedProposal.opportunityId}</em></p>
       
       ${consortiumMembers.length > 0 ? `
         <div style="margin: 30px 0; padding: 15px; background: #F7FAFC; border-radius: 8px;">
@@ -393,7 +387,7 @@ export function ProposalEditor() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    {section.is_complete ? (
+                    {section.isComplete ? (
                       <CheckCircle className="h-3.5 w-3.5 text-green-500" />
                     ) : (
                       <div className="h-3.5 w-3.5 rounded-full border border-muted-foreground" />
@@ -412,7 +406,7 @@ export function ProposalEditor() {
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">{activeSection?.title}</span>
-              {activeSection?.is_complete && (
+              {activeSection?.isComplete && (
                 <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
                   Completo
                 </Badge>
@@ -446,7 +440,6 @@ export function ProposalEditor() {
               </Button>
               <Button size="sm" onClick={() => {
                 if (activeSection) {
-                  const updated = { ...activeSection, is_complete: true };
                   updateSection(selectedProposal.id, activeSectionId, editorContent);
                 }
               }}>

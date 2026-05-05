@@ -3,8 +3,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from ..models import Budget
-from .factories import (
+from apps.proposals.models import Budget
+from apps.proposals.tests.factories import (
     BudgetFactory,
     OpportunityFactory,
     ProposalFactory,
@@ -98,15 +98,19 @@ class TestProposalViewSet:
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_ai_suggest(self, authenticated_client):
+        from unittest.mock import patch, MagicMock
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user)
         section = ProposalSectionFactory(proposal=proposal)
         url = reverse('proposal-ai-suggest', kwargs={'pk': proposal.pk})
-        response = client.post(
-            url,
-            {'section_id': section.id, 'action': 'expand'},
-            format='json',
-        )
+        mock_service = MagicMock()
+        mock_service.generate_suggestion.return_value = 'Expanded content here.'
+        with patch('apps.ai_services.services.AIServiceFactory.get_service', return_value=mock_service):
+            response = client.post(
+                url,
+                {'section_id': section.id, 'action': 'expand'},
+                format='json',
+            )
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_save_action(self, authenticated_client):

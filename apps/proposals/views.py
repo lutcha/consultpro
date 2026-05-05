@@ -119,13 +119,24 @@ class ProposalViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Placeholder for AI service integration.
-        generated_content = ''
+        # AI service integration
+        from apps.ai_services.services import AIServiceFactory
+        service = AIServiceFactory.get_service()
+        generated_content = service.generate_suggestion(
+            section_type=section.section_type,
+            content=section.content or '',
+            action=action_type,
+        )
+        
+        description = request.data.get('description', '')
+        if not description and generated_content:
+            description = generated_content[:200]
+        
         serializer = AISuggestionSerializer(
             data={
                 'section': section.id,
                 'action': action_type,
-                'description': request.data.get('description', ''),
+                'description': description,
                 'generated_content': generated_content,
             }
         )
@@ -156,7 +167,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def team(self, request, pk=None):
         proposal = self.get_object()
-        team = proposal.proposalteammember_set.all()
+        team = proposal.team_members_detail.all()
         serializer = ProposalTeamMemberSerializer(team, many=True)
         return Response(serializer.data)
 

@@ -14,8 +14,6 @@ import {
   Calendar,
   DollarSign,
   Users,
-  Flag,
-  FileText,
   Layers,
   Circle,
   CheckCircle2,
@@ -32,13 +30,14 @@ import { Progress } from '@/components/ui/progress';
 import { apiGetProject, apiUpdateProjectStatus } from '@/lib/api';
 import type { ApiProjectDetail } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
+import { StatusBadge } from '@/components/shared/StatusBadge';
 
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<ApiProjectDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) loadProject(id);

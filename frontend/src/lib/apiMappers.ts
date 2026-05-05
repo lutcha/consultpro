@@ -240,7 +240,7 @@ export function mapApiProposal(proposal: ApiProposal): Proposal {
     status: proposal.status as Proposal['status'],
     sections: (proposal.sections || []).map(mapApiProposalSection),
     team: (proposal.team || []).map(mapApiTeamMember),
-    budget: mapApiBudget(proposal.budget),
+    budget: mapApiBudget(proposal.budget) || { total: 0, currency: 'USD', breakdown: [] },
     qualityScore: proposal.quality_score || undefined,
     proponentLogoUrl: proposal.proponent_logo_url || undefined,
     clientLogoUrl: proposal.client_logo_url || undefined,
@@ -264,6 +264,8 @@ export function mapApiProposalListItem(
     status: proposal.status as Proposal['status'],
     sections: [],
     team: [],
+    budget: { total: 0, currency: 'USD', breakdown: [] },
+    consortiumMembers: [],
     createdAt: toDate(proposal.created_at),
     updatedAt: toDate(proposal.updated_at),
   };

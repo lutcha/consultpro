@@ -11,7 +11,7 @@ from .views import (
 )
 
 router = DefaultRouter()
-router.register(r'projects', ProjectViewSet, basename='project')
+router.register(r'', ProjectViewSet, basename='project')
 router.register(r'team-members', ProjectTeamMemberViewSet, basename='project-team-member')
 router.register(r'milestones', ProjectMilestoneViewSet, basename='project-milestone')
 router.register(r'risks', ProjectRiskViewSet, basename='project-risk')

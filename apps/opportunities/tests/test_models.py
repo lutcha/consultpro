@@ -45,7 +45,7 @@ class OpportunityModelTests(TestCase):
 class RequirementModelTests(TestCase):
     def test_str_representation(self):
         requirement = RequirementFactory(description='A very long description that exceeds fifty characters easily')
-        expected = f"{requirement.category} - A very long description that exceeds fifty char"
+        expected = f"{requirement.category} - A very long description that exceeds fifty charact"
         self.assertEqual(str(requirement), expected)
 
     def test_default_priority(self):

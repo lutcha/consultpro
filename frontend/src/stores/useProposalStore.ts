@@ -37,7 +37,7 @@ interface ProposalState {
   ) => void;
 }
 
-export const useProposalStore = create<ProposalState>((set, get) => ({
+export const useProposalStore = create<ProposalState>((set, _get) => ({
   proposals: [],
   selectedProposal: null,
   isLoading: false,

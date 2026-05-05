@@ -16,12 +16,14 @@ import {
   NewProposal,
   ProposalEditor,
   QualityCheck,
-  Teams,
   Settings,
   Projects,
   ProjectDetail,
   NewProject,
   Consultants,
+  ScrapingPage,
+  TeamsPage,
+  CurriculumPage,
 } from '@/pages';
 
 // Protected Route wrapper
@@ -119,7 +121,31 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Teams />} />
+          <Route index element={<TeamsPage />} />
+        </Route>
+
+        {/* Curriculum */}
+        <Route
+          path="/curriculum"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<CurriculumPage />} />
+        </Route>
+
+        {/* Scraping */}
+        <Route
+          path="/scraping"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<ScrapingPage />} />
         </Route>
 
         {/* Settings */}

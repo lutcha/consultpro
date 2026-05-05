@@ -1,0 +1,231 @@
+name: consultpro
+region: fra
+
+# ── Ingress routing ──────────────────────────────────────────
+ingress:
+  rules:
+  - component:
+      name: api
+      preserve_path_prefix: true
+    match:
+      path:
+        prefix: /api
+  - component:
+      name: api
+      preserve_path_prefix: true
+    match:
+      path:
+        prefix: /admin
+  - component:
+      name: api
+      preserve_path_prefix: true
+    match:
+      path:
+        prefix: /static
+  - component:
+      name: frontend
+    match:
+      path:
+        prefix: /
+
+# ── Frontend (Static Site) ────────────────────────────────────
+static_sites:
+- name: frontend
+  github:
+    repo: lutcha/consultpro
+    branch: main
+    deploy_on_push: true
+  source_dir: frontend
+  build_command: npm ci && npm run build
+  output_dir: dist
+  index_document: index.html
+  error_document: index.html
+  envs:
+  - key: VITE_APP_NAME
+    value: ConsultPro
+  - key: VITE_APP_VERSION
+    value: "1.0.0"
+
+# ── Backend API (Django) ──────────────────────────────────────
+services:
+- name: api
+  github:
+    repo: lutcha/consultpro
+    branch: main
+    deploy_on_push: true
+  dockerfile_path: docker/Dockerfile
+  http_port: 8000
+  instance_size_slug: basic-xs
+  instance_count: 1
+  health_check:
+    http_path: /health
+    initial_delay_seconds: 30
+    period_seconds: 30
+  envs:
+  - key: DJANGO_SETTINGS_MODULE
+    value: config.settings.production
+    scope: RUN_AND_BUILD_TIME
+  - key: SECRET_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: CHANGE_ME
+  - key: DEBUG
+    value: "False"
+    scope: RUN_AND_BUILD_TIME
+  - key: ALLOWED_HOSTS
+    value: "${APP_DOMAIN}"
+    scope: RUN_AND_BUILD_TIME
+  - key: CORS_ALLOWED_ORIGINS
+    value: "https://${APP_DOMAIN}"
+    scope: RUN_AND_BUILD_TIME
+  - key: DB_NAME
+    value: ${db.DATABASE}
+    scope: RUN_AND_BUILD_TIME
+  - key: DB_USER
+    value: ${db.USERNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: DB_PASSWORD
+    value: ${db.PASSWORD}
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+  - key: DB_HOST
+    value: ${db.HOSTNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: DB_PORT
+    value: ${db.PORT}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_DB
+    value: ${db.DATABASE}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_USER
+    value: ${db.USERNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_PASSWORD
+    value: ${db.PASSWORD}
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+  - key: POSTGRES_HOST
+    value: ${db.HOSTNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_PORT
+    value: ${db.PORT}
+    scope: RUN_AND_BUILD_TIME
+  - key: REDIS_URL
+    value: ${redis.REDIS_URL}
+    scope: RUN_AND_BUILD_TIME
+  - key: CELERY_BROKER_URL
+    value: ${redis.REDIS_URL}
+    scope: RUN_AND_BUILD_TIME
+  - key: CELERY_RESULT_BACKEND
+    value: ${redis.REDIS_URL}
+    scope: RUN_AND_BUILD_TIME
+  - key: JWT_ACCESS_TOKEN_LIFETIME
+    value: "60"
+    scope: RUN_AND_BUILD_TIME
+  - key: JWT_REFRESH_TOKEN_LIFETIME
+    value: "10080"
+    scope: RUN_AND_BUILD_TIME
+  - key: OPENAI_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: CHANGE_ME
+  - key: AWS_ACCESS_KEY_ID
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: CHANGE_ME
+  - key: AWS_SECRET_ACCESS_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: CHANGE_ME
+  - key: AWS_STORAGE_BUCKET_NAME
+    value: consultpro
+    scope: RUN_AND_BUILD_TIME
+  - key: AWS_S3_ENDPOINT_URL
+    value: CHANGE_ME
+    scope: RUN_AND_BUILD_TIME
+  - key: AWS_S3_REGION_NAME
+    value: us-east-1
+    scope: RUN_AND_BUILD_TIME
+
+# ── Celery Worker ─────────────────────────────────────────────
+workers:
+- name: celery
+  github:
+    repo: lutcha/consultpro
+    branch: main
+    deploy_on_push: true
+  dockerfile_path: docker/Dockerfile
+  instance_size_slug: basic-xs
+  instance_count: 1
+  run_command: celery -A config worker --loglevel=info --concurrency=2
+  envs:
+  - key: DJANGO_SETTINGS_MODULE
+    value: config.settings.production
+    scope: RUN_AND_BUILD_TIME
+  - key: SECRET_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: CHANGE_ME
+  - key: DB_NAME
+    value: ${db.DATABASE}
+  - key: DB_USER
+    value: ${db.USERNAME}
+  - key: DB_PASSWORD
+    value: ${db.PASSWORD}
+    type: SECRET
+  - key: DB_HOST
+    value: ${db.HOSTNAME}
+  - key: DB_PORT
+    value: ${db.PORT}
+  - key: REDIS_URL
+    value: ${redis.REDIS_URL}
+  - key: CELERY_BROKER_URL
+    value: ${redis.REDIS_URL}
+  - key: CELERY_RESULT_BACKEND
+    value: ${redis.REDIS_URL}
+
+# ── Jobs (migrations) ─────────────────────────────────────────
+jobs:
+- name: migrate
+  github:
+    repo: lutcha/consultpro
+    branch: main
+    deploy_on_push: true
+  dockerfile_path: docker/Dockerfile
+  run_command: python manage.py migrate --noinput
+  kind: PRE_DEPLOY
+  instance_size_slug: basic-xs
+  envs:
+  - key: DJANGO_SETTINGS_MODULE
+    value: config.settings.production
+    scope: RUN_AND_BUILD_TIME
+  - key: SECRET_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: CHANGE_ME
+  - key: DB_NAME
+    value: ${db.DATABASE}
+  - key: DB_USER
+    value: ${db.USERNAME}
+  - key: DB_PASSWORD
+    value: ${db.PASSWORD}
+    type: SECRET
+  - key: DB_HOST
+    value: ${db.HOSTNAME}
+  - key: DB_PORT
+    value: ${db.PORT}
+
+# ── Managed Databases ─────────────────────────────────────────
+databases:
+- name: db
+  engine: PG
+  version: "15"
+  size: db-s-1vcpu-1gb
+  num_nodes: 1
+  production: false
+- name: redis
+  engine: REDIS
+  version: "7"
+  size: db-s-1vcpu-1gb
+  num_nodes: 1
+  production: false

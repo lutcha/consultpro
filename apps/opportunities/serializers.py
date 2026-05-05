@@ -1,3 +1,5 @@
+import math
+
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -38,7 +40,7 @@ class OpportunityListSerializer(serializers.ModelSerializer):
     def get_days_until_deadline(self, obj: Opportunity) -> int:
         if obj.deadline:
             delta = obj.deadline - timezone.now()
-            return delta.days
+            return max(0, int(delta.total_seconds() // 86400))
         return 0
 
 
@@ -82,5 +84,5 @@ class OpportunityDetailSerializer(serializers.ModelSerializer):
     def get_days_until_deadline(self, obj: Opportunity) -> int:
         if obj.deadline:
             delta = obj.deadline - timezone.now()
-            return delta.days
+            return math.ceil(delta.total_seconds() / 86400)
         return 0

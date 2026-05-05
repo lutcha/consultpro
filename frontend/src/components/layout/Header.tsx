@@ -3,7 +3,7 @@
 // ============================================
 
 import { useState } from 'react';
-import { Bell, Search, User, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { Bell, Search, User, Settings, LogOut, ChevronDown, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -20,9 +20,10 @@ import { cn } from '@/lib/utils';
 
 interface HeaderProps {
   className?: string;
+  onMenuClick?: () => void;
 }
 
-export function Header({ className }: HeaderProps) {
+export function Header({ className, onMenuClick }: HeaderProps) {
   const { user, logout } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -37,6 +38,19 @@ export function Header({ className }: HeaderProps) {
         className
       )}
     >
+      {/* Mobile Menu Button */}
+      {onMenuClick && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="lg:hidden mr-2"
+          onClick={onMenuClick}
+          aria-label="Menu"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      )}
+
       {/* Search Bar */}
       <div className="flex-1 max-w-md">
         <div className="relative">

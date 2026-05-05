@@ -3,8 +3,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from ..models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
-from .factories import (
+from apps.quality_checks.models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
+from apps.quality_checks.tests.factories import (
     ProposalFactory,
     QCCheckCategoryFactory,
     QCItemFactory,

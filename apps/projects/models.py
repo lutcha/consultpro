@@ -153,14 +153,14 @@ class ProjectPhase(models.Model):
 
     @property
     def budget_utilization(self):
-        if self.budget_total > 0:
-            return int((self.actual_cost / self.budget_total) * 100)
+        if self.project.budget_total > 0:
+            return int((self.project.actual_cost / self.project.budget_total) * 100)
         return 0
 
     @property
     def is_overdue(self):
         from django.utils import timezone
-        if self.end_date and self.status not in (self.Status.COMPLETED, self.Status.CLOSED):
+        if self.end_date and self.project.status not in (Project.Status.COMPLETED, Project.Status.CLOSED):
             return self.end_date < timezone.now().date()
         return False
 

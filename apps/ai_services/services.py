@@ -137,13 +137,128 @@ class OpenAIService(BaseAIService):
             return ''
 
 
+class MockAIService(BaseAIService):
+    """Mock AI service for development and testing.
+
+    Returns realistic placeholder content when OpenAI is unavailable
+    (quota exceeded, no API key, or AI_ALWAYS_MOCK=True).
+    """
+
+    def analyze_document(self, text: str) -> dict:
+        logger.info('MockAIService.analyze_document called (len=%s)', len(text))
+        return {
+            'summary': (
+                '[MOCK] This is a simulated summary of the document. '
+                'The actual AI analysis is unavailable in development mode.'
+            ),
+            'requirements': [
+                '[MOCK] Requirement 1: Demonstrate technical capability.',
+                '[MOCK] Requirement 2: Provide past performance references.',
+                '[MOCK] Requirement 3: Include detailed pricing breakdown.',
+            ],
+            'risks': [
+                '[MOCK] Risk 1: Tight deadline may affect quality.',
+                '[MOCK] Risk 2: Unclear evaluation criteria.',
+            ],
+        }
+
+    def generate_suggestion(self, section_type: str, content: str, action: str) -> str:
+        logger.info(
+            'MockAIService.generate_suggestion called (section=%s, action=%s)',
+            section_type, action,
+        )
+        suggestions = {
+            'expand': (
+                f'[MOCK — Expanded {section_type}]\n\n'
+                f'This section has been expanded with additional detail. '
+                f'Original content ({len(content)} chars) would be elaborated '
+                f'with methodology, timelines, and deliverables. '
+                f'Connect to the client\'s strategic objectives and quantify '
+                f'expected outcomes wherever possible.'
+            ),
+            'summarize': (
+                f'[MOCK — Summarized {section_type}]\n\n'
+                f'Concise summary capturing the key points from the '
+                f'original {len(content)} characters of content.'
+            ),
+            'rewrite': (
+                f'[MOCK — Rewritten {section_type}]\n\n'
+                f'This section has been rewritten for clarity and impact, '
+                f'maintaining all original intent while improving readability.'
+            ),
+        }
+        return suggestions.get(
+            action,
+            f'[MOCK — Suggestion for {section_type}]\n\n'
+            f'Action requested: {action}. '
+            f'Original content length: {len(content)} characters.',
+        )
+
+    def improve_text(self, content: str, action: str) -> str:
+        logger.info(
+            'MockAIService.improve_text called (action=%s, len=%s)',
+            action, len(content),
+        )
+        improvements = {
+            'clarity': (
+                f'[MOCK — Improved for clarity]\n\n{content}\n\n'
+                f'[The text above would be restructured for clearer '
+                f'communication, shorter sentences, and active voice.]'
+            ),
+            'tone': (
+                f'[MOCK — Tone adjusted]\n\n{content}\n\n'
+                f'[The text above would be adjusted to a more professional '
+                f'and confident tone suitable for a proposal context.]'
+            ),
+            'grammar': (
+                f'[MOCK — Grammar corrected]\n\n{content}\n\n'
+                f'[The text above would be checked for grammatical accuracy, '
+                f'punctuation, and spelling.]'
+            ),
+        }
+        return improvements.get(
+            action,
+            f'[MOCK — Text improved ({action})]\n\n{content}',
+        )
+
+
 class AIServiceFactory:
-    """Factory for retrieving AI service instances."""
+    """Factory for retrieving AI service instances.
+
+    Attempts to use OpenAI first; falls back to MockAIService if:
+      - OPENAI_API_KEY is missing or invalid
+      - OpenAI API returns quota/authentication errors
+      - AI_ALWAYS_MOCK=True in Django settings
+    """
 
     _service = None
 
     @classmethod
     def get_service(cls) -> BaseAIService:
         if cls._service is None:
-            cls._service = OpenAIService()
+            cls._service = cls._create_service()
         return cls._service
+
+    @classmethod
+    def _create_service(cls) -> BaseAIService:
+        if getattr(settings, 'AI_ALWAYS_MOCK', False):
+            logger.info('AI_ALWAYS_MOCK=True — using MockAIService')
+            return MockAIService()
+
+        try:
+            service = OpenAIService()
+            logger.info('OpenAIService initialized successfully')
+            return service
+        except Exception as exc:
+            logger.warning(
+                'Failed to initialize OpenAIService (%s). '
+                'Falling back to MockAIService. '
+                'Set AI_ALWAYS_MOCK=True to suppress this warning.',
+                exc,
+            )
+            return MockAIService()
+
+    @classmethod
+    def reset(cls):
+        """Reset the cached service (useful in tests)."""
+        cls._service = None

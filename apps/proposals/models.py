@@ -1,4 +1,6 @@
 from django.db import models
+from apps.users.models import User
+from apps.opportunities.models import Opportunity
 
 
 class Proposal(models.Model):
@@ -12,36 +14,22 @@ class Proposal(models.Model):
         ('lost', 'Perdida'),
     ]
 
-    opportunity = models.ForeignKey(
-        'opportunities.Opportunity',
-        on_delete=models.CASCADE,
-        related_name='proposals',
-    )
+    opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='proposals')
     title = models.CharField(max_length=500)
     version = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    
+    # Auto-save tracking
     auto_save_status = models.CharField(
         max_length=20,
-        choices=[
-            ('idle', 'Idle'),
-            ('saving', 'A guardar'),
-            ('saved', 'Guardado'),
-            ('error', 'Erro'),
-        ],
-        default='idle',
+        choices=[('idle', 'Idle'), ('saving', 'A guardar'), ('saved', 'Guardado'), ('error', 'Erro')],
+        default='idle'
     )
     last_saved_at = models.DateTimeField(null=True, blank=True)
-    created_by = models.ForeignKey(
-        'users.User',
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='created_proposals',
-    )
-    team_members = models.ManyToManyField(
-        'users.User',
-        through='ProposalTeamMember',
-        related_name='proposals',
-    )
+    
+    # Metadata
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_proposals')
+    team_members = models.ManyToManyField(User, through='ProposalTeamMember', related_name='proposals')
     submitted_at = models.DateTimeField(null=True, blank=True)
     
     # Document branding
@@ -65,25 +53,29 @@ class Proposal(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    
     class Meta:
         ordering = ['-updated_at']
 
     def __str__(self):
-        return self.title
+        return f"{self.title} (v{self.version})"
 
 
 class ProposalTeamMember(models.Model):
-    proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE)
-    user = models.ForeignKey('users.User', on_delete=models.CASCADE)
-    role = models.CharField(max_length=200)
+    proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='team_members_detail')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    role = models.CharField(max_length=200)  # Team Leader, Especialista, etc.
     hours = models.PositiveIntegerField(default=0)
     hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     cv_attached = models.BooleanField(default=False)
     cv_document = models.FileField(upload_to='cv_documents/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['proposal', 'user']
 
     def __str__(self):
-        return f"{self.user} - {self.role}"
+        return f"{self.user.get_full_name() or self.user.email} - {self.role}"
 
 
 class ProposalSection(models.Model):
@@ -97,37 +89,33 @@ class ProposalSection(models.Model):
         ('annexes', 'Anexos'),
     ]
 
-    proposal = models.ForeignKey(
-        Proposal,
-        on_delete=models.CASCADE,
-        related_name='sections',
-    )
+    proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='sections')
     section_type = models.CharField(max_length=30, choices=SECTION_TYPE_CHOICES)
     title = models.CharField(max_length=200)
     content = models.TextField(blank=True)
     order = models.PositiveIntegerField(default=0)
     is_complete = models.BooleanField(default=False)
-
+    
     class Meta:
         ordering = ['order']
 
     def __str__(self):
-        return f"{self.proposal.title} - {self.title}"
+        return f"{self.title} - {self.proposal.title}"
 
 
 class Comment(models.Model):
-    section = models.ForeignKey(
-        ProposalSection,
-        on_delete=models.CASCADE,
-        related_name='comments',
-    )
-    user = models.ForeignKey('users.User', on_delete=models.CASCADE)
+    section = models.ForeignKey(ProposalSection, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     text = models.TextField()
     resolved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
-        return f"Comment by {self.user} on {self.section}"
+        return f"Comment by {self.user.email} on {self.section.title}"
 
 
 class AISuggestion(models.Model):
@@ -138,32 +126,32 @@ class AISuggestion(models.Model):
         ('translate_en', 'Traduzir EN'),
     ]
 
-    section = models.ForeignKey(
-        ProposalSection,
-        on_delete=models.CASCADE,
-        related_name='ai_suggestions',
-    )
+    section = models.ForeignKey(ProposalSection, on_delete=models.CASCADE, related_name='ai_suggestions')
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
     description = models.TextField()
     generated_content = models.TextField(blank=True)
     applied = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ['-created_at']
+
     def __str__(self):
-        return f"{self.action} on {self.section}"
+        return f"{self.get_action_display()} - {self.section.title}"
 
 
 class Budget(models.Model):
-    proposal = models.OneToOneField(
-        Proposal,
-        on_delete=models.CASCADE,
-        related_name='budget',
-    )
-    total = models.DecimalField(max_digits=15, decimal_places=2)
+    proposal = models.OneToOneField(Proposal, on_delete=models.CASCADE, related_name='budget')
+    total = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     currency = models.CharField(max_length=3, default='USD')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = 'Budgets'
 
     def __str__(self):
-        return f"Budget for {self.proposal.title}"
+        return f"Budget for {self.proposal.title} - {self.total} {self.currency}"
 
 
 class BudgetItem(models.Model):
@@ -176,14 +164,15 @@ class BudgetItem(models.Model):
         ('other', 'Outros'),
     ]
 
-    budget = models.ForeignKey(
-        Budget,
-        on_delete=models.CASCADE,
-        related_name='items',
-    )
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='items')
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['category']
 
     def __str__(self):
-        return f"{self.category} - {self.amount}"
+        return f"{self.get_category_display()} - {self.amount} {self.budget.currency}"

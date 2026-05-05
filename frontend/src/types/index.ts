@@ -69,7 +69,7 @@ export interface Proposal {
   status: ProposalStatus;
   sections: ProposalSection[];
   team: TeamMember[];
-  budget: Budget;
+  budget?: Budget;
   qualityScore?: number;
   proponentLogoUrl?: string;
   clientLogoUrl?: string;
@@ -214,6 +214,156 @@ export interface Activity {
   description: string;
   timestamp: Date;
   metadata?: Record<string, unknown>;
+}
+
+// Curriculum / CV Types
+export interface Curriculum {
+  id: string;
+  fileName: string;
+  fileType: 'pdf' | 'docx' | 'doc';
+  status: 'uploaded' | 'processing' | 'analyzed' | 'error';
+  analysisScore?: number;
+  extractedData: Record<string, unknown>;
+  templateMatches: TemplateMatch[];
+  suggestions: CVSuggestion[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CVTemplate {
+  id: string;
+  name: string;
+  organization: 'world_bank' | 'un' | 'eu' | 'afdb' | 'usaid' | 'giz' | 'other';
+  organizationName: string;
+  description: string;
+  requiredSections: Array<{ id: string; name: string; required: boolean }>;
+  formatRules: unknown[];
+  maxLengthPages?: number;
+  exampleUrl?: string;
+  isActive: boolean;
+}
+
+export interface TemplateMatch {
+  id: string;
+  curriculumId: string;
+  template: CVTemplate;
+  matchScore: number;
+  missingSections: string[];
+  recommendations: string[];
+  adaptedContent?: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface CVSuggestion {
+  id: string;
+  type: 'missing_section' | 'format' | 'content' | 'keyword' | 'length';
+  priority: 'high' | 'medium' | 'low';
+  message: string;
+  context?: string;
+  autoFixable: boolean;
+  fixed: boolean;
+  createdAt: Date;
+}
+
+export interface CVOpportunityMatch {
+  id: string;
+  curriculumId: string;
+  opportunityId: string;
+  opportunityTitle: string;
+  opportunityClient: string;
+  overallScore: number;
+  skillsMatchScore: number;
+  experienceMatchScore: number;
+  educationMatchScore: number;
+  languageMatchScore: number;
+  matchedSkills: string[];
+  missingSkills: string[];
+  relevantExperiences: unknown[];
+  recommendations: string[];
+}
+
+// Scraping Types
+export interface ScrapingSource {
+  id: string;
+  name: string;
+  organization: string;
+  url: string;
+  logo?: string;
+  sourceType: 'portal' | 'rss' | 'api' | 'job_board';
+  status: 'active' | 'paused' | 'error' | 'disabled';
+  scrapeFrequency: 'hourly' | 'daily' | 'weekly';
+  lastScrapedAt?: Date;
+  nextScrapeAt?: Date;
+  filters: Record<string, unknown>;
+  newOpportunitiesCount: number;
+  totalOpportunitiesCount: number;
+  successRate: number;
+  errorMessage?: string;
+}
+
+export interface ScrapedOpportunity {
+  id: string;
+  sourceId: string;
+  externalId?: string;
+  externalUrl: string;
+  title: string;
+  organization: string;
+  client: string;
+  sector?: string;
+  country?: string;
+  description: string;
+  value?: number;
+  currency: string;
+  deadline?: Date;
+  status: 'new' | 'imported' | 'ignored' | 'expired';
+  publishedAt?: Date;
+  deadlineAlert: boolean;
+  aiSummary?: string;
+  importedOpportunityId?: string;
+}
+
+export interface ScrapingJob {
+  id: string;
+  sourceId: string;
+  status: 'running' | 'completed' | 'failed' | 'scheduled';
+  startedAt?: Date;
+  completedAt?: Date;
+  itemsFound: number;
+  itemsNew: number;
+  itemsImported: number;
+  errorLog?: string;
+  executedBy: string;
+}
+
+export interface ScrapingAlert {
+  id: string;
+  type: 'new_opportunity' | 'deadline_approaching' | 'status_change' | 'value_threshold';
+  title: string;
+  message: string;
+  scrapedOpportunityId?: string;
+  read: boolean;
+  createdAt: Date;
+}
+
+// Team Types (extended)
+export interface Team {
+  id: string;
+  name: string;
+  description: string;
+  members: TeamMemberExtended[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TeamMemberExtended {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  role: string;
+  hoursAllocated?: number;
+  joinedAt: Date;
 }
 
 // Translation Types

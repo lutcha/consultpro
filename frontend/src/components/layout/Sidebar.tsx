@@ -12,6 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   UserCheck,
+  Globe,
+  FileBadge,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -19,6 +21,7 @@ import { useState } from 'react';
 
 interface SidebarProps {
   className?: string;
+  onClose?: () => void;
 }
 
 const navigationItems = [
@@ -53,13 +56,23 @@ const navigationItems = [
     icon: Users,
   },
   {
+    name: 'Fontes',
+    href: '/scraping',
+    icon: Globe,
+  },
+  {
+    name: 'Currículos',
+    href: '/curriculum',
+    icon: FileBadge,
+  },
+  {
     name: 'Definições',
     href: '/settings',
     icon: Settings,
   },
 ];
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, onClose }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   
@@ -120,6 +133,7 @@ export function Sidebar({ className }: SidebarProps) {
             <NavLink
               key={item.name}
               to={item.href}
+              onClick={onClose}
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 isActive

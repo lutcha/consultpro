@@ -205,6 +205,7 @@ export const mockProposals: Proposal[] = [
     title: 'Proposta - Avaliação de Impacto FAO Cabo Verde',
     version: 2,
     status: 'draft',
+    consortiumMembers: [],
     sections: [
       {
         id: 'sec-1',

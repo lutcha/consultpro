@@ -1,7 +1,7 @@
 import pytest
 
-from ..models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
-from .factories import (
+from apps.quality_checks.models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
+from apps.quality_checks.tests.factories import (
     QCCheckCategoryFactory,
     QCItemFactory,
     QCSuggestionFactory,

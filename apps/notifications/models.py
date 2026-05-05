@@ -1,5 +1,4 @@
 from django.db import models
-
 from apps.users.models import User
 
 
@@ -10,11 +9,8 @@ class Notification(models.Model):
         ('info', 'Informacao'),
         ('success', 'Sucesso'),
     ]
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='notifications',
-    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
     type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     title = models.CharField(max_length=200)
     message = models.TextField()
@@ -27,7 +23,7 @@ class Notification(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.type} - {self.title}"
+        return f"{self.title} ({self.user.email})"
 
 
 class ActivityLog(models.Model):
@@ -39,11 +35,8 @@ class ActivityLog(models.Model):
         ('comment_added', 'Comentario Adicionado'),
         ('status_changed', 'Estado Alterado'),
     ]
-    user = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-    )
+
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     type = models.CharField(max_length=30, choices=ACTIVITY_TYPES)
     description = models.TextField()
     metadata = models.JSONField(default=dict)
@@ -51,6 +44,8 @@ class ActivityLog(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        verbose_name_plural = 'Activity Logs'
 
     def __str__(self):
-        return f"{self.type} - {self.description[:50]}"
+        return f"{self.get_type_display()} - {self.user.email if self.user else 'Unknown'}"
+
