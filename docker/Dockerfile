@@ -9,6 +9,7 @@ COPY requirements/base.txt /app/requirements/
 RUN pip install --no-cache-dir -r requirements/production.txt
 COPY . /app/
 RUN mkdir -p /app/logs
+ENV DJANGO_SETTINGS_MODULE=config.settings.production
 RUN python manage.py collectstatic --noinput
 COPY docker/entrypoint.sh /app/docker/entrypoint.sh
 RUN chmod +x /app/docker/entrypoint.sh
