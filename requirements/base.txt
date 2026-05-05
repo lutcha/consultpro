@@ -42,3 +42,6 @@ python-dateutil>=2.8.0
 
 # Admin UI
 django-jazzmin>=3.0.0
+
+# Static Files
+whitenoise>=6.6.0
