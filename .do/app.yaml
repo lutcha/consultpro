@@ -68,7 +68,7 @@ services:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: CHANGE_ME
+    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
   - key: DEBUG
     value: "False"
     scope: RUN_AND_BUILD_TIME
@@ -111,14 +111,17 @@ services:
     value: ${db.PORT}
     scope: RUN_AND_BUILD_TIME
   - key: REDIS_URL
-    value: ${redis.REDIS_URL}
     scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: REDIS_URL_SET_VIA_DO_DASHBOARD
   - key: CELERY_BROKER_URL
-    value: ${redis.REDIS_URL}
     scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: REDIS_URL_SET_VIA_DO_DASHBOARD
   - key: CELERY_RESULT_BACKEND
-    value: ${redis.REDIS_URL}
     scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: REDIS_URL_SET_VIA_DO_DASHBOARD
   - key: JWT_ACCESS_TOKEN_LIFETIME
     value: "60"
     scope: RUN_AND_BUILD_TIME
@@ -128,20 +131,19 @@ services:
   - key: OPENAI_API_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: CHANGE_ME
+    value: placeholder-set-via-dashboard
   - key: AWS_ACCESS_KEY_ID
     scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: CHANGE_ME
+    value: minioadmin
   - key: AWS_SECRET_ACCESS_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: CHANGE_ME
+    value: placeholder-set-via-dashboard
   - key: AWS_STORAGE_BUCKET_NAME
     value: consultpro
     scope: RUN_AND_BUILD_TIME
   - key: AWS_S3_ENDPOINT_URL
-    value: CHANGE_ME
+    value: placeholder-set-via-dashboard
     scope: RUN_AND_BUILD_TIME
   - key: AWS_S3_REGION_NAME
     value: us-east-1
@@ -165,7 +167,7 @@ workers:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: CHANGE_ME
+    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
   - key: DB_NAME
     value: ${db.DATABASE}
   - key: DB_USER
@@ -178,11 +180,14 @@ workers:
   - key: DB_PORT
     value: ${db.PORT}
   - key: REDIS_URL
-    value: ${redis.REDIS_URL}
+    type: SECRET
+    value: REDIS_URL_SET_VIA_DO_DASHBOARD
   - key: CELERY_BROKER_URL
-    value: ${redis.REDIS_URL}
+    type: SECRET
+    value: REDIS_URL_SET_VIA_DO_DASHBOARD
   - key: CELERY_RESULT_BACKEND
-    value: ${redis.REDIS_URL}
+    type: SECRET
+    value: REDIS_URL_SET_VIA_DO_DASHBOARD
 
 # ── Jobs (migrations) ─────────────────────────────────────────
 jobs:
@@ -202,7 +207,7 @@ jobs:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: CHANGE_ME
+    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
   - key: DB_NAME
     value: ${db.DATABASE}
   - key: DB_USER
@@ -218,14 +223,6 @@ jobs:
 # ── Managed Databases ─────────────────────────────────────────
 databases:
 - name: db
+  cluster_name: consultpro-db
   engine: PG
-  version: "15"
-  size: db-s-1vcpu-1gb
-  num_nodes: 1
-  production: false
-- name: redis
-  engine: REDIS
-  version: "7"
-  size: db-s-1vcpu-1gb
-  num_nodes: 1
-  production: false
+  production: true
