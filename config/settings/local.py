@@ -42,8 +42,9 @@ REST_FRAMEWORK = globals().get('REST_FRAMEWORK', {})
 REST_FRAMEWORK['DEFAULT_THROTTLE_CLASSES'] = []
 REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {}
 
-# Use mock AI service in local dev (avoids quota/billing issues)
-AI_ALWAYS_MOCK = True
+# Use mock AI service in local dev by default (avoids quota/billing issues)
+# Override via env: AI_ALWAYS_MOCK=False AI_PROVIDER=deepseek DEEPSEEK_API_KEY=sk-...
+AI_ALWAYS_MOCK = os.getenv('AI_ALWAYS_MOCK', 'True').lower() == 'true'
 
 # Logging to console only
 LOGGING = {

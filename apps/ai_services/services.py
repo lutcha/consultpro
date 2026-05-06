@@ -9,68 +9,89 @@ logger = logging.getLogger(__name__)
 class BaseAIService:
     """Abstract base class for AI service implementations."""
 
-    def analyze_document(self, text: str) -> dict:
-        """Analyze a document and return summary, requirements, and risks.
+    PROVIDER_NAME = 'base'
 
-        Returns:
-            dict with keys: summary (str), requirements (list), risks (list)
-        """
+    def analyze_document(self, text: str) -> dict:
+        """Analyze a document and return summary, requirements, and risks."""
         raise NotImplementedError
 
     def generate_suggestion(self, section_type: str, content: str, action: str) -> str:
-        """Generate a suggestion for a given section.
-
-        Args:
-            section_type: The type of section (e.g., 'scope', 'timeline', 'budget')
-            content: The current content of the section
-            action: The action to perform (e.g., 'expand', 'summarize', 'rewrite')
-
-        Returns:
-            Suggested text as a string
-        """
+        """Generate a suggestion for a given section."""
         raise NotImplementedError
 
     def improve_text(self, content: str, action: str) -> str:
-        """Improve the given text based on the action.
-
-        Args:
-            content: The text to improve
-            action: The improvement action (e.g., 'clarity', 'tone', 'grammar')
-
-        Returns:
-            Improved text as a string
-        """
+        """Improve the given text based on the action."""
         raise NotImplementedError
 
 
-class OpenAIService(BaseAIService):
-    """Concrete AI service implementation using the OpenAI API."""
+class LLMService(BaseAIService):
+    """
+    Generic LLM service for any OpenAI-compatible provider.
 
-    def __init__(self):
+    Supports OpenAI, DeepSeek, Moonshot AI (Kimi), and any other
+    provider that uses the OpenAI chat completions API format.
+    """
+
+    PROVIDER_NAME = 'generic'
+
+    def __init__(self, api_key: str, base_url: str | None, model: str, provider_name: str = 'generic'):
         import openai
 
-        self.client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        self.client = openai.OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+        )
+        self.model = model
+        self.PROVIDER_NAME = provider_name
+
+    def _chat_completion(self, messages: list, temperature: float = 0.5, json_mode: bool = False) -> str:
+        """Internal helper for chat completions."""
+        kwargs = {
+            'model': self.model,
+            'messages': messages,
+            'temperature': temperature,
+        }
+        if json_mode:
+            # DeepSeek supports response_format={'type': 'json_object'}
+            # Moonshot supports it too
+            kwargs['response_format'] = {'type': 'json_object'}
+
+        try:
+            response = self.client.chat.completions.create(**kwargs)
+            return response.choices[0].message.content or ''
+        except Exception as exc:
+            logger.exception('%s chat completion failed: %s', self.PROVIDER_NAME, exc)
+            raise
 
     def analyze_document(self, text: str) -> dict:
         system_prompt = (
             "You are an expert procurement analyst. Analyze the provided document "
             "and return a JSON object with exactly these keys:\n"
-            "- summary: a concise summary of the document (string)\n"
+            "- summary: a concise summary of the document (string, max 400 words, Portuguese preferred)\n"
             "- requirements: a list of key requirements (list of strings)\n"
             "- risks: a list of identified risks (list of strings)\n"
             "Respond with valid JSON only."
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model='gpt-4o-mini',
+            content = self._chat_completion(
                 messages=[
                     {'role': 'system', 'content': system_prompt},
                     {'role': 'user', 'content': text},
                 ],
                 temperature=0.2,
+                json_mode=True,
             )
-            content = response.choices[0].message.content
+            # Some providers wrap JSON in markdown code blocks
+            content = content.strip()
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.startswith('```'):
+                content = content[3:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+
             result = json.loads(content)
             return {
                 'summary': result.get('summary', ''),
@@ -78,7 +99,7 @@ class OpenAIService(BaseAIService):
                 'risks': result.get('risks', []),
             }
         except Exception as exc:
-            logger.exception('OpenAI analyze_document failed: %s', exc)
+            logger.exception('%s analyze_document failed: %s', self.PROVIDER_NAME, exc)
             return {
                 'summary': '',
                 'requirements': [],
@@ -98,17 +119,15 @@ class OpenAIService(BaseAIService):
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model='gpt-4o-mini',
+            return self._chat_completion(
                 messages=[
                     {'role': 'system', 'content': system_prompt},
                     {'role': 'user', 'content': user_prompt},
                 ],
                 temperature=0.7,
-            )
-            return response.choices[0].message.content.strip()
+            ).strip()
         except Exception as exc:
-            logger.exception('OpenAI generate_suggestion failed: %s', exc)
+            logger.exception('%s generate_suggestion failed: %s', self.PROVIDER_NAME, exc)
             return ''
 
     def improve_text(self, content: str, action: str) -> str:
@@ -123,18 +142,29 @@ class OpenAIService(BaseAIService):
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model='gpt-4o-mini',
+            return self._chat_completion(
                 messages=[
                     {'role': 'system', 'content': system_prompt},
                     {'role': 'user', 'content': user_prompt},
                 ],
                 temperature=0.5,
-            )
-            return response.choices[0].message.content.strip()
+            ).strip()
         except Exception as exc:
-            logger.exception('OpenAI improve_text failed: %s', exc)
+            logger.exception('%s improve_text failed: %s', self.PROVIDER_NAME, exc)
             return ''
+
+
+# Backwards compatibility: OpenAIService is now an alias for LLMService with OpenAI defaults
+class OpenAIService(LLMService):
+    """Legacy alias. Use AIServiceFactory instead."""
+
+    def __init__(self):
+        super().__init__(
+            api_key=settings.OPENAI_API_KEY,
+            base_url=None,
+            model=getattr(settings, 'OPENAI_MODEL', 'gpt-4o-mini'),
+            provider_name='openai',
+        )
 
 
 class MockAIService(BaseAIService):
@@ -225,13 +255,35 @@ class MockAIService(BaseAIService):
 class AIServiceFactory:
     """Factory for retrieving AI service instances.
 
-    Attempts to use OpenAI first; falls back to MockAIService if:
-      - OPENAI_API_KEY is missing or invalid
-      - OpenAI API returns quota/authentication errors
-      - AI_ALWAYS_MOCK=True in Django settings
+    Provider selection priority:
+      1. AI_PROVIDER setting ('openai', 'deepseek', 'kimi', 'mock')
+      2. AI_ALWAYS_MOCK=True -> MockAIService
+      3. Fallback to mock if configured provider fails
     """
 
     _service = None
+
+    # Provider registry: maps provider name -> (api_key_setting, base_url, default_model)
+    PROVIDER_REGISTRY = {
+        'openai': {
+            'api_key_setting': 'OPENAI_API_KEY',
+            'base_url': None,
+            'default_model': 'gpt-4o-mini',
+            'model_setting': 'OPENAI_MODEL',
+        },
+        'deepseek': {
+            'api_key_setting': 'DEEPSEEK_API_KEY',
+            'base_url': 'https://api.deepseek.com',
+            'default_model': 'deepseek-chat',
+            'model_setting': 'DEEPSEEK_MODEL',
+        },
+        'kimi': {
+            'api_key_setting': 'KIMI_API_KEY',
+            'base_url': 'https://api.moonshot.cn/v1',
+            'default_model': 'moonshot-v1-128k',
+            'model_setting': 'KIMI_MODEL',
+        },
+    }
 
     @classmethod
     def get_service(cls) -> BaseAIService:
@@ -240,25 +292,86 @@ class AIServiceFactory:
         return cls._service
 
     @classmethod
+    def get_provider_info(cls) -> dict:
+        """Return info about the currently active provider."""
+        service = cls.get_service()
+        return {
+            'provider': getattr(service, 'PROVIDER_NAME', 'unknown'),
+            'model': getattr(service, 'model', 'unknown') if hasattr(service, 'model') else 'n/a',
+            'is_mock': isinstance(service, MockAIService),
+        }
+
+    @classmethod
     def _create_service(cls) -> BaseAIService:
         if getattr(settings, 'AI_ALWAYS_MOCK', False):
             logger.info('AI_ALWAYS_MOCK=True — using MockAIService')
             return MockAIService()
 
+        provider = getattr(settings, 'AI_PROVIDER', 'openai').lower().strip()
+
+        if provider == 'mock':
+            return MockAIService()
+
+        if provider not in cls.PROVIDER_REGISTRY:
+            logger.warning(
+                "Unknown AI_PROVIDER '%s'. Falling back to MockAIService. "
+                "Valid options: %s",
+                provider,
+                ', '.join(list(cls.PROVIDER_REGISTRY.keys()) + ['mock']),
+            )
+            return MockAIService()
+
+        config = cls.PROVIDER_REGISTRY[provider]
+        api_key = getattr(settings, config['api_key_setting'], '') or ''
+
+        if not api_key:
+            logger.warning(
+                "%s is not set. Falling back to MockAIService. "
+                "Set %s in your environment or switch AI_PROVIDER.",
+                config['api_key_setting'],
+                config['api_key_setting'],
+            )
+            return MockAIService()
+
+        model = getattr(settings, config['model_setting'], '') or config['default_model']
+        base_url = config['base_url']
+
         try:
-            service = OpenAIService()
-            logger.info('OpenAIService initialized successfully')
+            service = LLMService(
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                provider_name=provider,
+            )
+            logger.info(
+                '%s LLMService initialized (model=%s, base_url=%s)',
+                provider, model, base_url or 'default',
+            )
             return service
         except Exception as exc:
-            logger.warning(
-                'Failed to initialize OpenAIService (%s). '
-                'Falling back to MockAIService. '
-                'Set AI_ALWAYS_MOCK=True to suppress this warning.',
-                exc,
+            logger.exception(
+                'Failed to initialize %s LLMService. Falling back to MockAIService.',
+                provider,
             )
             return MockAIService()
 
     @classmethod
     def reset(cls):
-        """Reset the cached service (useful in tests)."""
+        """Reset the cached service (useful in tests or when switching providers)."""
         cls._service = None
+        logger.info('AIServiceFactory reset — next call will recreate service')
+
+    @classmethod
+    def switch_provider(cls, provider: str) -> BaseAIService:
+        """Switch to a different provider at runtime (useful for admin panels)."""
+        cls.reset()
+        # Temporarily override AI_PROVIDER
+        original = getattr(settings, 'AI_PROVIDER', None)
+        settings.AI_PROVIDER = provider
+        try:
+            return cls.get_service()
+        finally:
+            if original is not None:
+                settings.AI_PROVIDER = original
+            else:
+                delattr(settings, 'AI_PROVIDER')

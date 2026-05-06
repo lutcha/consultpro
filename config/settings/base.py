@@ -336,8 +336,22 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@consultpro.com')
 
+# AI / LLM Configuration
+# Provider: 'openai' | 'deepseek' | 'kimi' | 'mock'
+AI_PROVIDER = os.getenv('AI_PROVIDER', 'openai')
+AI_ALWAYS_MOCK = os.getenv('AI_ALWAYS_MOCK', 'False').lower() == 'true'
+
 # OpenAI
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+
+# DeepSeek (https://platform.deepseek.com)
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
+DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-chat')
+
+# Kimi / Moonshot AI (https://platform.moonshot.cn)
+KIMI_API_KEY = os.getenv('KIMI_API_KEY', '')
+KIMI_MODEL = os.getenv('KIMI_MODEL', 'moonshot-v1-128k')
 
 # Logging
 LOGGING = {
