@@ -105,16 +105,13 @@ services:
     scope: RUN_AND_BUILD_TIME
   - key: REDIS_URL
     scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: REDIS_URL_SET_VIA_DO_DASHBOARD
+    value: ${redis.DATABASE_URL}
   - key: CELERY_BROKER_URL
     scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: REDIS_URL_SET_VIA_DO_DASHBOARD
+    value: ${redis.DATABASE_URL}
   - key: CELERY_RESULT_BACKEND
     scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: REDIS_URL_SET_VIA_DO_DASHBOARD
+    value: ${redis.DATABASE_URL}
   - key: JWT_ACCESS_TOKEN_LIFETIME
     value: "60"
     scope: RUN_AND_BUILD_TIME
@@ -179,16 +176,13 @@ workers:
     scope: RUN_AND_BUILD_TIME
   - key: REDIS_URL
     scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: REDIS_URL_SET_VIA_DO_DASHBOARD
+    value: ${redis.DATABASE_URL}
   - key: CELERY_BROKER_URL
     scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: REDIS_URL_SET_VIA_DO_DASHBOARD
+    value: ${redis.DATABASE_URL}
   - key: CELERY_RESULT_BACKEND
     scope: RUN_AND_BUILD_TIME
-    type: SECRET
-    value: REDIS_URL_SET_VIA_DO_DASHBOARD
+    value: ${redis.DATABASE_URL}
 
 # ── Jobs (migrations) ─────────────────────────────────────────
 jobs:
@@ -232,3 +226,8 @@ databases:
   cluster_name: consultpro-db
   engine: PG
   production: true
+- name: redis
+  cluster_name: consultpro-redis
+  engine: REDIS
+  production: true
+
