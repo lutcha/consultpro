@@ -74,7 +74,6 @@ services:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
   - key: DEBUG
     value: "False"
     scope: RUN_AND_BUILD_TIME
@@ -180,7 +179,6 @@ workers:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
   - key: POSTGRES_DB
     value: ${db.DATABASE}
     scope: RUN_AND_BUILD_TIME
@@ -252,7 +250,6 @@ jobs:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
   - key: POSTGRES_DB
     value: ${db.DATABASE}
     scope: RUN_AND_BUILD_TIME
@@ -286,7 +283,6 @@ jobs:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
   - key: POSTGRES_DB
     value: ${db.DATABASE}
     scope: RUN_AND_BUILD_TIME
@@ -320,7 +316,6 @@ jobs:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
   - key: POSTGRES_DB
     value: ${db.DATABASE}
     scope: RUN_AND_BUILD_TIME
@@ -355,7 +350,6 @@ jobs:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
   - key: POSTGRES_DB
     value: ${db.DATABASE}
     scope: RUN_AND_BUILD_TIME
