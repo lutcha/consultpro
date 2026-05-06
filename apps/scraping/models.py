@@ -62,6 +62,7 @@ class ScrapedOpportunity(models.Model):
         ('imported', 'Importada'),
         ('ignored', 'Ignorada'),
         ('expired', 'Expirada'),
+        ('rejected', 'Rejeitada'),
     ]
 
     source = models.ForeignKey(ScrapingSource, on_delete=models.CASCADE, related_name='scraped_opportunities')
@@ -71,10 +72,11 @@ class ScrapedOpportunity(models.Model):
     # Opportunity data
     title = models.CharField(max_length=500)
     organization = models.CharField(max_length=200)
-    client = models.CharField(max_length=200)
+    client = models.CharField(max_length=200, blank=True)
     sector = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, blank=True)
-    description = models.TextField()
+    region = models.CharField(max_length=100, blank=True)
+    description = models.TextField(blank=True)
     value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=3, default='USD')
     deadline = models.DateTimeField(null=True, blank=True)
@@ -87,6 +89,27 @@ class ScrapedOpportunity(models.Model):
     # AI processing
     ai_summary = models.TextField(blank=True)
     ai_extracted_requirements = models.JSONField(default=list, blank=True)
+    
+    # === Pipeline de Ingestão Defensiva ===
+    # Proveniência: dados brutos preservados (imutáveis)
+    raw_payload = models.JSONField(default=dict, blank=True)
+    raw_content_hash = models.CharField(max_length=64, db_index=True, blank=True)
+    
+    # Validação de prazos
+    deadline_validation = models.JSONField(default=dict, blank=True)
+    deadline_timezone = models.CharField(max_length=50, default="Atlantic/Cape_Verde")
+    
+    # Elegibilidade para Cabo Verde
+    cv_eligible = models.BooleanField(default=False, db_index=True)
+    eligibility_data = models.JSONField(default=dict, blank=True)
+    
+    # Metadados técnicos
+    data_quality_score = models.DecimalField(max_digits=3, decimal_places=2, default=1.00)
+    transformation_flags = models.JSONField(default=dict, blank=True)
+    language = models.CharField(max_length=10, blank=True)
+    sector_tags = models.JSONField(default=list, blank=True)
+    geographic_scope = models.JSONField(default=dict, blank=True)
+    ingestion_batch_id = models.CharField(max_length=40, blank=True, db_index=True)
     
     # Relation to internal opportunity (if imported)
     imported_opportunity = models.OneToOneField(
@@ -104,6 +127,11 @@ class ScrapedOpportunity(models.Model):
     class Meta:
         ordering = ['-scraped_at']
         unique_together = ['source', 'external_id']
+        indexes = [
+            models.Index(fields=['status', 'scraped_at']),
+            models.Index(fields=['cv_eligible', 'deadline']),
+            models.Index(fields=['ingestion_batch_id']),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.source.name})"
@@ -131,10 +159,15 @@ class ScrapingJob(models.Model):
     items_found = models.PositiveIntegerField(default=0)
     items_new = models.PositiveIntegerField(default=0)
     items_imported = models.PositiveIntegerField(default=0)
+    items_rejected = models.PositiveIntegerField(default=0)
+    items_duplicate = models.PositiveIntegerField(default=0)
     
     error_log = models.TextField(blank=True)
     executed_by = models.CharField(max_length=20, choices=EXECUTED_BY_CHOICES, default='scheduler')
     triggered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # Pipeline stats
+    batch_stats = models.JSONField(default=dict, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     

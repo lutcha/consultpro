@@ -26,6 +26,7 @@ class ScrapingSourceListSerializer(serializers.ModelSerializer):
             'status',
             'scrape_frequency',
             'last_scraped_at',
+            'next_scrape_at',
             'new_opportunities_count',
             'total_opportunities_count',
             'success_rate',
@@ -60,6 +61,7 @@ class ScrapingSourceDetailSerializer(serializers.ModelSerializer):
 
 class ScrapedOpportunityListSerializer(serializers.ModelSerializer):
     source_name = serializers.CharField(source='source.name', read_only=True)
+    is_cv_eligible = serializers.BooleanField(source='cv_eligible', read_only=True)
 
     class Meta:
         model = ScrapedOpportunity
@@ -75,12 +77,18 @@ class ScrapedOpportunityListSerializer(serializers.ModelSerializer):
             'currency',
             'deadline',
             'status',
+            'cv_eligible',
+            'is_cv_eligible',
+            'data_quality_score',
             'scraped_at',
         ]
 
 
 class ScrapedOpportunityDetailSerializer(serializers.ModelSerializer):
     source = ScrapingSourceListSerializer(read_only=True)
+    eligibility = serializers.JSONField(source='eligibility_data', read_only=True)
+    deadline_meta = serializers.JSONField(source='deadline_validation', read_only=True)
+    flags = serializers.JSONField(source='transformation_flags', read_only=True)
 
     class Meta:
         model = ScrapedOpportunity
@@ -94,15 +102,27 @@ class ScrapedOpportunityDetailSerializer(serializers.ModelSerializer):
             'client',
             'sector',
             'country',
+            'region',
             'description',
             'value',
             'currency',
             'deadline',
+            'deadline_timezone',
+            'deadline_meta',
             'status',
             'published_at',
             'deadline_alert',
             'ai_summary',
             'ai_extracted_requirements',
+            'cv_eligible',
+            'eligibility',
+            'data_quality_score',
+            'flags',
+            'language',
+            'sector_tags',
+            'geographic_scope',
+            'raw_content_hash',
+            'ingestion_batch_id',
             'imported_opportunity',
             'imported_by',
             'imported_at',
@@ -123,6 +143,8 @@ class ScrapingJobListSerializer(serializers.ModelSerializer):
             'items_found',
             'items_new',
             'items_imported',
+            'items_rejected',
+            'items_duplicate',
             'started_at',
             'completed_at',
             'created_at',
@@ -132,6 +154,7 @@ class ScrapingJobListSerializer(serializers.ModelSerializer):
 class ScrapingJobDetailSerializer(serializers.ModelSerializer):
     source = ScrapingSourceListSerializer(read_only=True)
     triggered_by = UserMiniSerializer(read_only=True)
+    stats = serializers.JSONField(source='batch_stats', read_only=True)
 
     class Meta:
         model = ScrapingJob
@@ -142,9 +165,12 @@ class ScrapingJobDetailSerializer(serializers.ModelSerializer):
             'items_found',
             'items_new',
             'items_imported',
+            'items_rejected',
+            'items_duplicate',
             'error_log',
             'executed_by',
             'triggered_by',
+            'stats',
             'started_at',
             'completed_at',
             'created_at',

@@ -220,6 +220,74 @@ jobs:
     value: ${db.PORT}
     scope: RUN_AND_BUILD_TIME
 
+- name: seed-users
+  github:
+    repo: lutcha/consultpro
+    branch: main
+    deploy_on_push: false
+  dockerfile_path: docker/Dockerfile
+  run_command: python manage.py seed_users
+  kind: POST_DEPLOY
+  instance_size_slug: basic-xs
+  envs:
+  - key: DJANGO_SETTINGS_MODULE
+    value: config.settings.production
+    scope: RUN_AND_BUILD_TIME
+  - key: SECRET_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
+  - key: POSTGRES_DB
+    value: ${db.DATABASE}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_USER
+    value: ${db.USERNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_PASSWORD
+    value: ${db.PASSWORD}
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+  - key: POSTGRES_HOST
+    value: ${db.HOSTNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_PORT
+    value: ${db.PORT}
+    scope: RUN_AND_BUILD_TIME
+
+- name: setup-scraping-sources
+  github:
+    repo: lutcha/consultpro
+    branch: main
+    deploy_on_push: false
+  dockerfile_path: docker/Dockerfile
+  run_command: python manage.py setup_scraping_sources
+  kind: POST_DEPLOY
+  instance_size_slug: basic-xs
+  envs:
+  - key: DJANGO_SETTINGS_MODULE
+    value: config.settings.production
+    scope: RUN_AND_BUILD_TIME
+  - key: SECRET_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: QuMY7P02Sy0rAk1n8Zfr39rZiZWGwO29dRX1l7mOy9QAhtPqCDZFrtdK8M1-HJnxFQk
+  - key: POSTGRES_DB
+    value: ${db.DATABASE}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_USER
+    value: ${db.USERNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_PASSWORD
+    value: ${db.PASSWORD}
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+  - key: POSTGRES_HOST
+    value: ${db.HOSTNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_PORT
+    value: ${db.PORT}
+    scope: RUN_AND_BUILD_TIME
+
 # ── Managed Databases ─────────────────────────────────────────
 databases:
 - name: db

@@ -1,5 +1,6 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -42,7 +43,11 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
         source = self.get_object()
         
         from .tasks import run_scraping_source
-        run_scraping_source.delay(source.id)
+        run_scraping_source.delay(
+            source.id,
+            executed_by='manual',
+            user_id=request.user.id
+        )
         
         return Response({'status': 'scraping started'})
 
@@ -60,18 +65,22 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get scraping statistics"""
-        from django.db.models import Count, Sum, Q
+        from django.db.models import Count, Sum, Q, Avg
         total_sources = ScrapingSource.objects.count()
         active_sources = ScrapingSource.objects.filter(status='active').count()
         total_opportunities = ScrapedOpportunity.objects.count()
         imported_opportunities = ScrapedOpportunity.objects.filter(status='imported').count()
         new_opportunities = ScrapedOpportunity.objects.filter(status='new').count()
+        cv_eligible = ScrapedOpportunity.objects.filter(cv_eligible=True, status='new').count()
         
-        # Calculate average success rate
+        avg_quality = ScrapedOpportunity.objects.aggregate(
+            avg=Avg('data_quality_score')
+        )['avg'] or 0
+        
         avg_success_rate = 0
         sources_with_rate = ScrapingSource.objects.filter(success_rate__gt=0)
         if sources_with_rate.exists():
-            avg_success_rate = int(sources_with_rate.aggregate(avg=models.Avg('success_rate'))['avg'] or 0)
+            avg_success_rate = int(sources_with_rate.aggregate(avg=Avg('success_rate'))['avg'] or 0)
         
         return Response({
             'total_sources': total_sources,
@@ -79,6 +88,8 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
             'total_opportunities': total_opportunities,
             'imported_opportunities': imported_opportunities,
             'new_opportunities': new_opportunities,
+            'cv_eligible_new': cv_eligible,
+            'avg_quality_score': round(avg_quality, 2),
             'success_rate': avg_success_rate,
         })
 
@@ -86,9 +97,12 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
 class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ScrapedOpportunity.objects.all()
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['source', 'status', 'country', 'sector']
-    search_fields = ['title', 'organization', 'client']
-    ordering_fields = ['deadline', 'scraped_at', 'value']
+    filterset_fields = [
+        'source', 'status', 'country', 'sector',
+        'cv_eligible', 'language', 'data_quality_score'
+    ]
+    search_fields = ['title', 'organization', 'client', 'external_id']
+    ordering_fields = ['deadline', 'scraped_at', 'value', 'data_quality_score']
     ordering = ['-scraped_at']
 
     def get_serializer_class(self):
@@ -101,17 +115,16 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
         """Import a scraped opportunity to the internal system"""
         scraped_opp = self.get_object()
         
-        # Create internal opportunity from scraped data
         from apps.opportunities.models import Opportunity
         
         opportunity = Opportunity.objects.create(
             title=scraped_opp.title,
-            client=scraped_opp.client,
-            sector=scraped_opp.sector,
-            country=scraped_opp.country,
+            client=scraped_opp.client or scraped_opp.organization,
+            sector=scraped_opp.sector or 'Consultoria',
+            country=scraped_opp.country or 'Cabo Verde',
             value=scraped_opp.value or 0,
             currency=scraped_opp.currency,
-            deadline=scraped_opp.deadline,
+            deadline=scraped_opp.deadline or timezone.now(),
             description=scraped_opp.description,
             url_source=scraped_opp.external_url,
             ai_summary=scraped_opp.ai_summary,
@@ -150,7 +163,7 @@ class ScrapingJobViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ScrapingAlertViewSet(viewsets.ModelViewSet):
-    permission_classes = []  # Allow all
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['type', 'read']
     ordering_fields = ['created_at']

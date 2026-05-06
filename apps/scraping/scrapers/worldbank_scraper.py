@@ -1,0 +1,121 @@
+"""
+API scraper for World Bank active procurement notices.
+"""
+import json
+import logging
+from typing import Any, Dict, List, Optional
+
+from .base import BaseScraper
+
+logger = logging.getLogger(__name__)
+
+
+class WorldBankScraper(BaseScraper):
+    """Scraper for the World Bank public procurement search API."""
+
+    API_URL = "https://search.worldbank.org/api/v2/procurement"
+    DETAIL_URL = "https://projects.worldbank.org/procurement/noticedetail/{notice_id}"
+    DEFAULT_FIELDS = (
+        "id,title,deadline,pdate,countryname,regionname,project_name,url,"
+        "borrower,sector,docty"
+    )
+
+    def fetch(self, url: Optional[str] = None, **kwargs) -> str:
+        api_url = url or self.config.get('api_url', self.API_URL)
+        if not self._check_robots_txt(api_url):
+            raise PermissionError(f"robots.txt disallows: {api_url}")
+
+        page_size = int(self.config.get('page_size', 50))
+        max_items = int(self.config.get('max_items', 200))
+        docs: List[Dict[str, Any]] = []
+        num_found = None
+        start = 0
+
+        while len(docs) < max_items:
+            params = {
+                'format': 'json',
+                'fl': self.config.get('fields', self.DEFAULT_FIELDS),
+                'rows': page_size,
+                'start': start,
+                'fq': self.config.get('filter_query', 'docty:Notice AND status:Active'),
+            }
+            resp = self._http_get(api_url, params=params)
+            payload = resp.json()
+            response = payload.get('response') or {}
+            page_docs = response.get('docs') or []
+
+            if num_found is None:
+                num_found = response.get('numFound', 0)
+
+            if not page_docs:
+                break
+
+            remaining = max_items - len(docs)
+            docs.extend(page_docs[:remaining])
+
+            start += page_size
+            if len(docs) >= num_found or len(page_docs) < page_size:
+                break
+
+        return json.dumps({'response': {'numFound': num_found or len(docs), 'docs': docs}})
+
+    def parse(self, raw_data: str) -> List[Dict[str, Any]]:
+        opportunities: List[Dict[str, Any]] = []
+        try:
+            payload = json.loads(raw_data)
+            docs = (payload.get('response') or {}).get('docs') or []
+        except (TypeError, json.JSONDecodeError) as exc:
+            logger.warning(f"WorldBank: could not parse API response: {exc}")
+            return []
+
+        seen_ids = set()
+        for doc in docs:
+            try:
+                opp = self._parse_doc(doc)
+                if opp and opp['external_id'] not in seen_ids:
+                    seen_ids.add(opp['external_id'])
+                    opportunities.append(self._standardize_item(opp, self.source))
+            except Exception as exc:
+                logger.warning(f"WorldBank: error parsing notice: {exc}")
+
+        return opportunities
+
+    def _parse_doc(self, doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        notice_id = self._clean_text(str(doc.get('id') or ''))
+        title = self._clean_text(doc.get('title'))
+        if not notice_id or not title:
+            return None
+
+        country = self._clean_text(doc.get('countryname'))
+        region = self._clean_text(doc.get('regionname'))
+        sector = self._clean_text(doc.get('sector'))
+        deadline = self._parse_date(doc.get('deadline'))
+        published_at = self._parse_date(doc.get('pdate'))
+        external_url = self._clean_text(doc.get('url')) or self.DETAIL_URL.format(notice_id=notice_id)
+
+        return {
+            'external_id': self._make_external_id('WorldBank', notice_id),
+            'external_url': external_url,
+            'title': title,
+            'organization': 'World Bank Group',
+            'client': self._clean_text(doc.get('borrower')) or 'World Bank',
+            'sector': sector,
+            'country': country,
+            'region': region,
+            'description': self._clean_text(doc.get('project_name')),
+            'value': None,
+            'currency': 'USD',
+            'deadline': deadline.isoformat() if deadline else None,
+            'published_at': published_at.isoformat() if published_at else None,
+            'language': 'en',
+            'sector_tags': [sector] if sector else [],
+            'geographic_scope': {
+                'countries': [country] if country else [],
+                'region': region,
+            },
+            'source_metadata': {
+                'api_id': notice_id,
+                'document_type': doc.get('docty'),
+                'scraped_from': 'search.worldbank.org',
+            },
+        }

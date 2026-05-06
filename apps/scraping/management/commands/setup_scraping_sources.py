@@ -1,0 +1,432 @@
+"""
+Management command to initialize scraping sources for consultpro.cv.
+Populates the database with pre-configured sources focused on Cabo Verde and Africa.
+
+Usage:
+    python manage.py setup_scraping_sources
+"""
+from django.core.management.base import BaseCommand
+from apps.scraping.models import ScrapingSource
+
+
+DEFAULT_SOURCES = [
+    {
+        'name': 'UGPE - Concursos Cabo Verde',
+        'organization': 'UGPE',
+        'url': 'https://ugpe.gov.cv/concursos',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'UGPEScraper',
+        'scraper_config': {
+            'url': 'https://ugpe.gov.cv/concursos',
+            'item_selectors': [
+                'table.concursos-table tbody tr',
+                'div.concurso-item',
+                'div.opportunity-item',
+            ],
+        },
+        'filters': {
+            'countries': ['CPV'],
+            'keywords': ['consultoria', 'consultor', 'consultant'],
+        },
+    },
+    {
+        'name': 'ECREEE - Procurement Notices',
+        'organization': 'ECREEE / CEDEAO',
+        'url': 'https://www.ecreee.org/category/procurement-notices/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'ECREEEScraper',
+        'scraper_config': {
+            'url': 'https://www.ecreee.org/category/procurement-notices/',
+            'item_selectors': [
+                'article.post',
+                'div.post',
+                'article.type-post',
+            ],
+        },
+        'filters': {
+            'countries': ['CPV', 'GHA', 'SEN', 'NGA'],
+            'keywords': ['consultancy', 'consultant', 'expert', 'advisor'],
+        },
+    },
+    {
+        'name': 'World Bank - Operational Consulting',
+        'organization': 'World Bank Group',
+        'url': 'https://www.worldbank.org/en/about/corporate-procurement/business-opportunities/operational-consulting-opportunities',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'WorldBankScraper',
+        'scraper_config': {
+            'url': 'https://www.worldbank.org/en/about/corporate-procurement/business-opportunities/operational-consulting-opportunities',
+            'api_url': 'https://search.worldbank.org/api/v2/procurement',
+            'fields': 'id,title,deadline,pdate,countryname,regionname,project_name,url,borrower,sector,docty',
+            'filter_query': 'docty:Notice AND status:Active',
+            'page_size': 50,
+            'max_items': 200,
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['consultant', 'consulting', 'advisory', 'technical assistance'],
+        },
+    },
+    {
+        'name': 'AfDB - Consultant Vacancies',
+        'organization': 'African Development Bank',
+        'url': 'https://www.afdb.org/en/about-us/careers/current-vacancies/consultants',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'AfDBScraper',
+        'scraper_config': {
+            'url': 'https://www.afdb.org/en/about-us/careers/current-vacancies/consultants',
+            'api_url': 'https://www.afdb.org/api/v1/node/procurement',
+            'rss_url': 'https://www.afdb.org/en/projects-and-operations/procurement/rss',
+            'page_size': 50,
+            'page': 0,
+            'status': 1,
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['consultant', 'consulting', 'expert'],
+        },
+    },
+    {
+        'name': 'UNDP - Job Opportunities',
+        'organization': 'UNDP',
+        'url': 'https://jobs.undp.org/cj_view_jobs.cfm',
+        'source_type': 'job_board',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'UNDPScraper',
+        'scraper_config': {
+            'url': 'https://jobs.undp.org/cj_view_jobs.cfm',
+            'api_url': 'https://www.ungm.org/Public/Notice',
+            'rss_url': 'https://procurement-notices.undp.org/feed.cfm?po_filter=all',
+            'notice_type': 0,
+            'page_size': 50,
+            'max_items': 200,
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['consultant', 'consultancy', 'international consultant'],
+        },
+    },
+    {
+        'name': 'LuxDev - Call for Tenders',
+        'organization': 'LuxDev',
+        'url': 'https://luxdev.lu/en/tenders/call-tenders',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'LuxDevScraper',
+        'scraper_config': {
+            'urls': [
+                'https://luxdev.lu/en/tenders/call-tenders',
+                'https://luxdev.lu/en/tenders/calls-proposals',
+            ],
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa', 'ACP'],
+            'keywords': ['consultant', 'tender', 'proposal', 'expertise'],
+        },
+    },
+    {
+        'name': 'FAO - Cabo Verde Procurement',
+        'organization': 'FAO',
+        'url': 'https://www.fao.org/cabo-verde/fao-au-cabo-verde/procurement/en/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.fao.org/cabo-verde/fao-au-cabo-verde/procurement/en/',
+            'item_selectors': ['div.item', 'article', 'tr', 'li'],
+            'title_selector': 'h3, h4, a, strong',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, .description',
+            'deadline_selector': '.deadline, .date',
+            'organization': 'FAO',
+            'client': 'FAO Cabo Verde',
+            'country': 'Cabo Verde',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV'],
+            'keywords': ['consultant', 'consultancy', 'procurement'],
+        },
+    },
+    {
+        'name': 'Instituto Camões - Oportunidades',
+        'organization': 'Instituto Camões, I.P.',
+        'url': 'https://www.instituto-camoes.pt/activity/oportunidades',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.instituto-camoes.pt/activity/oportunidades',
+            'item_selectors': ['article', 'div.item', 'tr', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, .summary',
+            'organization': 'Instituto Camões',
+            'client': 'Instituto Camões, I.P.',
+            'country': 'PALOP',
+            'language': 'pt',
+        },
+        'filters': {
+            'countries': ['CPV', 'AO', 'MZ', 'GW', 'ST', 'PT'],
+            'keywords': ['consultor', 'consultoria', 'especialista', 'perito'],
+        },
+    },
+    {
+        'name': 'AECID - Cooperação Cabo Verde',
+        'organization': 'AECID',
+        'url': 'https://www.aecid.es',
+        'source_type': 'portal',
+        'status': 'paused',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.aecid.es',
+            'item_selectors': ['article', 'div.item', 'tr'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p',
+            'organization': 'AECID',
+            'client': 'Agência Espanhola de Cooperação',
+            'country': 'Cabo Verde',
+            'language': 'es',
+        },
+        'filters': {
+            'countries': ['CPV'],
+            'keywords': ['consultor', 'consultoria', 'cooperación'],
+        },
+    },
+    {
+        'name': 'ECOWAS / CEDEAO - Procurement',
+        'organization': 'ECOWAS',
+        'url': 'https://www.ecowas.int',
+        'source_type': 'portal',
+        'status': 'paused',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.ecowas.int',
+            'item_selectors': ['article', 'div.item', 'tr', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p',
+            'organization': 'ECOWAS / CEDEAO',
+            'client': 'ECOWAS',
+            'country': 'Regional',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'West Africa'],
+            'keywords': ['consultant', 'consultancy', 'procurement'],
+        },
+    },
+    {
+        'name': 'dgMarket - Global Tenders',
+        'organization': 'dgMarket',
+        'url': 'https://www.dgmarket.com',
+        'source_type': 'portal',
+        'status': 'paused',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.dgmarket.com',
+            'item_selectors': ['div.tender-item', 'tr', 'article'],
+            'title_selector': 'h3, a.tender-title',
+            'link_selector': 'a[href]',
+            'description_selector': '.description, p',
+            'organization': 'dgMarket',
+            'client': 'Various',
+            'country': 'International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['consultant', 'consulting', 'advisory'],
+        },
+    },
+    # === EU Grants & Multilateral Sources ===
+    {
+        'name': 'EU Funding & Tenders Portal',
+        'organization': 'European Commission',
+        'url': 'https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-search',
+        'source_type': 'portal',
+        'status': 'paused',  # React SPA — needs API integration (EU Open Data Portal)
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-search',
+            'item_selectors': ['div.topic-item', 'tr', 'article', 'li'],
+            'title_selector': 'h3, h4, a, strong',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, .description',
+            'deadline_selector': '.deadline, .date, .end-date',
+            'organization': 'European Commission',
+            'client': 'EU',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['Africa', 'CPV'],
+            'keywords': ['consultant', 'consultancy', 'expert', 'technical assistance'],
+            'programmes': [
+                'NDICI', 'Global Gateway', 'ARISE', 'EU-AITF',
+                'Intra-Africa Mobility', 'AU-EU Youth Lab', 'Digital Innovation',
+            ],
+        },
+    },
+    {
+        'name': 'DG INTPA - EU International Partnerships',
+        'organization': 'European Commission - DG INTPA',
+        'url': 'https://international-partnerships.ec.europa.eu',
+        'source_type': 'portal',
+        'status': 'paused',  # React SPA — needs API integration
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://international-partnerships.ec.europa.eu',
+            'item_selectors': ['article', 'div.item', 'tr', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p',
+            'organization': 'European Commission',
+            'client': 'DG INTPA',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['Africa', 'CPV'],
+            'keywords': ['grant', 'funding', 'consultancy', 'expert'],
+            'sectors': ['green energy', 'health', 'digital', 'education', 'youth'],
+        },
+    },
+    {
+        'name': 'TED - Tenders Electronic Daily',
+        'organization': 'Publications Office of the EU',
+        'url': 'https://ted.europa.eu',
+        'source_type': 'portal',
+        'status': 'paused',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://ted.europa.eu',
+            'item_selectors': ['div.notice', 'tr', 'article'],
+            'title_selector': 'h3, a.notice-title',
+            'link_selector': 'a[href]',
+            'description_selector': '.description, p',
+            'organization': 'EU',
+            'client': 'Various EU Institutions',
+            'country': 'International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['consultant', 'consulting', 'technical assistance'],
+        },
+    },
+    {
+        'name': 'EIB - European Investment Bank',
+        'organization': 'EIB',
+        'url': 'https://www.eib.org/en/about/procurement/index.htm',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.eib.org/en/about/procurement/index.htm',
+            'item_selectors': ['article', 'div.item', 'tr', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p',
+            'organization': 'EIB',
+            'client': 'European Investment Bank',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['Africa', 'CPV'],
+            'keywords': ['consultant', 'consulting', 'advisory', 'infrastructure', 'energy'],
+        },
+    },
+    {
+        'name': 'Devex - Development Jobs & Tenders',
+        'organization': 'Devex',
+        'url': 'https://www.devex.com',
+        'source_type': 'job_board',
+        'status': 'paused',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.devex.com',
+            'item_selectors': ['div.job-item', 'article', 'tr'],
+            'title_selector': 'h3, a.job-title',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, .description',
+            'organization': 'Devex',
+            'client': 'Various',
+            'country': 'International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['consultant', 'consultancy', 'advisor'],
+        },
+    },
+]
+
+
+class Command(BaseCommand):
+    help = 'Initialize scraping sources for Cabo Verde and Africa consultancy opportunities'
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--reset',
+            action='store_true',
+            help='Reset existing sources (delete and recreate)',
+        )
+
+    def handle(self, *args, **options):
+        reset = options['reset']
+
+        if reset:
+            count = ScrapingSource.objects.all().count()
+            ScrapingSource.objects.all().delete()
+            self.stdout.write(self.style.WARNING(f'Deleted {count} existing sources'))
+
+        created_count = 0
+        updated_count = 0
+
+        for src_data in DEFAULT_SOURCES:
+            source, created = ScrapingSource.objects.update_or_create(
+                name=src_data['name'],
+                defaults={
+                    'organization': src_data['organization'],
+                    'url': src_data['url'],
+                    'source_type': src_data['source_type'],
+                    'status': src_data['status'],
+                    'scrape_frequency': src_data['scrape_frequency'],
+                    'scraper_class': src_data['scraper_class'],
+                    'scraper_config': src_data.get('scraper_config', {}),
+                    'filters': src_data.get('filters', {}),
+                }
+            )
+            if created:
+                created_count += 1
+                self.stdout.write(self.style.SUCCESS(f'Created: {source.name}'))
+            else:
+                updated_count += 1
+                self.stdout.write(self.style.NOTICE(f'Updated: {source.name}'))
+
+        self.stdout.write(
+            f'Done: {created_count} created, {updated_count} updated.'
+        )
