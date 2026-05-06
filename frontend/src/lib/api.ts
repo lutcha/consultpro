@@ -24,11 +24,14 @@ async function apiRequest<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   const token = getToken();
+  const isFormData = options.body instanceof FormData;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...((options.headers as Record<string, string>) || {}),
   };
+  if (!isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -906,12 +909,21 @@ export async function apiGetScrapingJobs(): Promise<PaginatedResponse<ApiScrapin
   return apiRequest<PaginatedResponse<ApiScrapingJob>>('/scraping/jobs/');
 }
 
+export async function apiUpdateScrapingSource(id: number, data: Partial<ApiScrapingSource>): Promise<ApiScrapingSource> {
+  return apiRequest<ApiScrapingSource>(`/scraping/sources/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function apiGetScrapingStats(): Promise<{
   total_sources: number;
   active_sources: number;
   total_opportunities: number;
   imported_opportunities: number;
   new_opportunities: number;
+  cv_eligible_new: number;
+  avg_quality_score: number;
   success_rate: number;
 }> {
   return apiRequest('/scraping/sources/stats/');

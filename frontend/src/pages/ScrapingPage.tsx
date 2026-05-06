@@ -1,152 +1,112 @@
 // ============================================
-// SCRAPING PAGE — Web Scraping / Fontes
+// SCRAPING PAGE - Web Scraping / Fontes
 // ============================================
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Globe, Play, Pause, Settings, Plus, Search, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Download, ArrowRight,
   Activity, Zap, Bot, ChevronDown, ChevronUp,
   BarChart3, Layers, Eye, DollarSign,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { AddScrapingSourceModal } from '@/components/modals';
+import {
+  apiCreateScrapingSource,
+  apiGetScrapedOpportunities,
+  apiGetScrapingJobs,
+  apiGetScrapingSources,
+  apiGetScrapingStats,
+  apiIgnoreScrapedOpportunity,
+  apiImportScrapedOpportunity,
+  apiRunScrapingSource,
+  apiToggleScrapingSource,
+  apiUpdateScrapingSource,
+  type ApiScrapedOpportunity,
+  type ApiScrapingJob,
+  type ApiScrapingSource,
+} from '@/lib/api';
 import type { ScrapingSource, ScrapedOpportunity, ScrapingJob } from '@/types';
 
-// ============================================================
-// INITIAL MOCK DATA
-// ============================================================
-const initialSources: ScrapingSource[] = [
-  {
-    id: 'src-1', name: 'Tenders Electronic Daily (TED)', organization: 'TED', url: 'https://ted.europa.eu',
-    sourceType: 'portal', status: 'active', scrapeFrequency: 'daily',
-    lastScrapedAt: new Date('2025-04-29T10:30:00Z'), nextScrapeAt: new Date('2025-04-29T18:00:00Z'),
-    filters: { keywords: ['consultoria', 'desenvolvimento', 'saude', 'educacao'], countries: ['PT', 'AO', 'MZ', 'CV'] } as any,
-    newOpportunitiesCount: 3, totalOpportunitiesCount: 1247, successRate: 94,
-  } as any,
-  {
-    id: 'src-2', name: 'UNDP Procurement', organization: 'UNDP', url: 'https://procurement-notices.undp.org',
-    sourceType: 'portal', status: 'active', scrapeFrequency: 'daily',
-    lastScrapedAt: new Date('2025-04-29T09:15:00Z'), nextScrapeAt: new Date('2025-04-29T15:00:00Z'),
-    filters: { keywords: ['health', 'governance', 'climate', 'gender'] } as any,
-    newOpportunitiesCount: 2, totalOpportunitiesCount: 892, successRate: 97,
-  } as any,
-  {
-    id: 'src-3', name: 'World Bank Projects', organization: 'World Bank', url: 'https://projects.worldbank.org',
-    sourceType: 'portal', status: 'active', scrapeFrequency: 'daily',
-    lastScrapedAt: new Date('2025-04-29T08:00:00Z'), nextScrapeAt: new Date('2025-04-29T14:00:00Z'),
-    filters: { keywords: ['consulting services', 'technical assistance'] } as any,
-    newOpportunitiesCount: 1, totalOpportunitiesCount: 534, successRate: 91,
-  } as any,
-  {
-    id: 'src-4', name: 'DevBusiness (AfDB)', organization: 'AfDB', url: 'https://www.devbusiness.com',
-    sourceType: 'portal', status: 'error', scrapeFrequency: 'daily',
-    lastScrapedAt: new Date('2025-04-28T22:00:00Z'), nextScrapeAt: new Date('2025-04-29T20:00:00Z'),
-    filters: { keywords: ['consultancy', 'feasibility', 'M&E'] } as any,
-    newOpportunitiesCount: 0, totalOpportunitiesCount: 312, successRate: 72,
-    errorMessage: 'Rate limit exceeded at 22:15',
-  } as any,
-  {
-    id: 'src-5', name: 'Portal BASE (Portugal)', organization: 'BASE', url: 'https://www.base.gov.pt',
-    sourceType: 'portal', status: 'active', scrapeFrequency: 'daily',
-    lastScrapedAt: new Date('2025-04-29T07:00:00Z'), nextScrapeAt: new Date('2025-04-29T13:00:00Z'),
-    filters: { keywords: ['consultoria', 'formacao', 'avaliacao'] } as any,
-    newOpportunitiesCount: 2, totalOpportunitiesCount: 678, successRate: 96,
-  } as any,
-  {
-    id: 'src-6', name: 'UNICEF Consultancies', organization: 'UNICEF', url: 'https://www.unicef.org/about/employment',
-    sourceType: 'portal', status: 'paused', scrapeFrequency: 'daily',
-    lastScrapedAt: new Date('2025-04-25T10:00:00Z'), nextScrapeAt: undefined,
-    filters: { keywords: ['consultant', 'advisor', 'specialist'] } as any,
-    newOpportunitiesCount: 0, totalOpportunitiesCount: 245, successRate: 88,
-    errorMessage: 'Site structure changed - requires manual update',
-  } as any,
-];
+type ScrapingStats = {
+  total_sources: number;
+  active_sources: number;
+  total_opportunities: number;
+  imported_opportunities: number;
+  new_opportunities: number;
+  cv_eligible_new: number;
+  avg_quality_score: number;
+  success_rate: number;
+};
 
-const initialOpportunities: ScrapedOpportunity[] = [
-  {
-    id: 'opp-1', sourceId: 'src-1', externalUrl: 'https://ted.europa.eu/notice/12345',
-    title: 'Servicos de Consultoria para Avaliacao de Programa de Saude Publica',
-    organization: 'Ministerio da Saude de Mocambique', client: 'Ministerio da Saude de Mocambique',
-    deadline: new Date('2025-05-15'), status: 'new', location: 'Maputo, Mocambique',
-    sector: 'Saude', country: 'MZ', currency: 'EUR', value: 625000,
-    description: 'Avaliacao de impacto do Programa Nacional de Saude 2020-2024.',
-    aiSummary: 'Oportunidade de consultoria em avaliacao de programa de saude publica em Mocambique. Requisitos principais: experiencia em M&E (min. 8 anos), conhecimento do contexto lusofono. Prazo apertado (15 dias).',
-    deadlineAlert: true,
-  } as any,
-  {
-    id: 'opp-2', sourceId: 'src-2', externalUrl: 'https://procurement-notices.undp.org/notice/67890',
-    title: 'Consultor(a) Senior em Governanca e Fortalecimento Institucional',
-    organization: 'UNDP Angola', client: 'UNDP Angola',
-    deadline: new Date('2025-05-20'), status: 'imported', location: 'Luanda, Angola',
-    sector: 'Governanca', country: 'AO', currency: 'USD', value: 150000,
-    description: 'Apoio tecnico ao Ministerio da Administracao Territorial.',
-    aiSummary: 'Consultoria UNDP em governanca para Angola. Foco em reforma administrativa. Compativel com expertise da consultora Ana Silva.',
-    deadlineAlert: false,
-    importedOpportunityId: 'opp-imported-1',
-  } as any,
-  {
-    id: 'opp-3', sourceId: 'src-3', externalUrl: 'https://projects.worldbank.org/notice/11223',
-    title: 'Especialista em Sistemas de Saude',
-    organization: 'World Bank Group', client: 'World Bank Group',
-    deadline: new Date('2025-06-01'), status: 'new', location: 'Sao Tome e Principe',
-    sector: 'Saude', country: 'ST', currency: 'USD', value: 100000,
-    description: 'Consultor individual para fortalecimento do sistema de saude.',
-    aiSummary: 'Consultoria individual do Banco Mundial em Sao Tome e Principe. Oportunidade interessante mas prazo longo.',
-    deadlineAlert: false,
-  } as any,
-  {
-    id: 'opp-4', sourceId: 'src-5', externalUrl: 'https://www.base.gov.pt/notice/33445',
-    title: 'Servicos de Formacao em Avaliacao de Projetos',
-    organization: 'Agencia para o Desenvolvimento e Coesao', client: 'ADCS',
-    deadline: new Date('2025-05-10'), status: 'ignored', location: 'Lisboa, Portugal',
-    sector: 'Formacao', country: 'PT', currency: 'EUR', value: 55000,
-    description: 'Formacao de 30 tecnicos em avaliacao de projetos.',
-    aiSummary: 'Formacao em avaliacao de projetos. Menor alinhamento com foco atual da empresa.',
-    deadlineAlert: false,
-  } as any,
-  {
-    id: 'opp-5', sourceId: 'src-1', externalUrl: 'https://ted.europa.eu/notice/55667',
-    title: 'Consultoria em Desenvolvimento Rural e Seguranca Alimentar',
-    organization: 'FAO Cabo Verde', client: 'FAO Cabo Verde',
-    deadline: new Date('2025-05-30'), status: 'new', location: 'Praia, Cabo Verde',
-    sector: 'Agricultura', country: 'CV', currency: 'EUR', value: 250000,
-    description: 'Elaboracao de estudo de viabilidade para programa de desenvolvimento rural.',
-    aiSummary: 'Consultoria FAO em desenvolvimento rural em Cabo Verde. Grande oportunidade com budget substancial. Marcada para revisao pela equipa de negocios.',
-    deadlineAlert: true,
-  } as any,
-];
+function toDate(value: string | null | undefined): Date | undefined {
+  return value ? new Date(value) : undefined;
+}
 
-const initialJobs: ScrapingJob[] = [
-  {
-    id: 'job-1', sourceId: 'src-1', status: 'completed',
-    startedAt: new Date('2025-04-29T10:30:00Z'), completedAt: new Date('2025-04-29T10:45:00Z'),
-    itemsFound: 12, itemsNew: 3, itemsImported: 1, errorLog: '', executedBy: 'system',
-  } as any,
-  {
-    id: 'job-2', sourceId: 'src-2', status: 'completed',
-    startedAt: new Date('2025-04-29T09:15:00Z'), completedAt: new Date('2025-04-29T09:28:00Z'),
-    itemsFound: 8, itemsNew: 2, itemsImported: 1, errorLog: '', executedBy: 'system',
-  } as any,
-  {
-    id: 'job-3', sourceId: 'src-4', status: 'failed',
-    startedAt: new Date('2025-04-28T22:00:00Z'), completedAt: new Date('2025-04-28T22:15:00Z'),
-    itemsFound: 0, itemsNew: 0, itemsImported: 0, errorLog: 'Rate limit exceeded after 15 requests. Retry scheduled.', executedBy: 'system',
-  } as any,
-  {
-    id: 'job-4', sourceId: 'src-5', status: 'running',
-    startedAt: new Date('2025-04-29T13:00:00Z'), completedAt: undefined,
-    itemsFound: 0, itemsNew: 0, itemsImported: 0, errorLog: '', executedBy: 'system',
-  } as any,
-];
+function mapSource(source: ApiScrapingSource): ScrapingSource {
+  return {
+    id: String(source.id),
+    name: source.name,
+    organization: source.organization,
+    url: source.url,
+    sourceType: source.source_type as ScrapingSource['sourceType'],
+    status: source.status as ScrapingSource['status'],
+    scrapeFrequency: source.scrape_frequency as ScrapingSource['scrapeFrequency'],
+    lastScrapedAt: toDate(source.last_scraped_at),
+    nextScrapeAt: toDate(source.next_scrape_at),
+    filters: {},
+    newOpportunitiesCount: source.new_opportunities_count || 0,
+    totalOpportunitiesCount: source.total_opportunities_count || 0,
+    successRate: source.success_rate || 0,
+    errorMessage: source.error_message || undefined,
+  };
+}
 
-// ============================================================
+function mapOpportunity(opp: ApiScrapedOpportunity): ScrapedOpportunity {
+  return {
+    id: String(opp.id),
+    sourceId: String(opp.source),
+    externalId: opp.external_id || undefined,
+    externalUrl: opp.external_url,
+    title: opp.title,
+    organization: opp.organization,
+    client: opp.client,
+    sector: opp.sector || undefined,
+    country: opp.country || undefined,
+    description: opp.description || '',
+    value: opp.value ? Number(opp.value) : undefined,
+    currency: opp.currency || 'USD',
+    deadline: toDate(opp.deadline),
+    status: opp.status as ScrapedOpportunity['status'],
+    publishedAt: toDate(opp.published_at),
+    deadlineAlert: Boolean(opp.deadline_alert),
+    aiSummary: opp.ai_summary || undefined,
+  };
+}
+
+function mapJob(job: ApiScrapingJob): ScrapingJob {
+  return {
+    id: String(job.id),
+    sourceId: String(job.source),
+    status: job.status as ScrapingJob['status'],
+    startedAt: toDate(job.started_at),
+    completedAt: toDate(job.completed_at),
+    itemsFound: job.items_found || 0,
+    itemsNew: job.items_new || 0,
+    itemsImported: job.items_imported || 0,
+    errorLog: job.error_log || undefined,
+    executedBy: job.executed_by || 'system',
+  };
+}
+
+// ============================================
 // COMPONENTS
-// ============================================================
+// ============================================
 function SourceStatusBadge({ status }: { status: string }) {
   const configs: Record<string, { label: string; class: string; icon: typeof CheckCircle2 }> = {
     active: { label: 'Ativo', class: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
@@ -187,21 +147,25 @@ function JobStatusBadge({ status }: { status: string }) {
 
 interface StatsCardsProps {
   sources: ScrapingSource[];
+  stats: ScrapingStats | null;
 }
 
-function StatsCards({ sources }: StatsCardsProps) {
-  const activeSources = sources.filter((s) => s.status === 'active').length;
-  const totalOportunidades = sources.reduce((acc, s) => acc + s.totalOpportunitiesCount, 0);
-  const avgSuccess = sources.length > 0
-    ? Math.round(sources.reduce((acc, s) => acc + s.successRate, 0) / sources.length)
-    : 0;
+function StatsCards({ sources, stats }: StatsCardsProps) {
+  const activeSources = stats?.active_sources ?? sources.filter((s) => s.status === 'active').length;
+  const totalOportunidades = stats?.total_opportunities ?? sources.reduce((acc, s) => acc + s.totalOpportunitiesCount, 0);
+  const avgSuccess = stats?.success_rate ?? (
+    sources.length > 0
+      ? Math.round(sources.reduce((acc, s) => acc + s.successRate, 0) / sources.length)
+      : 0
+  );
+  const totalSources = stats?.total_sources ?? sources.length;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <Card>
         <CardContent className="p-4 flex items-center gap-3">
           <div className="p-2.5 rounded-lg bg-muted text-blue-600"><Globe className="h-5 w-5" /></div>
-          <div><p className="text-2xl font-bold">{sources.length}</p><p className="text-xs text-muted-foreground">Fontes Totais</p></div>
+          <div><p className="text-2xl font-bold">{totalSources}</p><p className="text-xs text-muted-foreground">Fontes Totais</p></div>
         </CardContent>
       </Card>
       <Card>
@@ -226,18 +190,53 @@ function StatsCards({ sources }: StatsCardsProps) {
   );
 }
 
-// ============================================================
+// ============================================
 // TAB: SOURCES
-// ============================================================
+// ============================================
 interface SourcesTabProps {
   sources: ScrapingSource[];
+  editingSource: ScrapingSource | null;
+  runningSourceIds: Set<string>;
+  savingSource: boolean;
   onAdd: () => void;
   onToggle: (id: string) => void;
+  onRun: (id: string) => void;
+  onEdit: (source: ScrapingSource) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (id: string, data: Partial<ApiScrapingSource>) => void;
 }
 
-function SourcesTab({ sources, onAdd, onToggle }: SourcesTabProps) {
+function SourcesTab({
+  sources,
+  editingSource,
+  runningSourceIds,
+  savingSource,
+  onAdd,
+  onToggle,
+  onRun,
+  onEdit,
+  onCancelEdit,
+  onSaveEdit,
+}: SourcesTabProps) {
   const [search, setSearch] = useState('');
+  const [editForm, setEditForm] = useState({
+    name: '',
+    url: '',
+    scrape_frequency: 'daily',
+    status: 'active',
+  });
   const filtered = sources.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
+
+  useEffect(() => {
+    if (editingSource) {
+      setEditForm({
+        name: editingSource.name,
+        url: editingSource.url,
+        scrape_frequency: editingSource.scrapeFrequency,
+        status: editingSource.status,
+      });
+    }
+  }, [editingSource]);
 
   return (
     <div className="space-y-4">
@@ -248,6 +247,34 @@ function SourcesTab({ sources, onAdd, onToggle }: SourcesTabProps) {
         </div>
         <Button size="sm" onClick={onAdd}><Plus className="h-4 w-4 mr-1" />Nova Fonte</Button>
       </div>
+
+      {editingSource && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input value={editForm.name} onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Nome" />
+              <Input value={editForm.url} onChange={(e) => setEditForm((prev) => ({ ...prev, url: e.target.value }))} placeholder="URL" />
+              <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={editForm.scrape_frequency} onChange={(e) => setEditForm((prev) => ({ ...prev, scrape_frequency: e.target.value }))}>
+                <option value="hourly">Por Hora</option>
+                <option value="daily">Diario</option>
+                <option value="weekly">Semanal</option>
+              </select>
+              <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={editForm.status} onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}>
+                <option value="active">Ativo</option>
+                <option value="paused">Pausado</option>
+                <option value="error">Erro</option>
+                <option value="disabled">Desativado</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="outline" onClick={onCancelEdit} disabled={savingSource}>Cancelar</Button>
+              <Button size="sm" onClick={() => onSaveEdit(editingSource.id, editForm)} disabled={savingSource}>
+                {savingSource ? 'A guardar...' : 'Guardar'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((source) => (
@@ -277,13 +304,13 @@ function SourcesTab({ sources, onAdd, onToggle }: SourcesTabProps) {
 
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
-                {(source as any).lastScrapedAt ? `Ultimo scrape: ${new Date((source as any).lastScrapedAt).toLocaleDateString('pt-PT')}` : 'Nunca scrapeado'}
+                {source.lastScrapedAt ? `Ultimo scrape: ${source.lastScrapedAt.toLocaleDateString('pt-PT')}` : 'Nunca scrapeado'}
               </div>
 
-              {(source as any).errorMessage && (
+              {source.errorMessage && (
                 <div className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 p-2 rounded">
                   <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
-                  <span>{(source as any).errorMessage}</span>
+                  <span>{source.errorMessage}</span>
                 </div>
               )}
 
@@ -291,8 +318,10 @@ function SourcesTab({ sources, onAdd, onToggle }: SourcesTabProps) {
                 <Button size="sm" variant="outline" className="h-8 text-xs flex-1" onClick={() => onToggle(source.id)}>
                   {source.status === 'paused' ? <><Play className="h-3.5 w-3.5 mr-1" />Iniciar</> : <><Pause className="h-3.5 w-3.5 mr-1" />Pausar</>}
                 </Button>
-                <Button size="sm" variant="outline" className="h-8 text-xs flex-1"><RefreshCw className="h-3.5 w-3.5 mr-1" />Executar</Button>
-                <Button size="sm" variant="outline" className="h-8 text-xs px-2"><Settings className="h-3.5 w-3.5" /></Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs flex-1" onClick={() => onRun(source.id)} disabled={runningSourceIds.has(source.id)}>
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" />{runningSourceIds.has(source.id) ? 'A executar' : 'Executar'}
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => onEdit(source)}><Settings className="h-3.5 w-3.5" /></Button>
               </div>
             </CardContent>
           </Card>
@@ -300,23 +329,24 @@ function SourcesTab({ sources, onAdd, onToggle }: SourcesTabProps) {
       </div>
       {filtered.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
-          Nenhuma fonte encontrada. Adicione uma nova fonte para começar.
+          Nenhuma fonte encontrada. Adicione uma nova fonte para comecar.
         </div>
       )}
     </div>
   );
 }
 
-// ============================================================
+// ============================================
 // TAB: OPPORTUNITIES
-// ============================================================
+// ============================================
 interface OpportunitiesTabProps {
   opportunities: ScrapedOpportunity[];
+  busyOpportunityIds: Set<string>;
   onImport: (id: string) => void;
   onIgnore: (id: string) => void;
 }
 
-function OpportunitiesTab({ opportunities, onImport, onIgnore }: OpportunitiesTabProps) {
+function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnore }: OpportunitiesTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -346,6 +376,7 @@ function OpportunitiesTab({ opportunities, onImport, onIgnore }: OpportunitiesTa
       <div className="space-y-3">
         {filtered.map((opp) => {
           const isExpanded = expanded === opp.id;
+          const isBusy = busyOpportunityIds.has(opp.id);
           return (
             <Card key={opp.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
@@ -355,23 +386,25 @@ function OpportunitiesTab({ opportunities, onImport, onIgnore }: OpportunitiesTa
                       <h4 className="font-semibold text-sm">{opp.title}</h4>
                       <OpportunityStatusBadge status={opp.status} />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{opp.organization} — {(opp as any).location}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{opp.organization} - {opp.country || '-'}</p>
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Prazo: {opp.deadline ? new Date(opp.deadline).toLocaleDateString('pt-PT') : '-'}</span>
-                      <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" />{opp.sector}</span>
+                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Prazo: {opp.deadline ? opp.deadline.toLocaleDateString('pt-PT') : '-'}</span>
+                      <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" />{opp.sector || '-'}</span>
                       {opp.value && <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{opp.value.toLocaleString('pt-PT')} {opp.currency}</span>}
                     </div>
                   </div>
                   <div className="flex gap-1">
                     <Button size="sm" variant="outline" className="h-7 text-xs"><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs"><Download className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
+                      <a href={opp.externalUrl} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" /></a>
+                    </Button>
                     {opp.status === 'new' && (
-                      <Button size="sm" className="h-7 text-xs" onClick={() => onImport(opp.id)}>
+                      <Button size="sm" className="h-7 text-xs" onClick={() => onImport(opp.id)} disabled={isBusy}>
                         <ArrowRight className="h-3.5 w-3.5 mr-1" />Importar
                       </Button>
                     )}
                     {opp.status === 'new' && (
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onIgnore(opp.id)}>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onIgnore(opp.id)} disabled={isBusy}>
                         Ignorar
                       </Button>
                     )}
@@ -405,9 +438,9 @@ function OpportunitiesTab({ opportunities, onImport, onIgnore }: OpportunitiesTa
   );
 }
 
-// ============================================================
+// ============================================
 // TAB: JOB LOGS
-// ============================================================
+// ============================================
 interface JobLogsTabProps {
   jobs: ScrapingJob[];
   sources: ScrapingSource[];
@@ -426,8 +459,8 @@ function JobLogsTab({ jobs, sources }: JobLogsTabProps) {
                   <div>
                     <p className="font-semibold text-sm">{sources.find((s) => s.id === job.sourceId)?.name || job.sourceId}</p>
                     <p className="text-xs text-muted-foreground">
-                      {job.startedAt ? new Date(job.startedAt).toLocaleString('pt-PT') : '-'}
-                      {job.completedAt && job.startedAt ? ` (${Math.floor((new Date(job.completedAt).getTime() - new Date(job.startedAt).getTime()) / 60000)}m)` : ''}
+                      {job.startedAt ? job.startedAt.toLocaleString('pt-PT') : '-'}
+                      {job.completedAt && job.startedAt ? ` (${Math.floor((job.completedAt.getTime() - job.startedAt.getTime()) / 60000)}m)` : ''}
                     </p>
                   </div>
                 </div>
@@ -456,33 +489,77 @@ function JobLogsTab({ jobs, sources }: JobLogsTabProps) {
   );
 }
 
-// ============================================================
+// ============================================
 // MAIN PAGE
-// ============================================================
+// ============================================
 export function ScrapingPage() {
-  const [sources, setSources] = useState<ScrapingSource[]>(initialSources);
-  const [opportunities, setOpportunities] = useState<ScrapedOpportunity[]>(initialOpportunities);
-  const [jobs] = useState<ScrapingJob[]>(initialJobs);
+  const [sources, setSources] = useState<ScrapingSource[]>([]);
+  const [opportunities, setOpportunities] = useState<ScrapedOpportunity[]>([]);
+  const [jobs, setJobs] = useState<ScrapingJob[]>([]);
+  const [stats, setStats] = useState<ScrapingStats | null>(null);
   const [showSourceModal, setShowSourceModal] = useState(false);
+  const [editingSource, setEditingSource] = useState<ScrapingSource | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [runningSourceIds, setRunningSourceIds] = useState<Set<string>>(new Set());
+  const [busyOpportunityIds, setBusyOpportunityIds] = useState<Set<string>>(new Set());
+  const [savingSource, setSavingSource] = useState(false);
 
-  const handleAddSource = (data: any) => {
-    const newSource: ScrapingSource = {
-      id: `src-${Date.now()}`,
-      name: data.name,
-      organization: data.organization,
-      url: data.url,
-      sourceType: (data.source_type || 'portal') as any,
-      status: 'active',
-      scrapeFrequency: (data.scrape_frequency || 'daily') as any,
-      filters: {},
-      newOpportunitiesCount: 0,
-      totalOpportunitiesCount: 0,
-      successRate: 100,
-    };
-    setSources((prev) => [...prev, newSource]);
+  const refreshSources = useCallback(async () => {
+    const response = await apiGetScrapingSources();
+    setSources(response.results.map(mapSource));
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [sourcesResponse, opportunitiesResponse, jobsResponse, statsResponse] = await Promise.all([
+        apiGetScrapingSources(),
+        apiGetScrapedOpportunities(),
+        apiGetScrapingJobs(),
+        apiGetScrapingStats(),
+      ]);
+      setSources(sourcesResponse.results.map(mapSource));
+      setOpportunities(opportunitiesResponse.results.map(mapOpportunity));
+      setJobs(jobsResponse.results.map(mapJob));
+      setStats(statsResponse);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao carregar dados de scraping';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshAll();
+  }, [refreshAll]);
+
+  const handleAddSource = async (data: any) => {
+    setError(null);
+    try {
+      await apiCreateScrapingSource({
+        name: data.name,
+        organization: data.organization,
+        url: data.url,
+        source_type: data.source_type || data.sourceType || 'portal',
+        scrape_frequency: data.scrape_frequency || data.scrapeFrequency || 'daily',
+      });
+      toast.success('Fonte criada');
+      setShowSourceModal(false);
+      await refreshSources();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao criar fonte';
+      setError(message);
+      toast.error(message);
+    }
   };
 
-  const handleToggleSource = (id: string) => {
+  const handleToggleSource = async (id: string) => {
+    const previous = sources;
+    setError(null);
     setSources((prev) =>
       prev.map((s) => {
         if (s.id !== id) return s;
@@ -490,46 +567,154 @@ export function ScrapingPage() {
         return { ...s, status: nextStatus };
       })
     );
+    try {
+      await apiToggleScrapingSource(Number(id));
+      await refreshSources();
+      toast.success('Estado da fonte atualizado');
+    } catch (err) {
+      setSources(previous);
+      const message = err instanceof Error ? err.message : 'Erro ao atualizar fonte';
+      setError(message);
+      toast.error(message);
+    }
   };
 
-  const handleImportOpportunity = (id: string) => {
-    setOpportunities((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status: 'imported' as const } : o))
-    );
+  const handleRunSource = async (id: string) => {
+    setError(null);
+    setRunningSourceIds((prev) => new Set(prev).add(id));
+    try {
+      await apiRunScrapingSource(Number(id));
+      toast.success('Scraping iniciado');
+      await refreshSources();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao executar scraping';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setRunningSourceIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
-  const handleIgnoreOpportunity = (id: string) => {
-    setOpportunities((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status: 'ignored' as const } : o))
-    );
+  const handleSaveSource = async (id: string, data: Partial<ApiScrapingSource>) => {
+    setSavingSource(true);
+    setError(null);
+    try {
+      const updated = await apiUpdateScrapingSource(Number(id), data);
+      setSources((prev) => prev.map((source) => (source.id === id ? mapSource(updated) : source)));
+      setEditingSource(null);
+      toast.success('Fonte atualizada');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao guardar fonte';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSavingSource(false);
+    }
+  };
+
+  const handleImportOpportunity = async (id: string) => {
+    setBusyOpportunityIds((prev) => new Set(prev).add(id));
+    setError(null);
+    try {
+      await apiImportScrapedOpportunity(Number(id));
+      setOpportunities((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, status: 'imported' as const } : o))
+      );
+      toast.success('Oportunidade importada');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao importar oportunidade';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setBusyOpportunityIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const handleIgnoreOpportunity = async (id: string) => {
+    setBusyOpportunityIds((prev) => new Set(prev).add(id));
+    setError(null);
+    try {
+      await apiIgnoreScrapedOpportunity(Number(id));
+      setOpportunities((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, status: 'ignored' as const } : o))
+      );
+      toast.success('Oportunidade ignorada');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao ignorar oportunidade';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setBusyOpportunityIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Web Scraping</h1>
-        <p className="text-muted-foreground text-sm">Monitorize fontes de oportunidades internacionais (UN, Banco Mundial, UE, etc.).</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Web Scraping</h1>
+          <p className="text-muted-foreground text-sm">Monitorize fontes de oportunidades internacionais (UN, Banco Mundial, UE, etc.).</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={refreshAll} disabled={loading}>
+          <RefreshCw className="h-4 w-4 mr-1" />
+          Atualizar
+        </Button>
       </div>
 
-      <StatsCards sources={sources} />
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {loading ? (
+        <div className="py-12 text-center text-muted-foreground">Carregando...</div>
+      ) : (
+        <>
+          <StatsCards sources={sources} stats={stats} />
 
-      <Tabs defaultValue="sources" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
-          <TabsTrigger value="sources" className="flex items-center gap-1.5"><Globe className="h-4 w-4" />Fontes</TabsTrigger>
-          <TabsTrigger value="opportunities" className="flex items-center gap-1.5"><Layers className="h-4 w-4" />Oportunidades</TabsTrigger>
-          <TabsTrigger value="jobs" className="flex items-center gap-1.5"><Activity className="h-4 w-4" />Histórico de Jobs</TabsTrigger>
-        </TabsList>
+          <Tabs defaultValue="sources" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
+              <TabsTrigger value="sources" className="flex items-center gap-1.5"><Globe className="h-4 w-4" />Fontes</TabsTrigger>
+              <TabsTrigger value="opportunities" className="flex items-center gap-1.5"><Layers className="h-4 w-4" />Oportunidades</TabsTrigger>
+              <TabsTrigger value="jobs" className="flex items-center gap-1.5"><Activity className="h-4 w-4" />Historico de Jobs</TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="sources" className="space-y-4">
-          <SourcesTab sources={sources} onAdd={() => setShowSourceModal(true)} onToggle={handleToggleSource} />
-        </TabsContent>
-        <TabsContent value="opportunities" className="space-y-4">
-          <OpportunitiesTab opportunities={opportunities} onImport={handleImportOpportunity} onIgnore={handleIgnoreOpportunity} />
-        </TabsContent>
-        <TabsContent value="jobs" className="space-y-4">
-          <JobLogsTab jobs={jobs} sources={sources} />
-        </TabsContent>
-      </Tabs>
+            <TabsContent value="sources" className="space-y-4">
+              <SourcesTab
+                sources={sources}
+                editingSource={editingSource}
+                runningSourceIds={runningSourceIds}
+                savingSource={savingSource}
+                onAdd={() => setShowSourceModal(true)}
+                onToggle={handleToggleSource}
+                onRun={handleRunSource}
+                onEdit={setEditingSource}
+                onCancelEdit={() => setEditingSource(null)}
+                onSaveEdit={handleSaveSource}
+              />
+            </TabsContent>
+            <TabsContent value="opportunities" className="space-y-4">
+              <OpportunitiesTab
+                opportunities={opportunities}
+                busyOpportunityIds={busyOpportunityIds}
+                onImport={handleImportOpportunity}
+                onIgnore={handleIgnoreOpportunity}
+              />
+            </TabsContent>
+            <TabsContent value="jobs" className="space-y-4">
+              <JobLogsTab jobs={jobs} sources={sources} />
+            </TabsContent>
+          </Tabs>
+        </>
+      )}
 
       <AddScrapingSourceModal open={showSourceModal} onClose={() => setShowSourceModal(false)} onAdd={handleAddSource} />
     </div>
