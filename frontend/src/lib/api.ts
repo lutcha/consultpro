@@ -8,6 +8,10 @@ function getToken(): string | null {
   return localStorage.getItem('access_token');
 }
 
+function getRefreshToken(): string | null {
+  return localStorage.getItem('refresh_token');
+}
+
 function setTokens(access: string, refresh: string) {
   localStorage.setItem('access_token', access);
   localStorage.setItem('refresh_token', refresh);
@@ -18,9 +22,35 @@ export function clearTokens() {
   localStorage.removeItem('refresh_token');
 }
 
+async function refreshAccessToken(): Promise<string | null> {
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+
+  const response = await fetch(`${API_BASE}/auth/token/refresh/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh }),
+  });
+
+  if (!response.ok) {
+    clearTokens();
+    return null;
+  }
+
+  const data = await response.json() as Partial<LoginResponse>;
+  if (!data.access) {
+    clearTokens();
+    return null;
+  }
+
+  setTokens(data.access, data.refresh || refresh);
+  return data.access;
+}
+
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryOnUnauthorized = true
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   const token = getToken();
@@ -37,10 +67,23 @@ async function apiRequest<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     headers,
   });
+
+  if (response.status === 401 && retryOnUnauthorized) {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) {
+      response = await fetch(url, {
+        ...options,
+        headers: {
+          ...headers,
+          Authorization: `Bearer ${refreshedToken}`,
+        },
+      });
+    }
+  }
 
   if (response.status === 401) {
     clearTokens();
