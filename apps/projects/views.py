@@ -38,6 +38,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
             permission_classes = [IsConsultantOrManager]
         return [permission() for permission in permission_classes]
 
+    def perform_create(self, serializer):
+        if serializer.validated_data.get('manager') is None:
+            serializer.save(manager=self.request.user)
+        else:
+            serializer.save()
+
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
         project = Project.objects.get(pk=response.data['id'])

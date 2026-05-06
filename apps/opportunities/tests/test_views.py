@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -9,8 +10,13 @@ from rest_framework.test import APIClient, APITestCase
 
 from apps.core.permissions import IsConsultantOrManager
 
-from ..models import Opportunity, Requirement, Risk
-from .factories import OpportunityFactory, RequirementFactory, RiskFactory, UserFactory
+from apps.opportunities.models import Opportunity, Requirement, Risk
+from apps.opportunities.tests.factories import (
+    OpportunityFactory,
+    RequirementFactory,
+    RiskFactory,
+    UserFactory,
+)
 
 
 class OpportunityViewSetTests(APITestCase):
@@ -65,10 +71,40 @@ class OpportunityViewSetTests(APITestCase):
     def test_analyze_tor_action(self):
         opportunity = OpportunityFactory(ai_analysis_status='pending')
         url = reverse('opportunity-analyze-tor', kwargs={'pk': opportunity.pk})
-        response = self.client.post(url)
+        with patch('apps.opportunities.tasks.analyze_tor_document.delay') as mock_delay:
+            response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         opportunity.refresh_from_db()
         self.assertEqual(opportunity.ai_analysis_status, 'queued')
+        mock_delay.assert_called_once_with(opportunity.id)
+
+    def test_upload_tor_requires_file(self):
+        opportunity = OpportunityFactory()
+        url = reverse('opportunity-upload-tor', kwargs={'pk': opportunity.pk})
+        response = self.client.post(url, data={}, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_upload_tor_saves_file_and_queues_analysis(self):
+        opportunity = OpportunityFactory(ai_analysis_status='pending')
+        url = reverse('opportunity-upload-tor', kwargs={'pk': opportunity.pk})
+        tor_file = SimpleUploadedFile(
+            'tor.pdf',
+            b'%PDF-1.4 test tor content',
+            content_type='application/pdf',
+        )
+
+        with patch('apps.opportunities.tasks.analyze_tor_document.delay') as mock_delay:
+            response = self.client.post(
+                url,
+                data={'tor_document': tor_file},
+                format='multipart',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        opportunity.refresh_from_db()
+        self.assertTrue(opportunity.tor_document.name.endswith('.pdf'))
+        self.assertEqual(opportunity.ai_analysis_status, 'queued')
+        mock_delay.assert_called_once_with(opportunity.id)
 
     def test_filter_by_status(self):
         OpportunityFactory(status='new')

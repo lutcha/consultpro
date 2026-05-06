@@ -46,6 +46,7 @@ class Opportunity(models.Model):
         max_length=20,
         choices=[
             ('pending', 'Pendente'),
+            ('queued', 'Em fila'),
             ('processing', 'A processar'),
             ('completed', 'Completo'),
             ('failed', 'Falhou'),

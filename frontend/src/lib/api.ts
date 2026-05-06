@@ -444,7 +444,7 @@ export interface ApiDashboardStats {
 }
 
 export interface ApiPipelineItem {
-  id: number;
+  id: string;
   title: string;
   client: string;
   deadline: string | null;

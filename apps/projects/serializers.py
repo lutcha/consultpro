@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.proposals.models import Proposal
 from apps.users.models import User
 from .models import Project, ProjectTeamMember, ProjectMilestone, ProjectRisk, ProjectDeliverable, ProjectPhase
 
@@ -112,7 +113,10 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     budget_utilization = serializers.IntegerField(read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
     proposal_id = serializers.PrimaryKeyRelatedField(
-        source='proposal', read_only=True
+        queryset=Proposal.objects.all(),
+        source='proposal',
+        required=False,
+        allow_null=True,
     )
 
     class Meta:

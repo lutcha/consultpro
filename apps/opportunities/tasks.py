@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import timedelta
 
 from celery import shared_task
 from django.utils import timezone
@@ -7,6 +8,14 @@ from django.utils import timezone
 from .models import Opportunity, Requirement, Risk
 
 logger = logging.getLogger(__name__)
+
+
+def _analysis_has_content(result: dict) -> bool:
+    return bool(
+        (result.get('summary') or '').strip()
+        or result.get('requirements')
+        or result.get('risks')
+    )
 
 
 def _extract_text_from_document(opportunity: Opportunity) -> str:
@@ -94,6 +103,19 @@ def analyze_tor_document(opportunity_id: int):
         opportunity.ai_analysis_status = 'failed'
         opportunity.save(update_fields=['ai_analysis_status'])
         return {'detail': 'Falha na analise de IA.', 'opportunity_id': opportunity_id, 'error': str(e)}
+
+    if not _analysis_has_content(result):
+        logger.warning(
+            "AI analysis returned empty output for opportunity %s using provider %s",
+            opportunity_id,
+            getattr(service, 'PROVIDER_NAME', 'unknown'),
+        )
+        opportunity.ai_analysis_status = 'failed'
+        opportunity.save(update_fields=['ai_analysis_status'])
+        return {
+            'detail': 'Analise de IA sem resultado util.',
+            'opportunity_id': opportunity_id,
+        }
 
     summary = result.get('summary', '')
     requirements = result.get('requirements', [])

@@ -40,6 +40,9 @@ class ProposalViewSet(viewsets.ModelViewSet):
             return ProposalListSerializer
         return ProposalDetailSerializer
 
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
     @action(detail=True, methods=['get'])
     def sections(self, request, pk=None):
         proposal = self.get_object()

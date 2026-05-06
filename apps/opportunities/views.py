@@ -31,6 +31,9 @@ class OpportunityViewSet(viewsets.ModelViewSet):
             return OpportunityListSerializer
         return OpportunityDetailSerializer
 
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
     @action(detail=True, methods=['post'])
     def go(self, request, pk=None):
         opportunity = self.get_object()
@@ -48,12 +51,12 @@ class OpportunityViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def analyze_tor(self, request, pk=None):
         opportunity = self.get_object()
-        opportunity.ai_analysis_status = 'pending'
+        opportunity.ai_analysis_status = 'queued'
         opportunity.save(update_fields=['ai_analysis_status'])
         # Trigger Celery task for AI analysis
         from .tasks import analyze_tor_document
         analyze_tor_document.delay(opportunity.id)
-        return Response({'ai_analysis_status': 'pending', 'task': 'analyze_tor_document triggered'})
+        return Response({'ai_analysis_status': 'queued', 'task': 'analyze_tor_document triggered'})
 
     @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def upload_tor(self, request, pk=None):
@@ -65,7 +68,8 @@ class OpportunityViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         opportunity.tor_document = file_obj
-        opportunity.save()
+        opportunity.ai_analysis_status = 'queued'
+        opportunity.save(update_fields=['tor_document', 'ai_analysis_status', 'updated_at'])
         # Auto-trigger AI analysis after upload
         from .tasks import analyze_tor_document
         analyze_tor_document.delay(opportunity.id)

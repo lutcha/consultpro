@@ -41,17 +41,30 @@ class DashboardViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='pipeline')
     def pipeline(self, request):
+        opportunities = Opportunity.objects.filter(
+            status__in=['new', 'analyzing', 'go', 'proposal_draft', 'proposal_review']
+        ).order_by('-created_at')[:20]
         proposals = Proposal.objects.filter(
             status__in=['draft', 'in_review', 'qc_check', 'approved']
         ).select_related('opportunity')
 
         data = []
+        for opp in opportunities:
+            data.append({
+                'id': f'opportunity-{opp.id}',
+                'title': opp.title,
+                'client': opp.client,
+                'deadline': opp.deadline.isoformat() if opp.deadline else None,
+                'status': opp.status,
+                'value': float(opp.value),
+                'progress': 0,
+            })
         for prop in proposals:
             total = prop.sections.count()
             complete = prop.sections.filter(is_complete=True).count()
             progress = int((complete / total) * 100) if total > 0 else 0
             data.append({
-                'id': prop.id,
+                'id': f'proposal-{prop.id}',
                 'title': prop.title,
                 'client': prop.opportunity.client if prop.opportunity else '',
                 'deadline': prop.opportunity.deadline.isoformat() if prop.opportunity and prop.opportunity.deadline else None,
