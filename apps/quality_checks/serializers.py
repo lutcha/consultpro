@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.proposals.models import Proposal
 from .models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
 
 
@@ -24,11 +25,19 @@ class QCSuggestionSerializer(serializers.ModelSerializer):
 
 
 class QualityCheckSerializer(serializers.ModelSerializer):
+    proposal = serializers.PrimaryKeyRelatedField(
+        queryset=Proposal.objects.all(),
+        required=False,
+    )
     categories = QCCheckCategorySerializer(many=True, read_only=True)
     suggestions = QCSuggestionSerializer(many=True, read_only=True)
     checks = serializers.SerializerMethodField()
     proposal_id = serializers.PrimaryKeyRelatedField(
-        source='proposal', read_only=True
+        queryset=Proposal.objects.all(),
+        source='proposal',
+        write_only=True,
+        required=False,
+        allow_null=True,
     )
 
     class Meta:
