@@ -1,6 +1,7 @@
 import json
 import logging
 
+import openai
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -23,20 +24,29 @@ class BaseAIService:
         """Improve the given text based on the action."""
         raise NotImplementedError
 
+    def _clean_json_response(self, content: str) -> str:
+        """Strip markdown code fences that some providers wrap JSON in."""
+        content = content.strip()
+        if content.startswith('```json'):
+            content = content[7:]
+        elif content.startswith('```'):
+            content = content[3:]
+        if content.endswith('```'):
+            content = content[:-3]
+        return content.strip()
+
 
 class LLMService(BaseAIService):
     """
     Generic LLM service for any OpenAI-compatible provider.
 
-    Supports OpenAI, DeepSeek, Moonshot AI (Kimi), and any other
-    provider that uses the OpenAI chat completions API format.
+    Supports OpenAI, DeepSeek, Moonshot AI (Kimi), Qwen, Google Gemini,
+    and any other provider that uses the OpenAI chat completions API format.
     """
 
     PROVIDER_NAME = 'generic'
 
     def __init__(self, api_key: str, base_url: str | None, model: str, provider_name: str = 'generic'):
-        import openai
-
         self.client = openai.OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -52,14 +62,21 @@ class LLMService(BaseAIService):
             'temperature': temperature,
         }
         if json_mode:
-            # DeepSeek supports response_format={'type': 'json_object'}
-            # Moonshot supports it too
             kwargs['response_format'] = {'type': 'json_object'}
 
         try:
             response = self.client.chat.completions.create(**kwargs)
             return response.choices[0].message.content or ''
         except Exception as exc:
+            if json_mode and 'response_format' in kwargs:
+                logger.warning(
+                    '%s rejected JSON response_format, retrying without it: %s',
+                    self.PROVIDER_NAME,
+                    exc,
+                )
+                kwargs.pop('response_format', None)
+                response = self.client.chat.completions.create(**kwargs)
+                return response.choices[0].message.content or ''
             logger.exception('%s chat completion failed: %s', self.PROVIDER_NAME, exc)
             raise
 
@@ -82,16 +99,7 @@ class LLMService(BaseAIService):
                 temperature=0.2,
                 json_mode=True,
             )
-            # Some providers wrap JSON in markdown code blocks
-            content = content.strip()
-            if content.startswith('```json'):
-                content = content[7:]
-            if content.startswith('```'):
-                content = content[3:]
-            if content.endswith('```'):
-                content = content[:-3]
-            content = content.strip()
-
+            content = self._clean_json_response(content)
             result = json.loads(content)
             return {
                 'summary': result.get('summary', ''),
@@ -154,6 +162,116 @@ class LLMService(BaseAIService):
             return ''
 
 
+class AnthropicService(BaseAIService):
+    """
+    Anthropic Claude service using the native Anthropic SDK.
+
+    Claude uses a different API format than OpenAI (Messages API).
+    This adapter normalizes it to the same BaseAIService interface.
+    """
+
+    PROVIDER_NAME = 'anthropic'
+
+    def __init__(self, api_key: str, model: str):
+        import anthropic
+
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self.model = model
+
+    def _messages_create(self, system_prompt: str, user_prompt: str, temperature: float = 0.5) -> str:
+        """Internal helper for Anthropic Messages API."""
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[
+                    {'role': 'user', 'content': user_prompt},
+                ],
+            )
+            if response.content and len(response.content) > 0:
+                return response.content[0].text or ''
+            return ''
+        except Exception as exc:
+            logger.exception('Anthropic messages.create failed: %s', exc)
+            raise
+
+    def analyze_document(self, text: str) -> dict:
+        system_prompt = (
+            "You are an expert procurement analyst. Analyze the provided document "
+            "and return a JSON object with exactly these keys:\n"
+            "- summary: a concise summary of the document (string, max 400 words, Portuguese preferred)\n"
+            "- requirements: a list of key requirements (list of strings)\n"
+            "- risks: a list of identified risks (list of strings)\n"
+            "Respond with valid JSON only. Do not wrap in markdown code blocks."
+        )
+
+        try:
+            content = self._messages_create(
+                system_prompt=system_prompt,
+                user_prompt=text,
+                temperature=0.2,
+            )
+            content = self._clean_json_response(content)
+            result = json.loads(content)
+            return {
+                'summary': result.get('summary', ''),
+                'requirements': result.get('requirements', []),
+                'risks': result.get('risks', []),
+            }
+        except Exception as exc:
+            logger.exception('Anthropic analyze_document failed: %s', exc)
+            return {
+                'summary': '',
+                'requirements': [],
+                'risks': [],
+            }
+
+    def generate_suggestion(self, section_type: str, content: str, action: str) -> str:
+        system_prompt = (
+            "You are an expert proposal writer. Provide a helpful suggestion "
+            "for the given section. Respond with plain text only."
+        )
+        user_prompt = (
+            f"Section type: {section_type}\n"
+            f"Action: {action}\n"
+            f"Current content:\n{content}\n\n"
+            f"Provide the improved suggestion."
+        )
+
+        try:
+            return self._messages_create(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.7,
+            ).strip()
+        except Exception as exc:
+            logger.exception('Anthropic generate_suggestion failed: %s', exc)
+            return ''
+
+    def improve_text(self, content: str, action: str) -> str:
+        system_prompt = (
+            "You are an expert editor. Improve the provided text based on the "
+            "requested action. Respond with the improved text only, no extra commentary."
+        )
+        user_prompt = (
+            f"Action: {action}\n"
+            f"Text:\n{content}\n\n"
+            f"Provide the improved text."
+        )
+
+        try:
+            return self._messages_create(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.5,
+            ).strip()
+        except Exception as exc:
+            logger.exception('Anthropic improve_text failed: %s', exc)
+            return ''
+
+
 # Backwards compatibility: OpenAIService is now an alias for LLMService with OpenAI defaults
 class OpenAIService(LLMService):
     """Legacy alias. Use AIServiceFactory instead."""
@@ -168,11 +286,7 @@ class OpenAIService(LLMService):
 
 
 class MockAIService(BaseAIService):
-    """Mock AI service for development and testing.
-
-    Returns realistic placeholder content when OpenAI is unavailable
-    (quota exceeded, no API key, or AI_ALWAYS_MOCK=True).
-    """
+    """Mock AI service for development and testing."""
 
     def analyze_document(self, text: str) -> dict:
         logger.info('MockAIService.analyze_document called (len=%s)', len(text))
@@ -203,7 +317,7 @@ class MockAIService(BaseAIService):
                 f'This section has been expanded with additional detail. '
                 f'Original content ({len(content)} chars) would be elaborated '
                 f'with methodology, timelines, and deliverables. '
-                f'Connect to the client\'s strategic objectives and quantify '
+                f'Connect to the client strategic objectives and quantify '
                 f'expected outcomes wherever possible.'
             ),
             'summarize': (
@@ -256,32 +370,61 @@ class AIServiceFactory:
     """Factory for retrieving AI service instances.
 
     Provider selection priority:
-      1. AI_PROVIDER setting ('openai', 'deepseek', 'kimi', 'mock')
+      1. AI_PROVIDER setting
       2. AI_ALWAYS_MOCK=True -> MockAIService
       3. Fallback to mock if configured provider fails
+
+    Valid providers: openai, deepseek, kimi, anthropic, qwen, google, mock
     """
 
     _service = None
 
-    # Provider registry: maps provider name -> (api_key_setting, base_url, default_model)
+    # OpenAI-compatible providers
     PROVIDER_REGISTRY = {
         'openai': {
             'api_key_setting': 'OPENAI_API_KEY',
             'base_url': None,
             'default_model': 'gpt-4o-mini',
             'model_setting': 'OPENAI_MODEL',
+            'service_class': LLMService,
         },
         'deepseek': {
             'api_key_setting': 'DEEPSEEK_API_KEY',
             'base_url': 'https://api.deepseek.com',
             'default_model': 'deepseek-chat',
             'model_setting': 'DEEPSEEK_MODEL',
+            'service_class': LLMService,
         },
         'kimi': {
             'api_key_setting': 'KIMI_API_KEY',
             'base_url': 'https://api.moonshot.cn/v1',
             'default_model': 'moonshot-v1-128k',
             'model_setting': 'KIMI_MODEL',
+            'service_class': LLMService,
+        },
+        'qwen': {
+            'api_key_setting': 'QWEN_API_KEY',
+            'base_url': 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+            'default_model': 'qwen-max',
+            'model_setting': 'QWEN_MODEL',
+            'service_class': LLMService,
+        },
+        'google': {
+            'api_key_setting': 'GOOGLE_API_KEY',
+            'base_url': 'https://generativelanguage.googleapis.com/v1beta/openai/',
+            'default_model': 'gemini-2.0-flash',
+            'model_setting': 'GOOGLE_MODEL',
+            'service_class': LLMService,
+        },
+    }
+
+    # Native SDK providers (not OpenAI-compatible)
+    NATIVE_PROVIDERS = {
+        'anthropic': {
+            'api_key_setting': 'ANTHROPIC_API_KEY',
+            'default_model': 'claude-3-5-haiku-20241022',
+            'model_setting': 'ANTHROPIC_MODEL',
+            'service_class': AnthropicService,
         },
     }
 
@@ -302,9 +445,18 @@ class AIServiceFactory:
         }
 
     @classmethod
+    def list_available_providers(cls) -> list:
+        """Return a list of all valid provider names."""
+        return (
+            list(cls.PROVIDER_REGISTRY.keys())
+            + list(cls.NATIVE_PROVIDERS.keys())
+            + ['mock']
+        )
+
+    @classmethod
     def _create_service(cls) -> BaseAIService:
         if getattr(settings, 'AI_ALWAYS_MOCK', False):
-            logger.info('AI_ALWAYS_MOCK=True — using MockAIService')
+            logger.info('AI_ALWAYS_MOCK=True using MockAIService')
             return MockAIService()
 
         provider = getattr(settings, 'AI_PROVIDER', 'openai').lower().strip()
@@ -312,15 +464,50 @@ class AIServiceFactory:
         if provider == 'mock':
             return MockAIService()
 
-        if provider not in cls.PROVIDER_REGISTRY:
+        if provider in cls.NATIVE_PROVIDERS:
+            return cls._create_native_service(provider)
+
+        if provider in cls.PROVIDER_REGISTRY:
+            return cls._create_openai_compatible_service(provider)
+
+        logger.warning(
+            "Unknown AI_PROVIDER '%s'. Falling back to MockAIService. "
+            "Valid options: %s",
+            provider,
+            ', '.join(cls.list_available_providers()),
+        )
+        return MockAIService()
+
+    @classmethod
+    def _create_native_service(cls, provider: str) -> BaseAIService:
+        config = cls.NATIVE_PROVIDERS[provider]
+        api_key = getattr(settings, config['api_key_setting'], '') or ''
+
+        if not api_key:
             logger.warning(
-                "Unknown AI_PROVIDER '%s'. Falling back to MockAIService. "
-                "Valid options: %s",
-                provider,
-                ', '.join(list(cls.PROVIDER_REGISTRY.keys()) + ['mock']),
+                "%s is not set. Falling back to MockAIService. "
+                "Set %s in your environment or switch AI_PROVIDER.",
+                config['api_key_setting'],
+                config['api_key_setting'],
             )
             return MockAIService()
 
+        model = getattr(settings, config['model_setting'], '') or config['default_model']
+        service_class = config['service_class']
+
+        try:
+            service = service_class(api_key=api_key, model=model)
+            logger.info('%s service initialized (model=%s)', provider, model)
+            return service
+        except Exception as exc:
+            logger.exception(
+                'Failed to initialize %s service. Falling back to MockAIService.',
+                provider,
+            )
+            return MockAIService()
+
+    @classmethod
+    def _create_openai_compatible_service(cls, provider: str) -> BaseAIService:
         config = cls.PROVIDER_REGISTRY[provider]
         api_key = getattr(settings, config['api_key_setting'], '') or ''
 
@@ -335,9 +522,10 @@ class AIServiceFactory:
 
         model = getattr(settings, config['model_setting'], '') or config['default_model']
         base_url = config['base_url']
+        service_class = config['service_class']
 
         try:
-            service = LLMService(
+            service = service_class(
                 api_key=api_key,
                 base_url=base_url,
                 model=model,
@@ -359,13 +547,12 @@ class AIServiceFactory:
     def reset(cls):
         """Reset the cached service (useful in tests or when switching providers)."""
         cls._service = None
-        logger.info('AIServiceFactory reset — next call will recreate service')
+        logger.info('AIServiceFactory reset - next call will recreate service')
 
     @classmethod
     def switch_provider(cls, provider: str) -> BaseAIService:
         """Switch to a different provider at runtime (useful for admin panels)."""
         cls.reset()
-        # Temporarily override AI_PROVIDER
         original = getattr(settings, 'AI_PROVIDER', None)
         settings.AI_PROVIDER = provider
         try:

@@ -337,7 +337,7 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@consultpro.com')
 
 # AI / LLM Configuration
-# Provider: 'openai' | 'deepseek' | 'kimi' | 'mock'
+# Providers: openai | deepseek | kimi | anthropic | qwen | google | mock
 AI_PROVIDER = os.getenv('AI_PROVIDER', 'openai')
 AI_ALWAYS_MOCK = os.getenv('AI_ALWAYS_MOCK', 'False').lower() == 'true'
 
@@ -345,13 +345,25 @@ AI_ALWAYS_MOCK = os.getenv('AI_ALWAYS_MOCK', 'False').lower() == 'true'
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 
-# DeepSeek (https://platform.deepseek.com)
+# DeepSeek (https://platform.deepseek.com) - very cost-effective
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', '')
 DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-chat')
 
-# Kimi / Moonshot AI (https://platform.moonshot.cn)
+# Kimi / Moonshot AI (https://platform.moonshot.cn) - excellent long context
 KIMI_API_KEY = os.getenv('KIMI_API_KEY', '')
 KIMI_MODEL = os.getenv('KIMI_MODEL', 'moonshot-v1-128k')
+
+# Anthropic Claude (https://console.anthropic.com) - best reasoning quality
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+ANTHROPIC_MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-3-5-haiku-20241022')
+
+# Qwen / Alibaba Cloud (https://www.alibabacloud.com/help/en/model-studio) - strong multilingual
+QWEN_API_KEY = os.getenv('QWEN_API_KEY', '')
+QWEN_MODEL = os.getenv('QWEN_MODEL', 'qwen-max')
+
+# Google Gemini (https://aistudio.google.com) - fast, generous free tier
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', '')
+GOOGLE_MODEL = os.getenv('GOOGLE_MODEL', 'gemini-2.0-flash')
 
 # Logging
 LOGGING = {
