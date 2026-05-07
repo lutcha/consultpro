@@ -137,6 +137,7 @@ def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
 
         source.status = 'error'
         source.error_message = error_message[:500]
+        source.success_rate = 0
         source.save()
 
         # Retry on transient errors

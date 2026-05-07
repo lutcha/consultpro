@@ -65,7 +65,7 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get scraping statistics"""
-        from django.db.models import Count, Sum, Q, Avg
+        from django.db.models import Avg
         total_sources = ScrapingSource.objects.count()
         active_sources = ScrapingSource.objects.filter(status='active').count()
         total_opportunities = ScrapedOpportunity.objects.count()
@@ -77,10 +77,15 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
             avg=Avg('data_quality_score')
         )['avg'] or 0
         
-        avg_success_rate = 0
-        sources_with_rate = ScrapingSource.objects.filter(success_rate__gt=0)
-        if sources_with_rate.exists():
-            avg_success_rate = int(sources_with_rate.aggregate(avg=Avg('success_rate'))['avg'] or 0)
+        terminal_jobs = ScrapingJob.objects.filter(status__in=['completed', 'failed'])
+        terminal_count = terminal_jobs.count()
+        if terminal_count:
+            completed_count = terminal_jobs.filter(status='completed').count()
+            avg_success_rate = int((completed_count / terminal_count) * 100)
+        else:
+            avg_success_rate = int(
+                ScrapingSource.objects.aggregate(avg=Avg('success_rate'))['avg'] or 0
+            )
         
         return Response({
             'total_sources': total_sources,
