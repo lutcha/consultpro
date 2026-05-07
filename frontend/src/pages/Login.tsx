@@ -17,6 +17,8 @@ export function Login() {
   const { login, isLoading, error } = useUserStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const enableDemoLogin =
+    import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,19 +90,21 @@ export function Login() {
               </Button>
             </form>
 
-            <div className="mt-4 text-center text-sm text-muted-foreground">
-              <p>Contas de demo:</p>
-              <p className="mt-1">
-                <code className="bg-muted px-1 py-0.5 rounded text-xs">
-                  admin@consultpro.pt / adminpass123
-                </code>
-              </p>
-              <p className="mt-1">
-                <code className="bg-muted px-1 py-0.5 rounded text-xs">
-                  ana.silva@consultpro.com / password123
-                </code>
-              </p>
-            </div>
+            {enableDemoLogin && (
+              <div className="mt-4 text-center text-sm text-muted-foreground">
+                <p>Contas de demo:</p>
+                <p className="mt-1">
+                  <code className="bg-muted px-1 py-0.5 rounded text-xs">
+                    admin@consultpro.pt / adminpass123
+                  </code>
+                </p>
+                <p className="mt-1">
+                  <code className="bg-muted px-1 py-0.5 rounded text-xs">
+                    ana.silva@consultpro.com / password123
+                  </code>
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

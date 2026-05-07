@@ -8,6 +8,9 @@ import { apiLogin, apiGetMe, clearTokens } from '@/lib/api';
 import { mapMeResponse } from '@/lib/apiMappers';
 
 // Demo accounts that work without a backend
+const ENABLE_DEMO_LOGIN =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_LOGIN === 'true';
+
 const DEMO_ACCOUNTS: Record<string, User> = {
   'admin@consultpro.pt:adminpass123': {
     id: 'user-admin', name: 'Admin ConsultPro', email: 'admin@consultpro.pt',
@@ -48,13 +51,17 @@ export const useUserStore = create<UserState>((set) => ({
       return true;
     } catch {
       // Backend offline — try demo accounts
-      const demoUser = DEMO_ACCOUNTS[`${email}:${password}`];
+      const demoUser = ENABLE_DEMO_LOGIN
+        ? DEMO_ACCOUNTS[`${email}:${password}`]
+        : undefined;
       if (demoUser) {
         set({ user: demoUser, isAuthenticated: true, isLoading: false, error: null });
         return true;
       }
       set({
-        error: 'Credenciais inválidas. Backend offline — use uma conta de demo.',
+        error: ENABLE_DEMO_LOGIN
+          ? 'Credenciais invalidas. Backend offline - use uma conta de demo.'
+          : 'Credenciais invalidas ou sessao expirada. Entre novamente.',
         isLoading: false,
         isAuthenticated: false,
         user: null,
