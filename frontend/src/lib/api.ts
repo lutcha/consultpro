@@ -314,6 +314,15 @@ export async function apiUploadToR(
   );
 }
 
+export async function apiAnalyzeOpportunityToR(
+  id: string
+): Promise<{ ai_analysis_status: string; task: string }> {
+  return apiRequest<{ ai_analysis_status: string; task: string }>(
+    `/opportunities/${id}/analyze_tor/`,
+    { method: 'POST' }
+  );
+}
+
 export async function apiUpdateOpportunityStatus(
   id: string,
   status: string

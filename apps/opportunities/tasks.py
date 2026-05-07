@@ -18,6 +18,17 @@ def _analysis_has_content(result: dict) -> bool:
     )
 
 
+def _coerce_text_item(item) -> str:
+    if isinstance(item, dict):
+        return str(item.get('description') or item.get('text') or item.get('requirement') or '').strip()
+    return str(item or '').strip()
+
+
+def _coerce_choice(value, allowed: set[str], default: str) -> str:
+    value = str(value or '').strip().lower()
+    return value if value in allowed else default
+
+
 def _extract_text_from_document(opportunity: Opportunity) -> str:
     """Extract text from tor_document (DOCX or PDF) or fall back to description."""
     if not opportunity.tor_document:
@@ -154,24 +165,37 @@ def _sync_ai_requirements(opportunity: Opportunity, requirements: list):
     # Remove old AI-extracted requirements to avoid duplicates
     opportunity.requirements.filter(extracted_by_ai=True).delete()
 
-    for req_text in requirements:
-        if not req_text or len(req_text.strip()) < 5:
+    for item in requirements:
+        req_text = _coerce_text_item(item)
+        if len(req_text) < 5:
             continue
-        # Try to infer category from text
-        category = 'functional'
-        lower = req_text.lower()
-        if any(k in lower for k in ['tecnico', 'technical', 'technology', 'software', 'system']):
-            category = 'technical'
-        elif any(k in lower for k in ['institucional', 'institutional', 'organizational', 'experience']):
-            category = 'institutional'
-        elif any(k in lower for k in ['financeiro', 'financial', 'budget', 'cost', 'price']):
-            category = 'financial'
+        if isinstance(item, dict):
+            category = _coerce_choice(
+                item.get('category'),
+                {'functional', 'technical', 'institutional', 'financial'},
+                'functional',
+            )
+            priority = _coerce_choice(
+                item.get('priority'),
+                {'mandatory', 'preferred', 'optional'},
+                'mandatory',
+            )
+        else:
+            category = 'functional'
+            priority = 'mandatory'
+            lower = req_text.lower()
+            if any(k in lower for k in ['tecnico', 'technical', 'technology', 'software', 'system']):
+                category = 'technical'
+            elif any(k in lower for k in ['institucional', 'institutional', 'organizational', 'experience']):
+                category = 'institutional'
+            elif any(k in lower for k in ['financeiro', 'financial', 'budget', 'cost', 'price']):
+                category = 'financial'
 
         Requirement.objects.create(
             opportunity=opportunity,
             category=category,
-            description=req_text.strip()[:500],
-            priority='mandatory',
+            description=req_text[:500],
+            priority=priority,
             extracted_by_ai=True,
         )
 
@@ -184,21 +208,27 @@ def _sync_ai_risks(opportunity: Opportunity, risks: list):
     # Remove old AI-extracted risks
     opportunity.risks.filter(identified_by_ai=True).delete()
 
-    for risk_text in risks:
-        if not risk_text or len(risk_text.strip()) < 5:
+    for item in risks:
+        risk_text = _coerce_text_item(item)
+        if len(risk_text) < 5:
             continue
-        # Infer severity
-        severity = 'medium'
-        lower = risk_text.lower()
-        if any(k in lower for k in ['critical', 'severe', 'high impact', 'grave']):
-            severity = 'high'
-        elif any(k in lower for k in ['minor', 'low impact', 'small']):
-            severity = 'low'
+        if isinstance(item, dict):
+            severity = _coerce_choice(item.get('severity'), {'low', 'medium', 'high'}, 'medium')
+            mitigation = str(item.get('mitigation') or '').strip()
+        else:
+            severity = 'medium'
+            mitigation = ''
+            lower = risk_text.lower()
+            if any(k in lower for k in ['critical', 'severe', 'high impact', 'grave']):
+                severity = 'high'
+            elif any(k in lower for k in ['minor', 'low impact', 'small']):
+                severity = 'low'
 
         Risk.objects.create(
             opportunity=opportunity,
-            description=risk_text.strip()[:500],
+            description=risk_text[:500],
             severity=severity,
+            mitigation=mitigation[:500],
             identified_by_ai=True,
         )
 

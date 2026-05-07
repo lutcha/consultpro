@@ -26,6 +26,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useOpportunityStore } from '@/stores';
 import { formatDate, formatCurrency, cn } from '@/lib/utils';
+import { apiAnalyzeOpportunityToR } from '@/lib/api';
+import { toast } from 'sonner';
 import type { Requirement, Risk } from '@/types';
 
 export function OpportunityDetail() {
@@ -34,6 +36,7 @@ export function OpportunityDetail() {
   const { selectedOpportunity, selectOpportunity, updateStatus, isLoading } =
     useOpportunityStore();
   const [activeTab, setActiveTab] = useState('summary');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -69,6 +72,20 @@ export function OpportunityDetail() {
 
   const handleNoGo = async () => {
     await updateStatus(opportunity.id, 'no_go');
+  };
+
+  const handleAnalyzeTor = async () => {
+    setIsAnalyzing(true);
+    try {
+      await apiAnalyzeOpportunityToR(opportunity.id);
+      toast.success('Analise IA iniciada');
+      await selectOpportunity(opportunity.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro ao iniciar analise IA';
+      toast.error(message);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const requirementsByCategory = opportunity.requirements.reduce(
@@ -201,8 +218,8 @@ export function OpportunityDetail() {
                 {opportunity.aiSummary || 'Ainda sem resumo IA para esta oportunidade.'}
               </p>
               <div className="flex gap-2 mt-4">
-                <Button variant="outline" size="sm">
-                  Regenerar
+                <Button variant="outline" size="sm" onClick={handleAnalyzeTor} disabled={isAnalyzing}>
+                  {isAnalyzing ? 'A iniciar...' : 'Regenerar'}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => navigate(`/opportunities/${id}/edit`)}>
                   Editar

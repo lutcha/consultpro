@@ -82,12 +82,16 @@ class LLMService(BaseAIService):
 
     def analyze_document(self, text: str) -> dict:
         system_prompt = (
-            "You are an expert procurement analyst. Analyze the provided document "
-            "and return a JSON object with exactly these keys:\n"
-            "- summary: a concise summary of the document (string, max 400 words, Portuguese preferred)\n"
-            "- requirements: a list of key requirements (list of strings)\n"
-            "- risks: a list of identified risks (list of strings)\n"
-            "Respond with valid JSON only."
+            "You are a senior procurement and proposal architect for international consulting bids. "
+            "Analyze the ToR using a proposal dissection methodology: identify the client, objective, "
+            "scope, deliverables, eligibility, team requirements, methodology expectations, evaluation "
+            "criteria, submission requirements, deadline pressure, compliance gaps, and proposal risks. "
+            "Return valid JSON only with exactly these keys:\n"
+            "- summary: Portuguese executive summary, max 500 words.\n"
+            "- requirements: array of objects with description, category, priority. category must be one "
+            "of functional, technical, institutional, financial. priority must be mandatory, preferred, optional.\n"
+            "- risks: array of objects with description, severity, mitigation. severity must be low, medium, high.\n"
+            "Extract specific actionable items. Do not invent facts that are not supported by the ToR."
         )
 
         try:
@@ -199,12 +203,17 @@ class AnthropicService(BaseAIService):
 
     def analyze_document(self, text: str) -> dict:
         system_prompt = (
-            "You are an expert procurement analyst. Analyze the provided document "
-            "and return a JSON object with exactly these keys:\n"
-            "- summary: a concise summary of the document (string, max 400 words, Portuguese preferred)\n"
-            "- requirements: a list of key requirements (list of strings)\n"
-            "- risks: a list of identified risks (list of strings)\n"
-            "Respond with valid JSON only. Do not wrap in markdown code blocks."
+            "You are a senior procurement and proposal architect for international consulting bids. "
+            "Analyze the ToR using a proposal dissection methodology: identify the client, objective, "
+            "scope, deliverables, eligibility, team requirements, methodology expectations, evaluation "
+            "criteria, submission requirements, deadline pressure, compliance gaps, and proposal risks. "
+            "Return valid JSON only with exactly these keys:\n"
+            "- summary: Portuguese executive summary, max 500 words.\n"
+            "- requirements: array of objects with description, category, priority. category must be one "
+            "of functional, technical, institutional, financial. priority must be mandatory, preferred, optional.\n"
+            "- risks: array of objects with description, severity, mitigation. severity must be low, medium, high.\n"
+            "Extract specific actionable items. Do not invent facts that are not supported by the ToR. "
+            "Do not wrap in markdown code blocks."
         )
 
         try:
