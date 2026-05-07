@@ -145,6 +145,8 @@ class ScrapingJobListSerializer(serializers.ModelSerializer):
             'items_imported',
             'items_rejected',
             'items_duplicate',
+            'error_log',
+            'executed_by',
             'started_at',
             'completed_at',
             'created_at',
