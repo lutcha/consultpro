@@ -339,6 +339,7 @@ export interface ApiAIProviderStatus {
   active_model: string;
   is_mock: boolean;
   always_mock: boolean;
+  selected_model: string;
   providers: Array<{
     id: string;
     model: string;
@@ -348,6 +349,15 @@ export interface ApiAIProviderStatus {
 
 export async function apiGetAIProviderStatus(): Promise<ApiAIProviderStatus> {
   return apiRequest<ApiAIProviderStatus>('/ai/providers/status/');
+}
+
+export async function apiUpdateAIProvider(
+  data: { provider: string; model?: string }
+): Promise<ApiAIProviderStatus> {
+  return apiRequest<ApiAIProviderStatus>('/ai/providers/status/', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
 }
 
 // ============================================

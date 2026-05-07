@@ -470,6 +470,7 @@ class AIServiceFactory:
     """
 
     _service = None
+    _signature = None
 
     # OpenAI-compatible providers
     PROVIDER_REGISTRY = {
@@ -522,8 +523,10 @@ class AIServiceFactory:
 
     @classmethod
     def get_service(cls) -> BaseAIService:
-        if cls._service is None:
+        signature = cls._get_config_signature()
+        if cls._service is None or cls._signature != signature:
             cls._service = cls._create_service()
+            cls._signature = signature
         return cls._service
 
     @classmethod
@@ -551,7 +554,7 @@ class AIServiceFactory:
             logger.info('AI_ALWAYS_MOCK=True using MockAIService')
             return MockAIService()
 
-        provider = getattr(settings, 'AI_PROVIDER', 'openai').lower().strip()
+        provider, _model_override = cls._get_configured_provider_and_model()
 
         if provider == 'mock':
             return MockAIService()
@@ -584,7 +587,8 @@ class AIServiceFactory:
             )
             return MockAIService()
 
-        model = getattr(settings, config['model_setting'], '') or config['default_model']
+        _provider, model_override = cls._get_configured_provider_and_model()
+        model = model_override or getattr(settings, config['model_setting'], '') or config['default_model']
         service_class = config['service_class']
 
         try:
@@ -612,7 +616,8 @@ class AIServiceFactory:
             )
             return MockAIService()
 
-        model = getattr(settings, config['model_setting'], '') or config['default_model']
+        _provider, model_override = cls._get_configured_provider_and_model()
+        model = model_override or getattr(settings, config['model_setting'], '') or config['default_model']
         base_url = config['base_url']
         service_class = config['service_class']
 
@@ -639,7 +644,28 @@ class AIServiceFactory:
     def reset(cls):
         """Reset the cached service (useful in tests or when switching providers)."""
         cls._service = None
+        cls._signature = None
         logger.info('AIServiceFactory reset - next call will recreate service')
+
+    @classmethod
+    def _get_configured_provider_and_model(cls) -> tuple[str, str]:
+        provider = getattr(settings, 'AI_PROVIDER', 'openai').lower().strip()
+        model = ''
+        try:
+            from .models import AIConfiguration
+
+            config = AIConfiguration.current()
+            if config.provider:
+                provider = config.provider.lower().strip()
+            model = config.model.strip()
+        except Exception:
+            pass
+        return provider, model
+
+    @classmethod
+    def _get_config_signature(cls) -> tuple:
+        provider, model = cls._get_configured_provider_and_model()
+        return (provider, model, getattr(settings, 'AI_ALWAYS_MOCK', False))
 
     @classmethod
     def switch_provider(cls, provider: str) -> BaseAIService:

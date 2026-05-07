@@ -1,3 +1,8 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import AIConfiguration
+
+
+@admin.register(AIConfiguration)
+class AIConfigurationAdmin(admin.ModelAdmin):
+    list_display = ('provider', 'model', 'updated_at')

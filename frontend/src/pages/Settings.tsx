@@ -31,10 +31,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUserStore } from '@/stores';
 import { useCurriculumStore } from '@/stores/useCurriculumStore';
 import { useScrapingStore } from '@/stores/useScrapingStore';
-import { apiGetAIProviderStatus, apiUpdateMe, type ApiAIProviderStatus } from '@/lib/api';
+import { apiGetAIProviderStatus, apiUpdateAIProvider, apiUpdateMe, type ApiAIProviderStatus } from '@/lib/api';
 import { toast } from 'sonner';
 
 export function Settings() {
@@ -44,6 +45,8 @@ export function Settings() {
   const { sources, fetchSources } = useScrapingStore();
   const [isLoading, setIsLoading] = useState(false);
   const [aiStatus, setAiStatus] = useState<ApiAIProviderStatus | null>(null);
+  const [selectedAIProvider, setSelectedAIProvider] = useState('');
+  const [selectedAIModel, setSelectedAIModel] = useState('');
 
   const [profile, setProfile] = useState({
     first_name: user?.name?.split(' ')[0] || '',
@@ -75,7 +78,11 @@ export function Settings() {
     fetchTemplates();
     fetchSources();
     apiGetAIProviderStatus()
-      .then(setAiStatus)
+      .then((status) => {
+        setAiStatus(status);
+        setSelectedAIProvider(status.active_provider);
+        setSelectedAIModel(status.selected_model || status.active_model);
+      })
       .catch(() => toast.error('Erro ao carregar configuração IA'));
   }, [fetchTemplates, fetchSources]);
 
@@ -113,6 +120,26 @@ export function Settings() {
   };
 
   const isAdmin = user?.role === 'admin';
+
+  const handleSaveAIProvider = async () => {
+    if (!selectedAIProvider) return;
+    setIsLoading(true);
+    try {
+      const status = await apiUpdateAIProvider({
+        provider: selectedAIProvider,
+        model: selectedAIModel,
+      });
+      setAiStatus(status);
+      setSelectedAIProvider(status.active_provider);
+      setSelectedAIModel(status.selected_model || status.active_model);
+      toast.success('Provider IA atualizado');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro ao atualizar provider IA';
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -291,6 +318,44 @@ export function Settings() {
                   </div>
 
                   <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+                      <div>
+                        <Label>Provider</Label>
+                        <Select value={selectedAIProvider} onValueChange={(value) => {
+                          setSelectedAIProvider(value);
+                          const provider = aiStatus.providers.find((item) => item.id === value);
+                          setSelectedAIModel(provider?.model || '');
+                        }}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Escolher provider" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {aiStatus.providers.map((provider) => (
+                              <SelectItem
+                                key={provider.id}
+                                value={provider.id}
+                                disabled={!provider.api_key_configured && provider.id !== 'mock'}
+                              >
+                                {provider.id}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Modelo</Label>
+                        <Input
+                          value={selectedAIModel}
+                          onChange={(event) => setSelectedAIModel(event.target.value)}
+                          placeholder="Modelo do provider"
+                        />
+                      </div>
+                      <Button onClick={handleSaveAIProvider} disabled={isLoading || !isAdmin}>
+                        <Save className="h-4 w-4 mr-2" />
+                        Guardar IA
+                      </Button>
+                    </div>
+
                     {aiStatus.providers.map((provider) => (
                       <div key={provider.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
