@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { AddScrapingSourceModal } from '@/components/modals';
@@ -248,33 +249,36 @@ function SourcesTab({
         <Button size="sm" onClick={onAdd}><Plus className="h-4 w-4 mr-1" />Nova Fonte</Button>
       </div>
 
-      {editingSource && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <Dialog open={!!editingSource} onOpenChange={(open) => !open && onCancelEdit()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Definicoes da Fonte</DialogTitle>
+          </DialogHeader>
+          {editingSource && (
+            <div className="space-y-3">
               <Input value={editForm.name} onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Nome" />
               <Input value={editForm.url} onChange={(e) => setEditForm((prev) => ({ ...prev, url: e.target.value }))} placeholder="URL" />
-              <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={editForm.scrape_frequency} onChange={(e) => setEditForm((prev) => ({ ...prev, scrape_frequency: e.target.value }))}>
+              <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={editForm.scrape_frequency} onChange={(e) => setEditForm((prev) => ({ ...prev, scrape_frequency: e.target.value }))}>
                 <option value="hourly">Por Hora</option>
                 <option value="daily">Diario</option>
                 <option value="weekly">Semanal</option>
               </select>
-              <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={editForm.status} onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}>
+              <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={editForm.status} onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}>
                 <option value="active">Ativo</option>
                 <option value="paused">Pausado</option>
                 <option value="error">Erro</option>
                 <option value="disabled">Desativado</option>
               </select>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button size="sm" variant="outline" onClick={onCancelEdit} disabled={savingSource}>Cancelar</Button>
+                <Button size="sm" onClick={() => onSaveEdit(editingSource.id, editForm)} disabled={savingSource}>
+                  {savingSource ? 'A guardar...' : 'Guardar'}
+                </Button>
+              </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={onCancelEdit} disabled={savingSource}>Cancelar</Button>
-              <Button size="sm" onClick={() => onSaveEdit(editingSource.id, editForm)} disabled={savingSource}>
-                {savingSource ? 'A guardar...' : 'Guardar'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((source) => (

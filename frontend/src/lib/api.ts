@@ -281,6 +281,16 @@ export async function apiCreateOpportunity(
   });
 }
 
+export async function apiUpdateOpportunity(
+  id: string,
+  data: Partial<ApiOpportunity>
+): Promise<ApiOpportunity> {
+  return apiRequest<ApiOpportunity>(`/opportunities/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function apiUploadToR(
   id: string,
   file: File
@@ -350,7 +360,8 @@ export interface ApiAISuggestion {
 export interface ApiProposalSection {
   id: number;
   proposal: number;
-  type: string;
+  type?: string;
+  section_type?: string;
   title: string;
   content: string;
   order: number;

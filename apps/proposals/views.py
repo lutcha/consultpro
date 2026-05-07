@@ -30,6 +30,29 @@ from .serializers import (
     ProposalTeamMemberSerializer,
 )
 
+DEFAULT_PROPOSAL_SECTIONS = [
+    ('cover', 'Capa', 1),
+    ('executive_summary', 'Resumo Executivo', 2),
+    ('methodology', 'Metodologia', 3),
+    ('team', 'Equipa Tecnica', 4),
+    ('workplan', 'Plano de Trabalho', 5),
+    ('budget', 'Orcamento', 6),
+    ('annexes', 'Anexos', 7),
+]
+
+
+def ensure_default_sections(proposal):
+    for section_type, title, order in DEFAULT_PROPOSAL_SECTIONS:
+        ProposalSection.objects.get_or_create(
+            proposal=proposal,
+            section_type=section_type,
+            defaults={
+                'title': title,
+                'order': order,
+                'content': '',
+            },
+        )
+
 
 class ProposalViewSet(viewsets.ModelViewSet):
     queryset = Proposal.objects.all()
@@ -41,7 +64,8 @@ class ProposalViewSet(viewsets.ModelViewSet):
         return ProposalDetailSerializer
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        proposal = serializer.save(created_by=self.request.user)
+        ensure_default_sections(proposal)
 
     @action(detail=True, methods=['get'])
     def sections(self, request, pk=None):

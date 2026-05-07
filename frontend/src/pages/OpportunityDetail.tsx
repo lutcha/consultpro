@@ -86,6 +86,14 @@ export function OpportunityDetail() {
     financial: 'Financeiros',
   };
 
+  const aiStatusLabels: Record<string, string> = {
+    pending: 'Pendente',
+    queued: 'Em fila',
+    processing: 'A processar',
+    completed: 'Completa',
+    failed: 'Falhou',
+  };
+
   return (
     <div className="space-y-6">
       {/* Breadcrumb & Header */}
@@ -171,23 +179,27 @@ export function OpportunityDetail() {
           {/* AI Summary */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-lg">🤖</span>
-                Resumo IA
-              </CardTitle>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-lg">IA</span>
+                  Resumo IA
+                </CardTitle>
+                {opportunity.aiAnalysisStatus && (
+                  <Badge variant="outline">
+                    {aiStatusLabels[opportunity.aiAnalysisStatus] || opportunity.aiAnalysisStatus}
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                Este ToR foca-se em {opportunity.sector.toLowerCase()}, com ênfase em 
-                resultados mensuráveis e sustentabilidade. Prazo:{' '}
-                {formatDate(opportunity.deadline)}. Critérios QCBS: Técnica 70%, 
-                Financeira 30%.
+                {opportunity.aiSummary || 'Ainda sem resumo IA para esta oportunidade.'}
               </p>
               <div className="flex gap-2 mt-4">
                 <Button variant="outline" size="sm">
                   Regenerar
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={() => navigate(`/opportunities/${id}/edit`)}>
                   Editar
                 </Button>
               </div>
@@ -271,12 +283,18 @@ export function OpportunityDetail() {
               </div>
               <div className="mt-6 p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground">
-                  Documento completo disponível para download.
+                  {opportunity.torDocument
+                    ? 'Documento completo disponivel para download.'
+                    : 'Nenhum documento ToR foi carregado para esta oportunidade.'}
                 </p>
-                <Button variant="outline" className="mt-2">
-                  <Download className="h-4 w-4 mr-2" />
-                  Descarregar ToR (PDF)
-                </Button>
+                {opportunity.torDocument && (
+                  <Button variant="outline" className="mt-2" asChild>
+                    <a href={opportunity.torDocument} target="_blank" rel="noreferrer">
+                      <Download className="h-4 w-4 mr-2" />
+                      Descarregar ToR
+                    </a>
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

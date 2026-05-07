@@ -119,6 +119,9 @@ export function mapApiOpportunity(opp: ApiOpportunity): Opportunity {
     deadline: toDate(opp.deadline),
     status: opp.status as Opportunity['status'],
     description: opp.description,
+    torDocument: opp.tor_document || undefined,
+    aiSummary: opp.ai_summary || undefined,
+    aiAnalysisStatus: opp.ai_analysis_status as Opportunity['aiAnalysisStatus'],
     requirements: (opp.requirements || []).map(mapApiRequirement),
     risks: (opp.risks || []).map(mapApiRisk),
     createdAt: toDate(opp.created_at),
@@ -140,6 +143,9 @@ export function mapApiOpportunityListItem(
     deadline: toDate(opp.deadline),
     status: opp.status as Opportunity['status'],
     description: '',
+    torDocument: undefined,
+    aiSummary: undefined,
+    aiAnalysisStatus: undefined,
     requirements: [],
     risks: [],
     createdAt: toDate(opp.created_at),
@@ -183,7 +189,7 @@ export function mapApiProposalSection(
 ): ProposalSection {
   return {
     id: String(section.id),
-    type: section.type as ProposalSection['type'],
+    type: (section.type || section.section_type) as ProposalSection['type'],
     title: section.title,
     content: section.content,
     order: section.order,

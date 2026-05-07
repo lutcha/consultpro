@@ -2,8 +2,8 @@
 // NEW OPPORTUNITY PAGE
 // ============================================
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiCreateOpportunity, apiUploadToR } from '@/lib/api';
+import { apiCreateOpportunity, apiGetOpportunity, apiUpdateOpportunity, apiUploadToR } from '@/lib/api';
 
 const SECTORS = [
   'Educação',
@@ -46,6 +46,8 @@ const CURRENCIES = ['USD', 'EUR', 'GBP'];
 
 export function NewOpportunity() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditing = Boolean(id);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [torFile, setTorFile] = useState<File | null>(null);
@@ -65,6 +67,43 @@ export function NewOpportunity() {
     url_source: '',
   });
 
+  useEffect(() => {
+    if (!id) return;
+
+    let isMounted = true;
+    setIsLoading(true);
+    setError(null);
+    apiGetOpportunity(id)
+      .then((opportunity) => {
+        if (!isMounted) return;
+        setFormData({
+          title: opportunity.title || '',
+          client: opportunity.client || '',
+          sector: opportunity.sector || '',
+          country: opportunity.country || '',
+          value: opportunity.value || '',
+          currency: opportunity.currency || 'USD',
+          deadline: opportunity.deadline ? opportunity.deadline.slice(0, 10) : '',
+          description: opportunity.description || '',
+          evaluation_criteria: opportunity.evaluation_criteria || '',
+          technical_weight: opportunity.technical_weight || 70,
+          financial_weight: opportunity.financial_weight || 30,
+          reference_number: opportunity.reference_number || '',
+          url_source: opportunity.url_source || '',
+        });
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Erro ao carregar oportunidade');
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -77,11 +116,13 @@ export function NewOpportunity() {
     setError(null);
 
     try {
-      const opportunity = await apiCreateOpportunity({
+      const payload = {
         ...formData,
         value: formData.value,
-        status: 'new',
-      });
+      };
+      const opportunity = isEditing && id
+        ? await apiUpdateOpportunity(id, payload)
+        : await apiCreateOpportunity({ ...payload, status: 'new' });
 
       // Upload ToR if selected
       if (torFile && opportunity.id) {
@@ -102,7 +143,7 @@ export function NewOpportunity() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
         </Button>
-        <h1 className="text-2xl font-bold">Nova Oportunidade</h1>
+        <h1 className="text-2xl font-bold">{isEditing ? 'Editar Oportunidade' : 'Nova Oportunidade'}</h1>
       </div>
 
       {error && (
@@ -336,7 +377,7 @@ export function NewOpportunity() {
           </Button>
           <Button type="submit" disabled={isLoading}>
             <Save className="h-4 w-4 mr-2" />
-            {isLoading ? 'A criar...' : 'Criar Oportunidade'}
+            {isLoading ? 'A guardar...' : isEditing ? 'Guardar Alteracoes' : 'Criar Oportunidade'}
           </Button>
         </div>
       </form>

@@ -68,6 +68,7 @@ function App() {
         >
           <Route index element={<Opportunities />} />
           <Route path="new" element={<NewOpportunity />} />
+          <Route path=":id/edit" element={<NewOpportunity />} />
           <Route path=":id" element={<OpportunityDetail />} />
         </Route>
 
