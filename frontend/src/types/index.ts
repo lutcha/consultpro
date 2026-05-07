@@ -27,11 +27,21 @@ export interface Opportunity {
   deadline: Date;
   status: OpportunityStatus;
   description: string;
+  torDocument?: string;
+  aiSummary?: string;
+  aiAnalysisStatus?: AIAnalysisStatus;
   requirements: Requirement[];
   risks: Risk[];
   createdAt: Date;
   updatedAt: Date;
 }
+
+export type AIAnalysisStatus =
+  | 'pending'
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed';
 
 export type OpportunityStatus = 
   | 'new' 
