@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,7 +43,7 @@ const COUNTRIES = [
   'Outro',
 ];
 
-const CURRENCIES = ['USD', 'EUR', 'GBP'];
+const CURRENCIES = ['ECV', 'EUR', 'USD', 'GBP'];
 const EVALUATION_CRITERIA = [
   { value: 'qcbs', label: 'QCBS (Qualidade e Custo)' },
   { value: 'cqs', label: 'CQS (Qualidade apenas)' },
@@ -141,9 +142,13 @@ export function NewOpportunity() {
         ? await apiUpdateOpportunity(id, payload)
         : await apiCreateOpportunity({ ...payload, status: 'new' });
 
-      // Upload ToR if selected
       if (torFile && opportunity.id) {
-        await apiUploadToR(String(opportunity.id), torFile);
+        try {
+          await apiUploadToR(String(opportunity.id), torFile);
+        } catch (uploadError) {
+          const uploadMessage = uploadError instanceof Error ? uploadError.message : 'Erro ao carregar ToR';
+          toast.error(`Oportunidade criada, mas o upload do ToR falhou: ${uploadMessage}`);
+        }
       }
 
       navigate(`/opportunities/${opportunity.id}`);

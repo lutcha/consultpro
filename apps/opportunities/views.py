@@ -1,3 +1,5 @@
+import logging
+
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -15,6 +17,9 @@ from .serializers import (
     RequirementSerializer,
     RiskSerializer,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class OpportunityViewSet(viewsets.ModelViewSet):
@@ -69,7 +74,19 @@ class OpportunityViewSet(viewsets.ModelViewSet):
             )
         opportunity.tor_document = file_obj
         opportunity.ai_analysis_status = 'queued'
-        opportunity.save(update_fields=['tor_document', 'ai_analysis_status', 'updated_at'])
+        try:
+            opportunity.save(update_fields=['tor_document', 'ai_analysis_status', 'updated_at'])
+        except Exception as exc:
+            logger.exception('Failed to upload ToR for opportunity %s', opportunity.id)
+            return Response(
+                {
+                    'detail': (
+                        'Upload do ToR indisponivel. A oportunidade foi mantida sem documento; '
+                        'verifique a configuracao de storage.'
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         # Auto-trigger AI analysis after upload
         from .tasks import analyze_tor_document
         analyze_tor_document.delay(opportunity.id)
