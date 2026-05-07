@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -15,5 +16,8 @@ class AIConfiguration(models.Model):
 
     @classmethod
     def current(cls):
-        config, _created = cls.objects.get_or_create(pk=1)
+        config, _created = cls.objects.get_or_create(
+            pk=1,
+            defaults={'provider': getattr(settings, 'AI_PROVIDER', 'openai')},
+        )
         return config

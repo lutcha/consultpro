@@ -12,16 +12,17 @@ class AIProviderStatusAPIView(APIView):
 
     def get(self, request):
         service = AIServiceFactory.get_service()
-        config = AIConfiguration.current()
+        ai_config = AIConfiguration.current()
+        active_provider, selected_model = AIServiceFactory._get_configured_provider_and_model()
         registry = {**AIServiceFactory.PROVIDER_REGISTRY, **AIServiceFactory.NATIVE_PROVIDERS}
         providers = []
 
-        for name, config in registry.items():
-            api_key_setting = config['api_key_setting']
-            model_setting = config['model_setting']
+        for name, provider_config in registry.items():
+            api_key_setting = provider_config['api_key_setting']
+            model_setting = provider_config['model_setting']
             providers.append({
                 'id': name,
-                'model': getattr(settings, model_setting, '') or config['default_model'],
+                'model': getattr(settings, model_setting, '') or provider_config['default_model'],
                 'api_key_configured': bool(getattr(settings, api_key_setting, '')),
             })
 
@@ -32,11 +33,11 @@ class AIProviderStatusAPIView(APIView):
         })
 
         return Response({
-            'active_provider': config.provider or getattr(settings, 'AI_PROVIDER', 'openai'),
+            'active_provider': active_provider,
             'active_model': getattr(service, 'model', 'mock'),
             'is_mock': isinstance(service, MockAIService),
             'always_mock': getattr(settings, 'AI_ALWAYS_MOCK', False),
-            'selected_model': config.model,
+            'selected_model': selected_model or ai_config.model,
             'providers': providers,
         })
 

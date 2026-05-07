@@ -649,15 +649,23 @@ class AIServiceFactory:
 
     @classmethod
     def _get_configured_provider_and_model(cls) -> tuple[str, str]:
-        provider = getattr(settings, 'AI_PROVIDER', 'openai').lower().strip()
+        env_provider = getattr(settings, 'AI_PROVIDER', 'openai').lower().strip()
+        provider = env_provider
         model = ''
         try:
             from .models import AIConfiguration
 
             config = AIConfiguration.current()
-            if config.provider:
-                provider = config.provider.lower().strip()
-            model = config.model.strip()
+            saved_provider = (config.provider or '').lower().strip()
+            saved_model = (config.model or '').strip()
+            is_unedited_default = (
+                saved_provider == 'openai'
+                and not saved_model
+                and env_provider != 'openai'
+            )
+            if saved_provider and not is_unedited_default:
+                provider = saved_provider
+            model = saved_model
         except Exception:
             pass
         return provider, model
