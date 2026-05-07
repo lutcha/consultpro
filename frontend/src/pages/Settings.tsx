@@ -13,6 +13,7 @@ import {
   FileText,
   Globe,
   Users,
+  Bot,
   Moon,
   Sun,
   Monitor,
@@ -33,7 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { useUserStore } from '@/stores';
 import { useCurriculumStore } from '@/stores/useCurriculumStore';
 import { useScrapingStore } from '@/stores/useScrapingStore';
-import { apiUpdateMe } from '@/lib/api';
+import { apiGetAIProviderStatus, apiUpdateMe, type ApiAIProviderStatus } from '@/lib/api';
 import { toast } from 'sonner';
 
 export function Settings() {
@@ -42,6 +43,7 @@ export function Settings() {
   const { templates, fetchTemplates } = useCurriculumStore();
   const { sources, fetchSources } = useScrapingStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [aiStatus, setAiStatus] = useState<ApiAIProviderStatus | null>(null);
 
   const [profile, setProfile] = useState({
     first_name: user?.name?.split(' ')[0] || '',
@@ -72,6 +74,9 @@ export function Settings() {
   useEffect(() => {
     fetchTemplates();
     fetchSources();
+    apiGetAIProviderStatus()
+      .then(setAiStatus)
+      .catch(() => toast.error('Erro ao carregar configuração IA'));
   }, [fetchTemplates, fetchSources]);
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -122,12 +127,13 @@ export function Settings() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8">
           <TabsTrigger value="profile"><User className="h-4 w-4 mr-1" /> Perfil</TabsTrigger>
           <TabsTrigger value="password"><Lock className="h-4 w-4 mr-1" /> Password</TabsTrigger>
           <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-1" /> Alertas</TabsTrigger>
           <TabsTrigger value="templates"><FileText className="h-4 w-4 mr-1" /> Templates</TabsTrigger>
           <TabsTrigger value="scraping"><Globe className="h-4 w-4 mr-1" /> Scraping</TabsTrigger>
+          <TabsTrigger value="ai"><Bot className="h-4 w-4 mr-1" /> IA</TabsTrigger>
           {isAdmin && <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Utilizadores</TabsTrigger>}
           <TabsTrigger value="appearance"><Palette className="h-4 w-4 mr-1" /> Tema</TabsTrigger>
         </TabsList>
@@ -248,6 +254,62 @@ export function Settings() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* AI */}
+        <TabsContent value="ai" className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle>Configuração de IA</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {!aiStatus ? (
+                <p className="text-muted-foreground">Carregando configuração IA...</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="rounded-lg border p-3">
+                      <p className="text-sm text-muted-foreground">Provider ativo</p>
+                      <p className="font-semibold">{aiStatus.active_provider}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-sm text-muted-foreground">Modelo ativo</p>
+                      <p className="font-semibold">{aiStatus.active_model}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-sm text-muted-foreground">Mock</p>
+                      <Badge variant={aiStatus.is_mock ? 'destructive' : 'default'}>
+                        {aiStatus.is_mock ? 'Ativo' : 'Desativado'}
+                      </Badge>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-sm text-muted-foreground">AI_ALWAYS_MOCK</p>
+                      <Badge variant={aiStatus.always_mock ? 'destructive' : 'secondary'}>
+                        {aiStatus.always_mock ? 'True' : 'False'}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {aiStatus.providers.map((provider) => (
+                      <div key={provider.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">{provider.id}</p>
+                          <p className="text-sm text-muted-foreground">{provider.model}</p>
+                        </div>
+                        <Badge variant={provider.api_key_configured ? 'default' : 'secondary'}>
+                          {provider.api_key_configured ? 'Chave configurada' : 'Sem chave'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    A seleção do provider/modelo em produção é feita por variáveis de ambiente na DigitalOcean.
+                    Esta tela mostra o estado sem expor chaves secretas.
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

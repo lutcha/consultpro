@@ -334,6 +334,22 @@ export async function apiUpdateOpportunityStatus(
   });
 }
 
+export interface ApiAIProviderStatus {
+  active_provider: string;
+  active_model: string;
+  is_mock: boolean;
+  always_mock: boolean;
+  providers: Array<{
+    id: string;
+    model: string;
+    api_key_configured: boolean;
+  }>;
+}
+
+export async function apiGetAIProviderStatus(): Promise<ApiAIProviderStatus> {
+  return apiRequest<ApiAIProviderStatus>('/ai/providers/status/');
+}
+
 // ============================================
 // PROPOSALS
 // ============================================

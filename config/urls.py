@@ -40,6 +40,7 @@ urlpatterns = [
     path('api/teams/', include('apps.teams.urls')),
     path('api/projects/', include('apps.projects.urls')),
     path('api/dashboard/', include('apps.core.urls')),
+    path('api/ai/', include('apps.ai_services.urls')),
 
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
