@@ -43,6 +43,12 @@ const COUNTRIES = [
 ];
 
 const CURRENCIES = ['USD', 'EUR', 'GBP'];
+const EVALUATION_CRITERIA = [
+  { value: 'qcbs', label: 'QCBS (Qualidade e Custo)' },
+  { value: 'cqs', label: 'CQS (Qualidade apenas)' },
+  { value: 'lcs', label: 'LCS (Custo mais baixo)' },
+  { value: 'fbs', label: 'FBS (Baseado em Fixo)' },
+];
 
 function mergeOptions(options: string[], value: string) {
   return value && !options.includes(value) ? [value, ...options] : options;
@@ -64,7 +70,7 @@ export function NewOpportunity() {
     currency: 'USD',
     deadline: '',
     description: '',
-    evaluation_criteria: '',
+    evaluation_criteria: 'qcbs',
     technical_weight: 70,
     financial_weight: 30,
     reference_number: '',
@@ -92,7 +98,7 @@ export function NewOpportunity() {
           currency: opportunity.currency || 'USD',
           deadline: opportunity.deadline ? opportunity.deadline.slice(0, 10) : '',
           description: opportunity.description || '',
-          evaluation_criteria: opportunity.evaluation_criteria || '',
+          evaluation_criteria: opportunity.evaluation_criteria || 'qcbs',
           technical_weight: opportunity.technical_weight || 70,
           financial_weight: opportunity.financial_weight || 30,
           reference_number: opportunity.reference_number || '',
@@ -126,6 +132,10 @@ export function NewOpportunity() {
       const payload = {
         ...formData,
         value: formData.value,
+        deadline: formData.deadline ? `${formData.deadline}T00:00:00-01:00` : '',
+        technical_weight: Number(formData.technical_weight),
+        financial_weight: Number(formData.financial_weight),
+        evaluation_criteria: formData.evaluation_criteria || 'qcbs',
       };
       const opportunity = isEditing && id
         ? await apiUpdateOpportunity(id, payload)
@@ -304,14 +314,23 @@ export function NewOpportunity() {
 
             <div className="space-y-2">
               <Label htmlFor="evaluation_criteria">Critérios de Avaliação</Label>
-              <Textarea
-                id="evaluation_criteria"
-                name="evaluation_criteria"
+              <Select
                 value={formData.evaluation_criteria}
-                onChange={handleChange}
-                placeholder="QCBS, LCS, etc."
-                rows={2}
-              />
+                onValueChange={(v) =>
+                  setFormData((prev) => ({ ...prev, evaluation_criteria: v }))
+                }
+              >
+                <SelectTrigger id="evaluation_criteria">
+                  <SelectValue placeholder="Selecionar criterio" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVALUATION_CRITERIA.map((criteria) => (
+                    <SelectItem key={criteria.value} value={criteria.value}>
+                      {criteria.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

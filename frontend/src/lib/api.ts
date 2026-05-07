@@ -92,8 +92,15 @@ async function apiRequest<T>(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    const fieldErrors = Object.entries(errorData)
+      .filter(([key]) => !['detail', 'message'].includes(key))
+      .map(([key, value]) => {
+        const message = Array.isArray(value) ? value.join(', ') : String(value);
+        return `${key}: ${message}`;
+      })
+      .join('; ');
     throw new Error(
-      errorData.detail || errorData.message || `API Error: ${response.status}`
+      errorData.detail || errorData.message || fieldErrors || `API Error: ${response.status}`
     );
   }
 
