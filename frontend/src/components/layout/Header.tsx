@@ -3,6 +3,7 @@
 // ============================================
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Search, User, Settings, LogOut, ChevronDown, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ interface HeaderProps {
 
 export function Header({ className, onMenuClick }: HeaderProps) {
   const { user, logout } = useUserStore();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   
   const handleLogout = () => {
@@ -131,7 +133,7 @@ export function Header({ className, onMenuClick }: HeaderProps) {
               <User className="mr-2 h-4 w-4" />
               Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               Definições
             </DropdownMenuItem>

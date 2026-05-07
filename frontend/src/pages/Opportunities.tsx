@@ -11,7 +11,6 @@ import {
   MoreHorizontal,
   Eye,
   FileText,
-  Calendar,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -195,15 +194,6 @@ export function Opportunities() {
                             >
                               <FileText className="mr-2 h-4 w-4" />
                               Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Create proposal from opportunity
-                              }}
-                            >
-                              <Calendar className="mr-2 h-4 w-4" />
-                              Criar Proposta
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={(e) => {

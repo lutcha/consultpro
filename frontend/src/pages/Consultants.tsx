@@ -3,7 +3,6 @@
 // ============================================
 
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Search,
   Filter,
@@ -24,17 +23,19 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AddConsultantModal } from '@/components/modals';
 import { apiGetConsultants } from '@/lib/api';
 import type { ApiConsultant } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export function Consultants() {
-  const navigate = useNavigate();
   const [consultants, setConsultants] = useState<ApiConsultant[]>([]);
   const [filtered, setFiltered] = useState<ApiConsultant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedConsultant, setSelectedConsultant] = useState<ApiConsultant | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [availabilityFilter, setAvailabilityFilter] = useState<string>('all');
 
   useEffect(() => {
@@ -113,7 +114,7 @@ export function Consultants() {
             {consultants.length} consultores registados
           </p>
         </div>
-        <Button onClick={() => navigate('/consultants/new')}>
+        <Button onClick={() => setShowAddModal(true)}>
           <Briefcase className="h-4 w-4 mr-2" />
           Novo Consultor
         </Button>
@@ -430,6 +431,14 @@ export function Consultants() {
           )}
         </DialogContent>
       </Dialog>
+      <AddConsultantModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={() => {
+          toast.info('Criacao de consultor sera ligada ao backend na proxima camada de CRUD.');
+          setShowAddModal(false);
+        }}
+      />
     </div>
   );
 }
