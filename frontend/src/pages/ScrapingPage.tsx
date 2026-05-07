@@ -437,7 +437,14 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnor
           );
         })}
       </div>
-      {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground">Nenhuma oportunidade encontrada.</div>}
+      {filtered.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          <p>Nenhuma oportunidade scraped encontrada.</p>
+          <p className="text-sm mt-1">
+            Execute uma fonte ativa e consulte o Historico de Jobs para acompanhar o resultado.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -553,7 +560,7 @@ export function ScrapingPage() {
       });
       toast.success('Fonte criada');
       setShowSourceModal(false);
-      await refreshSources();
+      await refreshAll();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao criar fonte';
       setError(message);
@@ -589,7 +596,7 @@ export function ScrapingPage() {
     try {
       await apiRunScrapingSource(Number(id));
       toast.success('Scraping iniciado');
-      await refreshSources();
+      await refreshAll();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao executar scraping';
       setError(message);

@@ -31,6 +31,13 @@ AI_ENRICHMENT_MIN_DESCRIPTION_LENGTH = 80  # Don't waste API calls on very short
 AI_ENRICHMENT_MAX_TEXT_LENGTH = 12000       # Truncate very long descriptions
 
 
+def _format_scraping_error(exc):
+    message = str(exc).strip()
+    if message:
+        return message[:1000]
+    return f'{exc.__class__.__name__}: no error detail provided'
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
     """
@@ -71,7 +78,8 @@ def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
         result = scraper.execute()
 
         if result['status'] != 'success':
-            raise RuntimeError(result.get('error', 'Unknown scraping error'))
+            detail = result.get('error') or result.get('message') or result
+            raise RuntimeError(f'Scraper returned {result.get("status")}: {detail}')
 
         raw_items = result['items']
         stats['total_received'] = len(raw_items)
@@ -119,22 +127,23 @@ def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
         return {'status': 'completed', 'job_id': job.id, 'stats': stats}
 
     except Exception as e:
-        logger.error(f"Scraping job failed for source {source_id}: {e}", exc_info=True)
+        error_message = _format_scraping_error(e)
+        logger.error(f"Scraping job failed for source {source_id}: {error_message}", exc_info=True)
         job.status = 'failed'
         job.completed_at = timezone.now()
-        job.error_log = str(e)
+        job.error_log = error_message
         job.batch_stats = stats
         job.save()
 
         source.status = 'error'
-        source.error_message = str(e)[:500]
+        source.error_message = error_message[:500]
         source.save()
 
         # Retry on transient errors
         if isinstance(e, (TimeoutError, ConnectionError)) and self.request.retries < self.max_retries:
             raise self.retry(exc=e)
 
-        return {'status': 'failed', 'job_id': job.id, 'error': str(e)}
+        return {'status': 'failed', 'job_id': job.id, 'error': error_message}
 
 
 @shared_task
