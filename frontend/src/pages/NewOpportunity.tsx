@@ -44,6 +44,10 @@ const COUNTRIES = [
 
 const CURRENCIES = ['USD', 'EUR', 'GBP'];
 
+function mergeOptions(options: string[], value: string) {
+  return value && !options.includes(value) ? [value, ...options] : options;
+}
+
 export function NewOpportunity() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -66,6 +70,9 @@ export function NewOpportunity() {
     reference_number: '',
     url_source: '',
   });
+  const sectorOptions = mergeOptions(SECTORS, formData.sector);
+  const countryOptions = mergeOptions(COUNTRIES, formData.country);
+  const currencyOptions = mergeOptions(CURRENCIES, formData.currency);
 
   useEffect(() => {
     if (!id) return;
@@ -207,7 +214,7 @@ export function NewOpportunity() {
                     <SelectValue placeholder="Selecionar setor" />
                   </SelectTrigger>
                   <SelectContent>
-                    {SECTORS.map((s) => (
+                    {sectorOptions.map((s) => (
                       <SelectItem key={s} value={s}>
                         {s}
                       </SelectItem>
@@ -227,7 +234,7 @@ export function NewOpportunity() {
                     <SelectValue placeholder="Selecionar país" />
                   </SelectTrigger>
                   <SelectContent>
-                    {COUNTRIES.map((c) => (
+                    {countryOptions.map((c) => (
                       <SelectItem key={c} value={c}>
                         {c}
                       </SelectItem>
@@ -262,7 +269,7 @@ export function NewOpportunity() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {CURRENCIES.map((c) => (
+                    {currencyOptions.map((c) => (
                       <SelectItem key={c} value={c}>
                         {c}
                       </SelectItem>

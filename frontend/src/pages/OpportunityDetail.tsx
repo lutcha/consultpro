@@ -9,6 +9,7 @@ import {
   CheckCircle,
   XCircle,
   MessageSquare,
+  Pencil,
   Download,
   CheckSquare,
   AlertTriangle,
@@ -150,6 +151,10 @@ export function OpportunityDetail() {
         <Button variant="outline">
           <MessageSquare className="h-4 w-4 mr-2" />
           Adicionar Nota
+        </Button>
+        <Button variant="outline" onClick={() => navigate(`/opportunities/${opportunity.id}/edit`)}>
+          <Pencil className="h-4 w-4 mr-2" />
+          Editar
         </Button>
       </div>
 
