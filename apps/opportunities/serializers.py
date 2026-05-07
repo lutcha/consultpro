@@ -71,6 +71,7 @@ class OpportunityDetailSerializer(serializers.ModelSerializer):
             'reference_number',
             'url_source',
             'ai_summary',
+            'ai_extraction',
             'ai_analysis_status',
             'created_by',
             'assigned_to',

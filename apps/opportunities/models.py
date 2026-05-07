@@ -42,6 +42,7 @@ class Opportunity(models.Model):
     reference_number = models.CharField(max_length=100, blank=True)
     url_source = models.URLField(blank=True)
     ai_summary = models.TextField(blank=True)
+    ai_extraction = models.JSONField(default=dict, blank=True)
     ai_analysis_status = models.CharField(
         max_length=20,
         choices=[

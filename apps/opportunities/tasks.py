@@ -29,6 +29,20 @@ def _coerce_choice(value, allowed: set[str], default: str) -> str:
     return value if value in allowed else default
 
 
+def _build_ai_extraction(result: dict, opportunity: Opportunity, service) -> dict:
+    cos_analysis = result.get('cos_analysis') or {}
+    return {
+        'schema': 'cos_tor_analysis_v1',
+        'provider': getattr(service, 'PROVIDER_NAME', 'unknown'),
+        'generated_at': timezone.now().isoformat(),
+        'opportunity_id': opportunity.id,
+        'summary': result.get('summary', ''),
+        'requirements': result.get('requirements', []),
+        'risks': result.get('risks', []),
+        'cos_analysis': cos_analysis,
+    }
+
+
 def _extract_text_from_document(opportunity: Opportunity) -> str:
     """Extract text from tor_document (DOCX or PDF) or fall back to description."""
     if not opportunity.tor_document:
@@ -131,9 +145,11 @@ def analyze_tor_document(opportunity_id: int):
     summary = result.get('summary', '')
     requirements = result.get('requirements', [])
     risks = result.get('risks', [])
+    ai_extraction = _build_ai_extraction(result, opportunity, service)
 
     # Save summary
     opportunity.ai_summary = summary
+    opportunity.ai_extraction = ai_extraction
 
     # Create/update Requirements from AI extraction
     _sync_ai_requirements(opportunity, requirements)
@@ -142,7 +158,7 @@ def analyze_tor_document(opportunity_id: int):
     _sync_ai_risks(opportunity, risks)
 
     opportunity.ai_analysis_status = 'completed'
-    opportunity.save(update_fields=['ai_analysis_status', 'ai_summary'])
+    opportunity.save(update_fields=['ai_analysis_status', 'ai_summary', 'ai_extraction'])
 
     logger.info(
         f"AI analysis completed for opportunity {opportunity_id}: "

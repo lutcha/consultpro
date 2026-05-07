@@ -46,6 +46,19 @@ class LLMService(BaseAIService):
 
     PROVIDER_NAME = 'generic'
 
+    COS_KEYS = [
+        'opportunity_profile',
+        'tor_dissection_matrix',
+        'strategic_opportunities',
+        'proposal_strategy',
+        'methodology_blueprint',
+        'team_requirements',
+        'workplan_requirements',
+        'budget_requirements',
+        'submission_requirements',
+        'qc_checklist',
+    ]
+
     def __init__(self, api_key: str, base_url: str | None, model: str, provider_name: str = 'generic'):
         self.client = openai.OpenAI(
             api_key=api_key,
@@ -91,6 +104,16 @@ class LLMService(BaseAIService):
             "- requirements: array of objects with description, category, priority. category must be one "
             "of functional, technical, institutional, financial. priority must be mandatory, preferred, optional.\n"
             "- risks: array of objects with description, severity, mitigation. severity must be low, medium, high.\n"
+            "- opportunity_profile: object with client, country, sector, objective, deadline, value, currency.\n"
+            "- tor_dissection_matrix: array of objects with requirement, type, category, priority, evidence.\n"
+            "- strategic_opportunities: array of differentiation opportunities.\n"
+            "- proposal_strategy: object with theory_of_change, value_proposition, win_themes, key_messages.\n"
+            "- methodology_blueprint: array of phases with phase, activities, deliverables, tools.\n"
+            "- team_requirements: array of required profiles, skills, experience.\n"
+            "- workplan_requirements: object or array with phases, milestones, dependencies, timeline_constraints.\n"
+            "- budget_requirements: object or array with financial rules, limits, eligible costs, currency.\n"
+            "- submission_requirements: array of documents, format, channel, deadline instructions.\n"
+            "- qc_checklist: array of compliance checks for final proposal review.\n"
             "Extract specific actionable items. Do not invent facts that are not supported by the ToR."
         )
 
@@ -105,10 +128,15 @@ class LLMService(BaseAIService):
             )
             content = self._clean_json_response(content)
             result = json.loads(content)
+            cos_analysis = result.get('cos_analysis') or {
+                key: result.get(key, [] if key.endswith(('matrix', 'opportunities', 'blueprint', 'requirements', 'checklist')) else {})
+                for key in self.COS_KEYS
+            }
             return {
                 'summary': result.get('summary', ''),
                 'requirements': result.get('requirements', []),
                 'risks': result.get('risks', []),
+                'cos_analysis': cos_analysis,
             }
         except Exception as exc:
             logger.exception('%s analyze_document failed: %s', self.PROVIDER_NAME, exc)
@@ -176,6 +204,8 @@ class AnthropicService(BaseAIService):
 
     PROVIDER_NAME = 'anthropic'
 
+    COS_KEYS = LLMService.COS_KEYS
+
     def __init__(self, api_key: str, model: str):
         import anthropic
 
@@ -212,6 +242,16 @@ class AnthropicService(BaseAIService):
             "- requirements: array of objects with description, category, priority. category must be one "
             "of functional, technical, institutional, financial. priority must be mandatory, preferred, optional.\n"
             "- risks: array of objects with description, severity, mitigation. severity must be low, medium, high.\n"
+            "- opportunity_profile: object with client, country, sector, objective, deadline, value, currency.\n"
+            "- tor_dissection_matrix: array of objects with requirement, type, category, priority, evidence.\n"
+            "- strategic_opportunities: array of differentiation opportunities.\n"
+            "- proposal_strategy: object with theory_of_change, value_proposition, win_themes, key_messages.\n"
+            "- methodology_blueprint: array of phases with phase, activities, deliverables, tools.\n"
+            "- team_requirements: array of required profiles, skills, experience.\n"
+            "- workplan_requirements: object or array with phases, milestones, dependencies, timeline_constraints.\n"
+            "- budget_requirements: object or array with financial rules, limits, eligible costs, currency.\n"
+            "- submission_requirements: array of documents, format, channel, deadline instructions.\n"
+            "- qc_checklist: array of compliance checks for final proposal review.\n"
             "Extract specific actionable items. Do not invent facts that are not supported by the ToR. "
             "Do not wrap in markdown code blocks."
         )
@@ -224,10 +264,15 @@ class AnthropicService(BaseAIService):
             )
             content = self._clean_json_response(content)
             result = json.loads(content)
+            cos_analysis = result.get('cos_analysis') or {
+                key: result.get(key, [] if key.endswith(('matrix', 'opportunities', 'blueprint', 'requirements', 'checklist')) else {})
+                for key in self.COS_KEYS
+            }
             return {
                 'summary': result.get('summary', ''),
                 'requirements': result.get('requirements', []),
                 'risks': result.get('risks', []),
+                'cos_analysis': cos_analysis,
             }
         except Exception as exc:
             logger.exception('Anthropic analyze_document failed: %s', exc)
@@ -299,6 +344,43 @@ class MockAIService(BaseAIService):
 
     def analyze_document(self, text: str) -> dict:
         logger.info('MockAIService.analyze_document called (len=%s)', len(text))
+        cos_analysis = {
+            'opportunity_profile': {
+                'client': '[MOCK] Client extracted from ToR',
+                'country': '[MOCK] Country',
+                'sector': '[MOCK] Sector',
+                'objective': '[MOCK] Project objective',
+            },
+            'tor_dissection_matrix': [
+                {
+                    'requirement': '[MOCK] Demonstrate technical capability.',
+                    'type': 'explicit',
+                    'category': 'technical',
+                    'priority': 'mandatory',
+                    'evidence': '[MOCK] ToR evidence',
+                },
+            ],
+            'strategic_opportunities': ['[MOCK] Emphasize local delivery experience.'],
+            'proposal_strategy': {
+                'theory_of_change': '[MOCK] Inputs lead to outcomes through structured technical assistance.',
+                'value_proposition': '[MOCK] Practical, locally grounded delivery.',
+                'win_themes': ['[MOCK] Speed', '[MOCK] Quality', '[MOCK] Local context'],
+                'key_messages': ['[MOCK] Strong technical team and clear methodology.'],
+            },
+            'methodology_blueprint': [
+                {
+                    'phase': '[MOCK] Inception',
+                    'activities': ['Kickoff', 'Document review'],
+                    'deliverables': ['Inception report'],
+                    'tools': ['Workplan', 'Stakeholder map'],
+                },
+            ],
+            'team_requirements': ['[MOCK] Team leader with relevant sector experience.'],
+            'workplan_requirements': {'timeline_constraints': '[MOCK] Tight deadline.'},
+            'budget_requirements': {'currency': '[MOCK] USD/EUR/ECV'},
+            'submission_requirements': ['[MOCK] Submit technical and financial proposal.'],
+            'qc_checklist': ['[MOCK] Cover all mandatory requirements.'],
+        }
         return {
             'summary': (
                 '[MOCK] This is a simulated summary of the document. '
@@ -313,6 +395,7 @@ class MockAIService(BaseAIService):
                 '[MOCK] Risk 1: Tight deadline may affect quality.',
                 '[MOCK] Risk 2: Unclear evaluation criteria.',
             ],
+            'cos_analysis': cos_analysis,
         }
 
     def generate_suggestion(self, section_type: str, content: str, action: str) -> str:

@@ -227,6 +227,7 @@ export interface ApiOpportunity {
   reference_number: string;
   url_source: string;
   ai_summary: string | null;
+  ai_extraction: Record<string, unknown>;
   ai_analysis_status: string;
   created_by: number | null;
   assigned_to: number | null;

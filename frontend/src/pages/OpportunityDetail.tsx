@@ -30,6 +30,12 @@ import { apiAnalyzeOpportunityToR } from '@/lib/api';
 import { toast } from 'sonner';
 import type { Requirement, Risk } from '@/types';
 
+function countCosItems(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  if (value && typeof value === 'object') return Object.keys(value).length;
+  return value ? 1 : 0;
+}
+
 export function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -45,6 +51,8 @@ export function OpportunityDetail() {
   }, [id]);
 
   const opportunity = selectedOpportunity;
+  const cosAnalysis = opportunity?.aiExtraction?.cos_analysis as Record<string, unknown> | undefined;
+  const hasCosAnalysis = Boolean(cosAnalysis && Object.keys(cosAnalysis).length > 0);
 
   if (isLoading) {
     return <OpportunityDetailSkeleton />;
@@ -227,6 +235,33 @@ export function OpportunityDetail() {
               </div>
             </CardContent>
           </Card>
+
+          {hasCosAnalysis && cosAnalysis && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Extração COS</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[
+                    ['Matriz TdR', cosAnalysis.tor_dissection_matrix],
+                    ['Estratégia', cosAnalysis.proposal_strategy],
+                    ['Metodologia', cosAnalysis.methodology_blueprint],
+                    ['Equipa', cosAnalysis.team_requirements],
+                    ['Plano', cosAnalysis.workplan_requirements],
+                    ['Orçamento', cosAnalysis.budget_requirements],
+                    ['Submissão', cosAnalysis.submission_requirements],
+                    ['QC', cosAnalysis.qc_checklist],
+                  ].map(([label, value]) => (
+                    <div key={label as string} className="rounded-lg border p-3">
+                      <p className="text-sm font-medium">{label as string}</p>
+                      <p className="text-2xl font-bold mt-1">{countCosItems(value)}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Requirements */}
           <Card>

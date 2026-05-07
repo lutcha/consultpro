@@ -29,6 +29,7 @@ export interface Opportunity {
   description: string;
   torDocument?: string;
   aiSummary?: string;
+  aiExtraction?: Record<string, unknown>;
   aiAnalysisStatus?: AIAnalysisStatus;
   requirements: Requirement[];
   risks: Risk[];
