@@ -938,6 +938,44 @@ export interface ApiScrapedOpportunity {
   published_at: string | null;
   deadline_alert: boolean;
   ai_summary: string;
+  cv_eligible?: boolean;
+  data_quality_score?: number;
+  scraped_at?: string;
+  source_name?: string;
+}
+
+export interface ApiScrapedOpportunityDetail {
+  id: number;
+  source: ApiScrapingSource;
+  external_id: string;
+  external_url: string;
+  title: string;
+  organization: string;
+  client: string;
+  sector: string;
+  country: string;
+  region: string;
+  description: string;
+  deep_content_text: string | null;
+  deep_content_url: string | null;
+  deep_content_status: string | null;
+  value: string;
+  currency: string;
+  deadline: string | null;
+  deadline_meta: Record<string, unknown> | null;
+  status: string;
+  published_at: string | null;
+  deadline_alert: boolean;
+  ai_summary: string | null;
+  ai_extracted_requirements: Array<{ description: string; priority?: string }> | null;
+  cv_eligible: boolean;
+  eligibility: Record<string, unknown> | null;
+  data_quality_score: number;
+  language: string;
+  sector_tags: string[];
+  imported_opportunity: number | null;
+  imported_at: string | null;
+  scraped_at: string;
 }
 
 export interface ApiScrapingJob {
@@ -986,8 +1024,12 @@ export async function apiToggleScrapingSource(id: number): Promise<{ status: str
   });
 }
 
-export async function apiGetScrapedOpportunities(): Promise<PaginatedResponse<ApiScrapedOpportunity>> {
-  return apiRequest<PaginatedResponse<ApiScrapedOpportunity>>('/scraping/opportunities/');
+export async function apiGetScrapedOpportunities(page = 1): Promise<PaginatedResponse<ApiScrapedOpportunity>> {
+  return apiRequest<PaginatedResponse<ApiScrapedOpportunity>>(`/scraping/opportunities/?page=${page}`);
+}
+
+export async function apiGetScrapedOpportunity(id: number): Promise<ApiScrapedOpportunityDetail> {
+  return apiRequest<ApiScrapedOpportunityDetail>(`/scraping/opportunities/${id}/`);
 }
 
 export async function apiImportScrapedOpportunity(id: number): Promise<{ opportunity_id: number; status: string }> {
