@@ -3,7 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.proposals.models import Budget
+from apps.proposals.models import Budget, Proposal
 from apps.proposals.tests.factories import (
     BudgetFactory,
     OpportunityFactory,
@@ -48,6 +48,23 @@ class TestProposalViewSet:
         }
         response = client.post(url, data)
         assert response.status_code == status.HTTP_201_CREATED
+        proposal = Proposal.objects.get(pk=response.data['id'])
+        assert proposal.sections.count() == 7
+        opportunity.refresh_from_db()
+        assert opportunity.status == 'proposal_draft'
+
+    def test_retrieve_proposal_repairs_missing_default_sections(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user)
+        assert proposal.sections.count() == 0
+        url = reverse('proposal-detail', kwargs={'pk': proposal.pk})
+
+        response = client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        proposal.refresh_from_db()
+        assert proposal.sections.count() == 7
+        assert len(response.data['sections']) == 7
 
     def test_sections_action(self, authenticated_client):
         client, user = authenticated_client

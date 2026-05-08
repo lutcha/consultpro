@@ -11,6 +11,7 @@ from rest_framework.test import APIClient, APITestCase
 from apps.core.permissions import IsConsultantOrManager
 
 from apps.opportunities.models import Opportunity, Requirement, Risk
+from apps.proposals.models import Proposal
 from apps.opportunities.tests.factories import (
     OpportunityFactory,
     RequirementFactory,
@@ -67,6 +68,27 @@ class OpportunityViewSetTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         opportunity.refresh_from_db()
         self.assertEqual(opportunity.status, 'no_go')
+
+    def test_create_proposal_action_creates_default_sections_and_is_idempotent(self):
+        opportunity = OpportunityFactory(status='go', ai_summary='Resumo IA inicial')
+        url = reverse('opportunity-create-proposal', kwargs={'pk': opportunity.pk})
+
+        first = self.client.post(url)
+        second = self.client.post(url)
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertTrue(first.data['created'])
+        self.assertFalse(second.data['created'])
+        self.assertEqual(first.data['proposal_id'], second.data['proposal_id'])
+        self.assertEqual(Proposal.objects.filter(opportunity=opportunity).count(), 1)
+
+        proposal = Proposal.objects.get(pk=first.data['proposal_id'])
+        self.assertEqual(proposal.sections.count(), 7)
+        self.assertTrue(proposal.sections.filter(section_type='executive_summary', content__contains='Resumo IA inicial').exists())
+
+        opportunity.refresh_from_db()
+        self.assertEqual(opportunity.status, 'proposal_draft')
 
     def test_analyze_tor_action(self):
         opportunity = OpportunityFactory(ai_analysis_status='pending')

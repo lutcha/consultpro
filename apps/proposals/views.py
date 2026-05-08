@@ -41,6 +41,51 @@ DEFAULT_PROPOSAL_SECTIONS = [
 ]
 
 
+def _extract_cos_value(opportunity, *keys):
+    data = opportunity.ai_extraction or {}
+    cos_analysis = data.get('cos_analysis') or {}
+    current = cos_analysis
+    for key in keys:
+        if not isinstance(current, dict):
+            return ''
+        current = current.get(key)
+    if isinstance(current, str):
+        return current
+    if isinstance(current, list):
+        return '\n'.join(f"- {item}" for item in current if item)
+    if isinstance(current, dict):
+        return '\n'.join(f"{key}: {value}" for key, value in current.items() if value)
+    return ''
+
+
+def _default_section_content(proposal, section_type):
+    opportunity = proposal.opportunity
+    if section_type == 'cover':
+        return (
+            f"<h1>{proposal.title}</h1>"
+            f"<p><strong>Cliente:</strong> {opportunity.client}</p>"
+            f"<p><strong>Setor:</strong> {opportunity.sector}</p>"
+            f"<p><strong>País:</strong> {opportunity.country}</p>"
+            f"<p><strong>Referência:</strong> {opportunity.reference_number or 'N/A'}</p>"
+        )
+    if section_type == 'executive_summary':
+        summary = opportunity.ai_summary or opportunity.description
+        return f"<p>{summary}</p>" if summary else ''
+    if section_type == 'methodology':
+        methodology = _extract_cos_value(opportunity, 'methodology_blueprint')
+        return f"<p>{methodology}</p>" if methodology else ''
+    if section_type == 'team':
+        team_requirements = _extract_cos_value(opportunity, 'team_requirements')
+        return f"<p>{team_requirements}</p>" if team_requirements else ''
+    if section_type == 'workplan':
+        workplan = _extract_cos_value(opportunity, 'workplan_requirements')
+        return f"<p>{workplan}</p>" if workplan else ''
+    if section_type == 'budget':
+        budget = _extract_cos_value(opportunity, 'budget_requirements')
+        return f"<p>{budget}</p>" if budget else ''
+    return ''
+
+
 def ensure_default_sections(proposal):
     for section_type, title, order in DEFAULT_PROPOSAL_SECTIONS:
         ProposalSection.objects.get_or_create(
@@ -49,7 +94,7 @@ def ensure_default_sections(proposal):
             defaults={
                 'title': title,
                 'order': order,
-                'content': '',
+                'content': _default_section_content(proposal, section_type),
             },
         )
 
@@ -64,12 +109,22 @@ class ProposalViewSet(viewsets.ModelViewSet):
         return ProposalDetailSerializer
 
     def perform_create(self, serializer):
-        proposal = serializer.save(created_by=self.request.user)
+        with transaction.atomic():
+            proposal = serializer.save(created_by=self.request.user)
+            ensure_default_sections(proposal)
+            proposal.opportunity.status = 'proposal_draft'
+            proposal.opportunity.save(update_fields=['status', 'updated_at'])
+
+    def retrieve(self, request, *args, **kwargs):
+        proposal = self.get_object()
         ensure_default_sections(proposal)
+        serializer = self.get_serializer(proposal)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
     def sections(self, request, pk=None):
         proposal = self.get_object()
+        ensure_default_sections(proposal)
         sections = proposal.sections.all()
         serializer = ProposalSectionSerializer(sections, many=True)
         return Response(serializer.data)

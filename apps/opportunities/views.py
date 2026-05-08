@@ -54,6 +54,41 @@ class OpportunityViewSet(viewsets.ModelViewSet):
         return Response({'status': 'no_go'})
 
     @action(detail=True, methods=['post'])
+    def create_proposal(self, request, pk=None):
+        opportunity = self.get_object()
+
+        from apps.proposals.models import Proposal
+        from apps.proposals.views import ensure_default_sections
+
+        existing = opportunity.proposals.order_by('-updated_at').first()
+        if existing:
+            ensure_default_sections(existing)
+            return Response({
+                'proposal_id': existing.id,
+                'proposal_url': f'/proposals/{existing.id}',
+                'status': existing.status,
+                'created': False,
+            })
+
+        proposal = Proposal.objects.create(
+            opportunity=opportunity,
+            title=f'Proposta Tecnica - {opportunity.title}',
+            version=1,
+            status='draft',
+            created_by=request.user,
+        )
+        ensure_default_sections(proposal)
+        opportunity.status = 'proposal_draft'
+        opportunity.save(update_fields=['status', 'updated_at'])
+
+        return Response({
+            'proposal_id': proposal.id,
+            'proposal_url': f'/proposals/{proposal.id}',
+            'status': proposal.status,
+            'created': True,
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
     def analyze_tor(self, request, pk=None):
         opportunity = self.get_object()
         opportunity.ai_analysis_status = 'queued'

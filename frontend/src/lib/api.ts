@@ -324,6 +324,15 @@ export async function apiAnalyzeOpportunityToR(
   );
 }
 
+export async function apiCreateProposalFromOpportunity(
+  id: string
+): Promise<{ proposal_id: number; proposal_url?: string; status: string; created?: boolean }> {
+  return apiRequest<{ proposal_id: number; proposal_url?: string; status: string; created?: boolean }>(
+    `/opportunities/${id}/create_proposal/`,
+    { method: 'POST' }
+  );
+}
+
 export async function apiUpdateOpportunityStatus(
   id: string,
   status: string

@@ -16,6 +16,7 @@ import {
   FileText,
   Grid3X3,
   ShieldAlert,
+  FilePlus2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,7 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useOpportunityStore } from '@/stores';
 import { formatDate, formatCurrency, cn } from '@/lib/utils';
-import { apiAnalyzeOpportunityToR } from '@/lib/api';
+import { apiAnalyzeOpportunityToR, apiCreateProposalFromOpportunity } from '@/lib/api';
 import { toast } from 'sonner';
 import type { Requirement, Risk } from '@/types';
 
@@ -67,6 +68,7 @@ export function OpportunityDetail() {
     useOpportunityStore();
   const [activeTab, setActiveTab] = useState('summary');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isCreatingProposal, setIsCreatingProposal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -128,6 +130,20 @@ export function OpportunityDetail() {
       toast.error(message);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleCreateProposal = async () => {
+    setIsCreatingProposal(true);
+    try {
+      const result = await apiCreateProposalFromOpportunity(opportunity.id);
+      toast.success(result.created ? 'Proposta criada' : 'Proposta existente aberta');
+      navigate(`/proposals/${result.proposal_id}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro ao criar proposta';
+      toast.error(message);
+    } finally {
+      setIsCreatingProposal(false);
     }
   };
 
@@ -215,6 +231,10 @@ export function OpportunityDetail() {
         >
           <CheckCircle className="h-4 w-4 mr-2" />
           Go — Avançar
+        </Button>
+        <Button onClick={handleCreateProposal} disabled={isCreatingProposal}>
+          <FilePlus2 className="h-4 w-4 mr-2" />
+          {isCreatingProposal ? 'A criar...' : 'Criar Proposta'}
         </Button>
         <Button
           variant="outline"

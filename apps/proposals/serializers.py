@@ -98,7 +98,7 @@ class ProposalListSerializer(serializers.ModelSerializer):
 class ProposalDetailSerializer(serializers.ModelSerializer):
     sections = ProposalSectionSerializer(many=True, read_only=True)
     team = ProposalTeamMemberSerializer(
-        source='proposalteammember_set', many=True, read_only=True
+        source='team_members_detail', many=True, read_only=True
     )
     budget = BudgetSerializer(read_only=True)
     proponent_logo_url = serializers.SerializerMethodField()
