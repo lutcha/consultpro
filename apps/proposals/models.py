@@ -87,6 +87,7 @@ class ProposalSection(models.Model):
         ('workplan', 'Plano de Trabalho'),
         ('budget', 'Orcamento'),
         ('annexes', 'Anexos'),
+        ('custom', 'Personalizada'),
     ]
 
     proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='sections')

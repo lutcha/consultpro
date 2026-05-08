@@ -117,7 +117,8 @@ export type SectionType =
   | 'team' 
   | 'workplan' 
   | 'budget' 
-  | 'annexes';
+  | 'annexes'
+  | 'custom';
 
 export interface TeamMember {
   userId: string;

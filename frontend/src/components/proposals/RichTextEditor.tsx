@@ -17,17 +17,24 @@ interface RichTextEditorProps {
 
 export function RichTextEditor({ value, onChange, placeholder: _placeholder, className }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const lastSyncedValueRef = useRef('');
 
-  // Update editor content when value prop changes (from outside)
   useEffect(() => {
-    if (editorRef.current && editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value || '';
+    const editor = editorRef.current;
+    const nextValue = value || '';
+    if (!editor || lastSyncedValueRef.current === nextValue) return;
+
+    if (document.activeElement !== editor) {
+      editor.innerHTML = nextValue;
+      lastSyncedValueRef.current = nextValue;
     }
-  }, []);
+  }, [value]);
 
   const handleInput = useCallback(() => {
     if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
+      const nextValue = editorRef.current.innerHTML;
+      lastSyncedValueRef.current = nextValue;
+      onChange(nextValue);
     }
   }, [onChange]);
 
@@ -101,7 +108,6 @@ export function RichTextEditor({ value, onChange, placeholder: _placeholder, cla
         onBlur={handleInput}
         className="flex-1 p-4 min-h-[300px] outline-none prose prose-sm max-w-none dark:prose-invert"
         style={{ minHeight: '300px' }}
-        dangerouslySetInnerHTML={{ __html: value || '' }}
       />
     </div>
   );

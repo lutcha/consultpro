@@ -69,11 +69,12 @@ class TestProposalViewSet:
     def test_sections_action(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user)
-        ProposalSectionFactory(proposal=proposal)
+        section = ProposalSectionFactory(proposal=proposal)
         url = reverse('proposal-sections', kwargs={'pk': proposal.pk})
         response = client.get(url)
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
+        assert len(response.data) == 7
+        assert any(item['id'] == section.id for item in response.data)
 
     def test_section_detail_get(self, authenticated_client):
         client, user = authenticated_client
@@ -101,6 +102,19 @@ class TestProposalViewSet:
         assert response.status_code == status.HTTP_200_OK
         section.refresh_from_db()
         assert section.content == 'Updated content'
+
+    def test_add_custom_section(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user)
+        ProposalSectionFactory(proposal=proposal, order=3)
+        url = reverse('proposal-add-section', kwargs={'pk': proposal.pk})
+
+        response = client.post(url, {'title': 'Plano de Comunicacao'})
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['title'] == 'Plano de Comunicacao'
+        assert response.data['section_type'] == 'custom'
+        assert response.data['order'] == 4
 
     def test_add_comment(self, authenticated_client):
         client, user = authenticated_client

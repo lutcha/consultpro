@@ -33,6 +33,7 @@ import { useProposalStore } from '@/stores';
 import {
   apiDownloadProposalWord,
   apiDownloadProposalPdf,
+  apiCreateProposalSection,
   apiUploadProposalLogo,
 } from '@/lib/api';
 
@@ -47,6 +48,8 @@ export function ProposalEditor() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [consortiumMembers, setConsortiumMembers] = useState<string[]>([]);
   const [newMember, setNewMember] = useState('');
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [isAddingSection, setIsAddingSection] = useState(false);
   const [logos, setLogos] = useState<{
     proponent?: string;
     client?: string;
@@ -154,6 +157,23 @@ export function ProposalEditor() {
 
   const handleRemoveConsortiumMember = (index: number) => {
     setConsortiumMembers((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddSection = async () => {
+    if (!selectedProposal || !newSectionTitle.trim() || isAddingSection) return;
+    setIsAddingSection(true);
+    try {
+      const section = await apiCreateProposalSection(selectedProposal.id, {
+        title: newSectionTitle.trim(),
+      });
+      setNewSectionTitle('');
+      await selectProposal(selectedProposal.id);
+      setActiveSectionId(String(section.id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao criar secao');
+    } finally {
+      setIsAddingSection(false);
+    }
   };
 
   const handleAISuggestion = (action: string) => {
@@ -375,6 +395,28 @@ export function ProposalEditor() {
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Secções
             </h3>
+            <div className="flex gap-1 mb-3">
+              <Input
+                value={newSectionTitle}
+                onChange={(e) => setNewSectionTitle(e.target.value)}
+                placeholder="Nova secao"
+                className="h-7 text-xs"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddSection();
+                  }
+                }}
+              />
+              <Button
+                size="sm"
+                className="h-7 px-2"
+                onClick={handleAddSection}
+                disabled={isAddingSection || !newSectionTitle.trim()}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
             <div className="space-y-1">
               {selectedProposal.sections.map((section) => (
                 <button

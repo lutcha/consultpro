@@ -502,6 +502,16 @@ export async function apiUpdateProposalSection(
   );
 }
 
+export async function apiCreateProposalSection(
+  proposalId: string,
+  data: { title: string; section_type?: string; content?: string }
+): Promise<ApiProposalSection> {
+  return apiRequest<ApiProposalSection>(`/proposals/${proposalId}/add_section/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {
   const token = localStorage.getItem('access_token');
   const response = await fetch(`/api/proposals/${proposalId}/download_word/`, {

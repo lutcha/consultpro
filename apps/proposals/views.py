@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Max
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -128,6 +129,32 @@ class ProposalViewSet(viewsets.ModelViewSet):
         sections = proposal.sections.all()
         serializer = ProposalSectionSerializer(sections, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def add_section(self, request, pk=None):
+        proposal = self.get_object()
+        title = str(request.data.get('title') or '').strip()
+        if not title:
+            return Response(
+                {'detail': 'title is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        section_type = request.data.get('section_type') or 'custom'
+        valid_section_types = {choice[0] for choice in ProposalSection.SECTION_TYPE_CHOICES}
+        if section_type not in valid_section_types:
+            section_type = 'custom'
+
+        next_order = (proposal.sections.aggregate(max_order=Max('order'))['max_order'] or 0) + 1
+        section = ProposalSection.objects.create(
+            proposal=proposal,
+            section_type=section_type,
+            title=title[:200],
+            content=request.data.get('content') or '',
+            order=next_order,
+        )
+        serializer = ProposalSectionSerializer(section)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(
         detail=True,
