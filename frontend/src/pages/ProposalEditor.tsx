@@ -482,11 +482,11 @@ export function ProposalEditor() {
               </Button>
               <Button size="sm" onClick={() => {
                 if (activeSection) {
-                  updateSection(selectedProposal.id, activeSectionId, editorContent);
+                  updateSection(selectedProposal.id, activeSectionId, editorContent, true);
                 }
-              }}>
+              }} disabled={activeSection?.isComplete}>
                 <CheckCircle className="h-4 w-4 mr-2" />
-                Marcar como Completo
+                {activeSection?.isComplete ? 'Completo' : 'Marcar como Completo'}
               </Button>
             </div>
           </div>
