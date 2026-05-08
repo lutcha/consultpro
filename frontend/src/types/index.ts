@@ -330,6 +330,7 @@ export interface ScrapedOpportunity {
   publishedAt?: Date;
   deadlineAlert: boolean;
   aiSummary?: string;
+  deepContentStatus?: string;
   importedOpportunityId?: string;
 }
 

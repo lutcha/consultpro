@@ -938,8 +938,11 @@ export interface ApiScrapedOpportunity {
   published_at: string | null;
   deadline_alert: boolean;
   ai_summary: string;
+  deep_content_status?: string | null;
+  deep_content_extracted_at?: string | null;
   cv_eligible?: boolean;
   data_quality_score?: number;
+  imported_opportunity?: number | null;
   scraped_at?: string;
   source_name?: string;
 }

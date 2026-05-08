@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Globe, Play, Pause, Settings, Plus, Search, RefreshCw,
-  CheckCircle2, AlertTriangle, Clock, Download, ArrowRight,
+  CheckCircle2, AlertTriangle, Clock, ArrowRight,
   Activity, Zap, Bot, ChevronDown, ChevronUp,
   BarChart3, Layers, Eye, DollarSign, ExternalLink, Star,
   ChevronLeft, ChevronRight,
@@ -91,6 +91,8 @@ function mapOpportunity(opp: ApiScrapedOpportunity): ScrapedOpportunity {
     publishedAt: toDate(opp.published_at),
     deadlineAlert: Boolean(opp.deadline_alert),
     aiSummary: opp.ai_summary || undefined,
+    deepContentStatus: opp.deep_content_status || undefined,
+    importedOpportunityId: opp.imported_opportunity ? String(opp.imported_opportunity) : undefined,
   };
 }
 
@@ -107,6 +109,20 @@ function mapJob(job: ApiScrapingJob): ScrapingJob {
     errorLog: job.error_log || undefined,
     executedBy: job.executed_by || 'system',
   };
+}
+
+function deepContentLabel(status?: string): string | null {
+  if (!status) return null;
+
+  const labels: Record<string, string> = {
+    extracted: 'Fonte lida',
+    completed: 'Fonte lida',
+    failed: 'Fonte nao lida',
+    skipped: 'Sem texto extraido',
+    pending: 'Leitura pendente',
+  };
+
+  return labels[status] || `Fonte: ${status}`;
 }
 
 // ============================================
@@ -356,6 +372,7 @@ interface OpportunityDetailModalProps {
 }
 
 function OpportunityDetailModal({ detail, loading, onClose, onImport, isBusy }: OpportunityDetailModalProps) {
+  const navigate = useNavigate();
   const open = loading || !!detail;
   const qualityColor = (score: number) =>
     score >= 0.7 ? 'text-emerald-600' : score >= 0.4 ? 'text-amber-600' : 'text-red-600';
@@ -405,6 +422,19 @@ function OpportunityDetailModal({ detail, loading, onClose, onImport, isBusy }: 
                 <p className="text-muted-foreground mb-0.5">Publicado</p>
                 <p className="font-medium">{detail.published_at ? new Date(detail.published_at).toLocaleDateString('pt-PT') : '—'}</p>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 p-3 bg-muted/40 rounded-lg text-xs">
+              <div>
+                <p className="text-muted-foreground mb-0.5">Leitura da fonte</p>
+                <p className="font-medium">{deepContentLabel(detail.deep_content_status || undefined) || '-'}</p>
+              </div>
+              {detail.imported_opportunity && (
+                <div>
+                  <p className="text-muted-foreground mb-0.5">Oportunidade criada</p>
+                  <p className="font-medium">#{detail.imported_opportunity}</p>
+                </div>
+              )}
             </div>
 
             {/* External link */}
@@ -469,8 +499,13 @@ function OpportunityDetailModal({ detail, loading, onClose, onImport, isBusy }: 
               </div>
             )}
             {detail.status !== 'new' && (
-              <div className="flex justify-end pt-2 border-t">
+              <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button size="sm" variant="outline" onClick={onClose}>Fechar</Button>
+                {detail.imported_opportunity && (
+                  <Button size="sm" onClick={() => navigate(`/opportunities/${detail.imported_opportunity}`)}>
+                    Abrir em Oportunidades
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -499,6 +534,7 @@ function OpportunitiesTab({
   opportunities, busyOpportunityIds, page, totalCount, pageSize,
   onImport, onIgnore, onView, onPageChange,
 }: OpportunitiesTabProps) {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -529,6 +565,10 @@ function OpportunitiesTab({
         </select>
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Fluxo: ver detalhes da oportunidade, confirmar a fonte e clicar em Importar para Oportunidades. Depois ela fica disponivel no modulo Oportunidades para criar proposta.
+      </p>
+
       <div className="space-y-3">
         {filtered.map((opp) => {
           const isExpanded = expanded === opp.id;
@@ -550,18 +590,30 @@ function OpportunitiesTab({
                       </span>
                       {opp.sector && <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" />{opp.sector}</span>}
                       {opp.value && <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{opp.value.toLocaleString('pt-PT')} {opp.currency}</span>}
+                      {deepContentLabel(opp.deepContentStatus) && (
+                        <span>{deepContentLabel(opp.deepContentStatus)}</span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Ver detalhe" onClick={() => onView(opp.id)}>
-                      <Eye className="h-3.5 w-3.5" />
+                  <div className="flex flex-wrap justify-end gap-1 shrink-0">
+                    <Button size="sm" variant="outline" className="h-7 text-xs px-2" title="Ver detalhe" onClick={() => onView(opp.id)}>
+                      <Eye className="h-3.5 w-3.5 mr-1" />Ver
                     </Button>
-                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Abrir fonte" asChild>
-                      <a href={opp.externalUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5" /></a>
-                    </Button>
+                    {opp.externalUrl && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs px-2" title="Abrir fonte" asChild>
+                        <a href={opp.externalUrl} target="_blank" rel="noreferrer">
+                          <ExternalLink className="h-3.5 w-3.5 mr-1" />Fonte
+                        </a>
+                      </Button>
+                    )}
                     {opp.status === 'new' && (
                       <Button size="sm" className="h-7 text-xs px-2" onClick={() => onImport(opp.id)} disabled={isBusy}>
-                        <ArrowRight className="h-3.5 w-3.5 mr-1" />Importar
+                        <ArrowRight className="h-3.5 w-3.5 mr-1" />Importar para Oportunidades
+                      </Button>
+                    )}
+                    {opp.status === 'imported' && opp.importedOpportunityId && (
+                      <Button size="sm" className="h-7 text-xs px-2" onClick={() => navigate(`/opportunities/${opp.importedOpportunityId}`)}>
+                        Abrir em Oportunidades
                       </Button>
                     )}
                     {opp.status === 'new' && (
@@ -836,7 +888,11 @@ export function ScrapingPage() {
     try {
       const result = await apiImportScrapedOpportunity(Number(id));
       setOpportunities((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, status: 'imported' as const } : o))
+        prev.map((o) => (
+          o.id === id
+            ? { ...o, status: 'imported' as const, importedOpportunityId: String(result.opportunity_id) }
+            : o
+        ))
       );
       toast.success('Oportunidade importada', {
         action: {
@@ -886,7 +942,7 @@ export function ScrapingPage() {
           <h1 className="text-2xl font-bold tracking-tight">Web Scraping</h1>
           <p className="text-muted-foreground text-sm">Monitorize fontes de oportunidades internacionais (UN, Banco Mundial, UE, etc.).</p>
         </div>
-        <Button variant="outline" size="sm" onClick={refreshAll} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={() => refreshAll()} disabled={loading}>
           <RefreshCw className="h-4 w-4 mr-1" />
           Atualizar
         </Button>
