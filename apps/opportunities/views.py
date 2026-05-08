@@ -72,6 +72,9 @@ class OpportunityViewSet(viewsets.ModelViewSet):
                 {'detail': 'Nenhum ficheiro fornecido.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        from .tasks import analyze_tor_document, extract_text_from_uploaded_tor
+
+        uploaded_tor_text = extract_text_from_uploaded_tor(file_obj)
         opportunity.tor_document = file_obj
         opportunity.ai_analysis_status = 'queued'
         try:
@@ -88,8 +91,7 @@ class OpportunityViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         # Auto-trigger AI analysis after upload
-        from .tasks import analyze_tor_document
-        analyze_tor_document.delay(opportunity.id)
+        analyze_tor_document.delay(opportunity.id, uploaded_tor_text)
         return Response({
             'detail': 'Ficheiro enviado com sucesso. Analise IA iniciada em background.',
             'ai_analysis_status': 'queued',

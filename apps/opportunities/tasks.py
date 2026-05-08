@@ -88,8 +88,48 @@ def _extract_text_from_document(opportunity: Opportunity) -> str:
     return text
 
 
+def extract_text_from_uploaded_tor(file_obj) -> str:
+    """Extract text from an uploaded ToR file before it leaves the API process."""
+    filename = getattr(file_obj, 'name', '') or ''
+    ext = os.path.splitext(filename)[1].lower()
+    text = ''
+
+    try:
+        file_obj.seek(0)
+        if ext == '.docx':
+            from docx import Document
+            doc = Document(file_obj)
+            text = '\n'.join([para.text for para in doc.paragraphs])
+        elif ext == '.pdf':
+            from PyPDF2 import PdfReader
+            reader = PdfReader(file_obj)
+            parts = []
+            for page in reader.pages:
+                try:
+                    parts.append(page.extract_text() or '')
+                except Exception as e:
+                    logger.warning(f"Error extracting uploaded PDF page: {e}")
+            text = '\n'.join(parts)
+        else:
+            raw = file_obj.read()
+            if isinstance(raw, bytes):
+                text = raw.decode('utf-8', errors='ignore')
+            else:
+                text = str(raw or '')
+    except Exception as e:
+        logger.warning(f"Error extracting text from uploaded ToR {filename}: {e}")
+        text = ''
+    finally:
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
+
+    return text
+
+
 @shared_task
-def analyze_tor_document(opportunity_id: int):
+def analyze_tor_document(opportunity_id: int, tor_text_override: str = ''):
     """
     Analyze an Opportunity's ToR document (or description) using AI.
     Creates/updates ai_summary, Requirement, and Risk objects.
@@ -107,7 +147,7 @@ def analyze_tor_document(opportunity_id: int):
     from apps.ai_services.services import AIServiceFactory
     service = AIServiceFactory.get_service()
 
-    tor_text = _extract_text_from_document(opportunity)
+    tor_text = (tor_text_override or '').strip() or _extract_text_from_document(opportunity)
 
     if not tor_text.strip():
         opportunity.ai_analysis_status = 'failed'

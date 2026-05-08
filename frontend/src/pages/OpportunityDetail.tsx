@@ -36,6 +36,30 @@ function countCosItems(value: unknown): number {
   return value ? 1 : 0;
 }
 
+function humanizeKey(value: string): string {
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatCosValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return 'Sem dados.';
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'Sem dados.';
+    return value
+      .map((item) => `- ${formatCosValue(item).replace(/\n/g, '\n  ')}`)
+      .join('\n');
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return 'Sem dados.';
+    return entries
+      .map(([key, item]) => `${humanizeKey(key)}: ${formatCosValue(item)}`)
+      .join('\n');
+  }
+  return String(value);
+}
+
 export function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -123,6 +147,12 @@ export function OpportunityDetail() {
     financial: 'Financeiros',
   };
 
+  const priorityLabels: Record<string, string> = {
+    mandatory: 'Obrigatório',
+    preferred: 'Preferencial',
+    optional: 'Opcional',
+  };
+
   const aiStatusLabels: Record<string, string> = {
     pending: 'Pendente',
     queued: 'Em fila',
@@ -130,6 +160,17 @@ export function OpportunityDetail() {
     completed: 'Completa',
     failed: 'Falhou',
   };
+
+  const cosSections = [
+    ['Matriz TdR', cosAnalysis?.tor_dissection_matrix],
+    ['Estratégia', cosAnalysis?.proposal_strategy],
+    ['Metodologia', cosAnalysis?.methodology_blueprint],
+    ['Equipa', cosAnalysis?.team_requirements],
+    ['Plano', cosAnalysis?.workplan_requirements],
+    ['Orçamento', cosAnalysis?.budget_requirements],
+    ['Submissão', cosAnalysis?.submission_requirements],
+    ['QC', cosAnalysis?.qc_checklist],
+  ] as const;
 
   return (
     <div className="space-y-6">
@@ -254,22 +295,32 @@ export function OpportunityDetail() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {[
-                    ['Matriz TdR', cosAnalysis.tor_dissection_matrix],
-                    ['Estratégia', cosAnalysis.proposal_strategy],
-                    ['Metodologia', cosAnalysis.methodology_blueprint],
-                    ['Equipa', cosAnalysis.team_requirements],
-                    ['Plano', cosAnalysis.workplan_requirements],
-                    ['Orçamento', cosAnalysis.budget_requirements],
-                    ['Submissão', cosAnalysis.submission_requirements],
-                    ['QC', cosAnalysis.qc_checklist],
-                  ].map(([label, value]) => (
+                  {cosSections.map(([label, value]) => (
                     <div key={label as string} className="rounded-lg border p-3">
                       <p className="text-sm font-medium">{label as string}</p>
                       <p className="text-2xl font-bold mt-1">{countCosItems(value)}</p>
                     </div>
                   ))}
                 </div>
+                <Accordion type="multiple" className="mt-4">
+                  {cosSections.map(([label, value]) => (
+                    <AccordionItem key={label as string} value={label as string}>
+                      <AccordionTrigger>
+                        <div className="flex items-center gap-2">
+                          <span>{label as string}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {countCosItems(value)}
+                          </Badge>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <pre className="whitespace-pre-wrap rounded-lg bg-muted/50 p-3 text-sm leading-relaxed text-muted-foreground">
+                          {formatCosValue(value)}
+                        </pre>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               </CardContent>
             </Card>
           )}
@@ -322,7 +373,7 @@ export function OpportunityDetail() {
                               <div className="flex-1">
                                 <p className="text-sm">{req.description}</p>
                                 <Badge variant="outline" className="mt-1 text-xs">
-                                  {req.priority}
+                                  {priorityLabels[req.priority] || req.priority}
                                 </Badge>
                               </div>
                             </div>
@@ -390,7 +441,7 @@ export function OpportunityDetail() {
                       <tr key={req.id} className="border-b border-border">
                         <td className="p-2">{req.description}</td>
                         <td className="p-2">
-                          <Badge variant="outline">{req.priority}</Badge>
+                          <Badge variant="outline">{priorityLabels[req.priority] || req.priority}</Badge>
                         </td>
                         <td className="p-2">
                           {req.coveredIn || '—'}

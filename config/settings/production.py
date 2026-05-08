@@ -28,6 +28,15 @@ DATABASES = {
 
 import ssl
 
+def _with_celery_ssl_cert_reqs(url):
+    if url and url.startswith('rediss://') and 'ssl_cert_reqs=' not in url:
+        separator = '&' if '?' in url else '?'
+        return f'{url}{separator}ssl_cert_reqs=CERT_NONE'
+    return url
+
+
+CELERY_BROKER_URL = _with_celery_ssl_cert_reqs(CELERY_BROKER_URL)
+CELERY_RESULT_BACKEND = _with_celery_ssl_cert_reqs(CELERY_RESULT_BACKEND)
 CELERY_BROKER_USE_SSL = {'ssl_cert_reqs': ssl.CERT_NONE}
 CELERY_REDIS_BACKEND_USE_SSL = {'ssl_cert_reqs': ssl.CERT_NONE}
 
@@ -40,6 +49,22 @@ CACHES = {
         }
     }
 }
+
+
+def _is_placeholder_env(value):
+    return not value or value == 'placeholder-set-via-dashboard'
+
+
+if _is_placeholder_env(os.getenv('AWS_S3_ENDPOINT_URL')):
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    STORAGES = {
+        'default': {
+            'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        },
+    }
 
 # Sentry
 SENTRY_DSN = os.getenv('SENTRY_DSN')
@@ -54,5 +79,3 @@ if SENTRY_DSN:
         traces_sample_rate=0.5,
         send_default_pii=True,
     )
-
-

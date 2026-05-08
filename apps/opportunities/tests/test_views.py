@@ -104,7 +104,7 @@ class OpportunityViewSetTests(APITestCase):
         opportunity.refresh_from_db()
         self.assertTrue(opportunity.tor_document.name.endswith('.pdf'))
         self.assertEqual(opportunity.ai_analysis_status, 'queued')
-        mock_delay.assert_called_once_with(opportunity.id)
+        mock_delay.assert_called_once_with(opportunity.id, '')
 
     def test_filter_by_status(self):
         OpportunityFactory(status='new')
