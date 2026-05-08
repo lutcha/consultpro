@@ -56,7 +56,14 @@ def _is_placeholder_env(value):
 
 
 if _is_placeholder_env(os.getenv('AWS_S3_ENDPOINT_URL')):
-    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    try:
+        del DEFAULT_FILE_STORAGE
+    except NameError:
+        pass
+    try:
+        del STATICFILES_STORAGE
+    except NameError:
+        pass
     STORAGES = {
         'default': {
             'BACKEND': 'django.core.files.storage.FileSystemStorage',
