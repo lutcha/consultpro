@@ -531,6 +531,22 @@ export async function apiApproveProposalForSubmission(
   );
 }
 
+export async function apiTransitionProposalStatus(
+  proposalId: string,
+  data: { status: string; note?: string }
+): Promise<{
+  status: string;
+  proposal_id: number;
+  proposal_url: string;
+  project_id?: number;
+  project_url?: string;
+}> {
+  return apiRequest(`/proposals/${proposalId}/transition_status/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {
   const token = localStorage.getItem('access_token');
   const response = await fetch(`/api/proposals/${proposalId}/download_word/`, {

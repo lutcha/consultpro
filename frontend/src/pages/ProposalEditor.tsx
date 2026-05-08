@@ -35,9 +35,70 @@ import {
   apiDownloadProposalPdf,
   apiCreateProposalSection,
   apiGenerateProposalSectionSuggestion,
+  apiTransitionProposalStatus,
   apiUploadProposalLogo,
 } from '@/lib/api';
 import { normalizeProposalHtml } from '@/lib/htmlContent';
+import { StatusBadge } from '@/components/shared/StatusBadge';
+import type { ProposalStatus } from '@/types';
+
+const proposalPipeline: { status: ProposalStatus; label: string }[] = [
+  { status: 'draft', label: 'Draft' },
+  { status: 'qc_check', label: 'QC' },
+  { status: 'ready_for_submission', label: 'Pronta' },
+  { status: 'submitted', label: 'Submetida' },
+  { status: 'under_evaluation', label: 'Avaliação' },
+  { status: 'shortlisted', label: 'Shortlist' },
+  { status: 'clarifications_requested', label: 'Clarificações' },
+  { status: 'bafo', label: 'BAFO' },
+  { status: 'awarded', label: 'Adjudicada' },
+  { status: 'contract_negotiation', label: 'Contrato' },
+  { status: 'contract_signed', label: 'Assinado' },
+  { status: 'project_initiation', label: 'Projeto' },
+];
+
+const proposalTransitions: Partial<
+  Record<ProposalStatus, { status: ProposalStatus; label: string; note: string }[]>
+> = {
+  ready_for_submission: [
+    { status: 'submitted', label: 'Registar submissão', note: 'Proposta submetida ao cliente/concurso.' },
+  ],
+  submitted: [
+    { status: 'under_evaluation', label: 'Marcar em avaliação', note: 'Cliente/concurso iniciou avaliação.' },
+  ],
+  under_evaluation: [
+    { status: 'shortlisted', label: 'Shortlisted', note: 'Proposta selecionada para fase seguinte.' },
+    { status: 'clarifications_requested', label: 'Clarificações pedidas', note: 'Cliente pediu clarificações.' },
+    { status: 'awarded', label: 'Adjudicada', note: 'Proposta selecionada como vencedora.' },
+    { status: 'lost', label: 'Perdida', note: 'Proposta perdeu para outro concorrente.' },
+    { status: 'rejected', label: 'Rejeitada', note: 'Proposta rejeitada pelo cliente/concurso.' },
+  ],
+  shortlisted: [
+    { status: 'clarifications_requested', label: 'Clarificações', note: 'Cliente pediu clarificações após shortlist.' },
+    { status: 'bafo', label: 'BAFO', note: 'Cliente pediu Best And Final Offer.' },
+    { status: 'awarded', label: 'Adjudicada', note: 'Proposta selecionada como vencedora.' },
+    { status: 'lost', label: 'Perdida', note: 'Proposta perdida após shortlist.' },
+  ],
+  clarifications_requested: [
+    { status: 'under_evaluation', label: 'Voltar à avaliação', note: 'Clarificações respondidas.' },
+    { status: 'bafo', label: 'BAFO', note: 'Cliente pediu BAFO após clarificações.' },
+    { status: 'awarded', label: 'Adjudicada', note: 'Proposta selecionada após clarificações.' },
+    { status: 'lost', label: 'Perdida', note: 'Proposta perdida após clarificações.' },
+  ],
+  bafo: [
+    { status: 'awarded', label: 'Adjudicada', note: 'BAFO aceite e proposta vencedora.' },
+    { status: 'lost', label: 'Perdida', note: 'BAFO não venceu.' },
+  ],
+  awarded: [
+    { status: 'contract_negotiation', label: 'Iniciar negociação', note: 'Iniciada negociação contratual.' },
+  ],
+  contract_negotiation: [
+    { status: 'contract_signed', label: 'Contrato assinado', note: 'Contrato assinado por ambas as partes.' },
+  ],
+  contract_signed: [
+    { status: 'project_initiation', label: 'Iniciar projeto', note: 'Handover concluído e projeto iniciado.' },
+  ],
+};
 
 function escapeHtml(value: string) {
   return value
@@ -194,7 +255,7 @@ function aiMarkdownToHtml(markdown: string) {
 export function ProposalEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { selectedProposal, selectProposal, updateSection, autoSaveStatus } =
+  const { selectedProposal, selectProposal, updateSection, updateStatus, autoSaveStatus } =
     useProposalStore();
   const [activeSectionId, setActiveSectionId] = useState<string>('');
   const [editorContent, setEditorContent] = useState('');
@@ -204,6 +265,8 @@ export function ProposalEditor() {
   const [newMember, setNewMember] = useState('');
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [isAddingSection, setIsAddingSection] = useState(false);
+  const [transitioningStatus, setTransitioningStatus] = useState<ProposalStatus | null>(null);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [logos, setLogos] = useState<{
     proponent?: string;
     client?: string;
@@ -357,6 +420,34 @@ export function ProposalEditor() {
       alert(err instanceof Error ? err.message : 'Erro ao gerar sugestao IA');
     }
   };
+
+  const handleProposalTransition = async (
+    nextStatus: ProposalStatus,
+    note: string
+  ) => {
+    if (!selectedProposal || transitioningStatus) return;
+    setPipelineError(null);
+    setTransitioningStatus(nextStatus);
+    try {
+      const result = await apiTransitionProposalStatus(selectedProposal.id, {
+        status: nextStatus,
+        note,
+      });
+      updateStatus(selectedProposal.id, result.status as ProposalStatus);
+      if (result.project_url) {
+        navigate(result.project_url);
+        return;
+      }
+      await selectProposal(selectedProposal.id);
+    } catch (err) {
+      setPipelineError(
+        err instanceof Error ? err.message : 'Erro ao atualizar estado da proposta'
+      );
+    } finally {
+      setTransitioningStatus(null);
+    }
+  };
+
   const activeSection = selectedProposal?.sections.find(
     (s) => s.id === activeSectionId
   );
@@ -437,6 +528,7 @@ export function ProposalEditor() {
             <h1 className="text-xl font-bold">{selectedProposal.title}</h1>
             <div className="flex items-center gap-2 mt-1">
               <Badge variant="outline">v{selectedProposal.version}</Badge>
+              <StatusBadge status={selectedProposal.status} size="sm" />
               <Badge
                 variant={autoSaveStatus === 'saved' ? 'default' : 'secondary'}
                 className="text-xs"
@@ -479,8 +571,72 @@ export function ProposalEditor() {
         </div>
       </div>
 
+      {/* Proposal Pipeline */}
+      <div className="mt-3 rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex items-center gap-2">
+              <p className="text-sm font-semibold">Pipeline da Proposta</p>
+              <StatusBadge status={selectedProposal.status} size="sm" />
+            </div>
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              {proposalPipeline.map((step, index) => {
+                const currentIndex = proposalPipeline.findIndex(
+                  (item) => item.status === selectedProposal.status
+                );
+                const isCurrent = step.status === selectedProposal.status;
+                const isDone = currentIndex >= 0 && index < currentIndex;
+                return (
+                  <div
+                    key={step.status}
+                    className={`shrink-0 rounded-md border px-2 py-1 text-xs ${
+                      isCurrent
+                        ? 'border-primary bg-primary/10 text-primary font-medium'
+                        : isDone
+                        ? 'border-green-200 bg-green-50 text-green-700'
+                        : 'border-border bg-muted/40 text-muted-foreground'
+                    }`}
+                  >
+                    {step.label}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {selectedProposal.status === 'draft' || selectedProposal.status === 'in_review' ? (
+              <Button size="sm" onClick={() => navigate(`/proposals/${id}/qc`)}>
+                <Send className="h-4 w-4 mr-2" />
+                Submeter para QC
+              </Button>
+            ) : selectedProposal.status === 'qc_check' ? (
+              <Button size="sm" onClick={() => navigate(`/proposals/${id}/qc`)}>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Concluir QC
+              </Button>
+            ) : (
+              (proposalTransitions[selectedProposal.status] || []).map((action) => (
+                <Button
+                  key={action.status}
+                  size="sm"
+                  variant={action.status === 'lost' || action.status === 'rejected' ? 'outline' : 'default'}
+                  disabled={transitioningStatus !== null}
+                  onClick={() => handleProposalTransition(action.status, action.note)}
+                >
+                  {transitioningStatus === action.status ? 'A atualizar...' : action.label}
+                </Button>
+              ))
+            )}
+          </div>
+        </div>
+        {pipelineError && (
+          <p className="mt-2 text-sm text-error">{pipelineError}</p>
+        )}
+      </div>
+
       {/* Main Editor Area */}
-      <div className="flex-1 flex overflow-hidden mt-4">
+      <div className="flex-1 flex overflow-hidden mt-3">
         {/* Left Sidebar - Sections & Logos */}
         <div className="w-64 flex-shrink-0 flex flex-col border-r border-border overflow-auto">
           {/* Logos Section */}

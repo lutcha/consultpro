@@ -130,6 +130,10 @@ export const useProposalStore = create<ProposalState>((set, _get) => ({
       proposals: state.proposals.map((prop) =>
         prop.id === id ? { ...prop, status, updatedAt: new Date() } : prop
       ),
+      selectedProposal:
+        state.selectedProposal?.id === id
+          ? { ...state.selectedProposal, status, updatedAt: new Date() }
+          : state.selectedProposal,
     }));
   },
 
