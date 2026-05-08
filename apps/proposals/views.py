@@ -59,6 +59,20 @@ def _extract_cos_value(opportunity, *keys):
     return ''
 
 
+def _format_context_value(value):
+    if not value:
+        return ''
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return '\n'.join(f"- {_format_context_value(item)}" for item in value if item)
+    if isinstance(value, dict):
+        return '\n'.join(
+            f"{key}: {_format_context_value(item)}" for key, item in value.items() if item
+        )
+    return str(value)
+
+
 def _default_section_content(proposal, section_type):
     opportunity = proposal.opportunity
     if section_type == 'cover':
@@ -85,6 +99,38 @@ def _default_section_content(proposal, section_type):
         budget = _extract_cos_value(opportunity, 'budget_requirements')
         return f"<p>{budget}</p>" if budget else ''
     return ''
+
+
+def _build_proposal_ai_context(proposal):
+    opportunity = proposal.opportunity
+    context_parts = [
+        f"Titulo da proposta: {proposal.title}",
+        f"Secao/Oportunidade: {opportunity.title}",
+        f"Cliente: {opportunity.client}",
+        f"Pais: {opportunity.country}",
+        f"Setor: {opportunity.sector}",
+        f"Valor: {opportunity.value} {opportunity.currency}",
+        f"Prazo: {opportunity.deadline.date() if opportunity.deadline else 'N/A'}",
+        f"Resumo IA da oportunidade: {opportunity.ai_summary or ''}",
+        f"Descricao/TdR: {opportunity.description or ''}",
+    ]
+    cos_analysis = (opportunity.ai_extraction or {}).get('cos_analysis') or {}
+    for key in (
+        'tor_dissection_matrix',
+        'strategic_opportunities',
+        'proposal_strategy',
+        'methodology_blueprint',
+        'team_requirements',
+        'workplan_requirements',
+        'budget_requirements',
+        'submission_requirements',
+        'qc_checklist',
+    ):
+        formatted_value = _format_context_value(cos_analysis.get(key))
+        if formatted_value:
+            context_parts.append(f"{key}:\n{formatted_value}")
+
+    return '\n\n'.join(part for part in context_parts if part).strip()[:12000]
 
 
 def ensure_default_sections(proposal):
@@ -214,10 +260,16 @@ class ProposalViewSet(viewsets.ModelViewSet):
     def ai_suggest(self, request, pk=None):
         proposal = self.get_object()
         section_id = request.data.get('section_id')
-        action_type = request.data.get('action')
+        action_type = str(request.data.get('action') or '').replace('-', '_')
         if not section_id or not action_type:
             return Response(
                 {'detail': 'section_id and action are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        valid_actions = {choice[0] for choice in AISuggestion.ACTION_CHOICES}
+        if action_type not in valid_actions:
+            return Response(
+                {'detail': 'Invalid AI action.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
@@ -231,9 +283,18 @@ class ProposalViewSet(viewsets.ModelViewSet):
         # AI service integration
         from apps.ai_services.services import AIServiceFactory
         service = AIServiceFactory.get_service()
+        current_content = request.data.get('current_content', section.content or '')
+        proposal_context = _build_proposal_ai_context(proposal)
+        prompt_content = (
+            f"Proposal context:\n{proposal_context}\n\n"
+            f"Target section title: {section.title}\n"
+            f"Target section type: {section.section_type}\n"
+            f"Current section content:\n{current_content}\n\n"
+            "Write in the proposal language and return only the suggested section text."
+        )
         generated_content = service.generate_suggestion(
-            section_type=section.section_type,
-            content=section.content or '',
+            section_type=section.title or section.section_type,
+            content=prompt_content,
             action=action_type,
         )
         

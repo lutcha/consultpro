@@ -512,6 +512,16 @@ export async function apiCreateProposalSection(
   });
 }
 
+export async function apiGenerateProposalSectionSuggestion(
+  proposalId: string,
+  data: { section_id: string; action: string; current_content?: string }
+): Promise<ApiAISuggestion> {
+  return apiRequest<ApiAISuggestion>(`/proposals/${proposalId}/ai_suggest/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {
   const token = localStorage.getItem('access_token');
   const response = await fetch(`/api/proposals/${proposalId}/download_word/`, {

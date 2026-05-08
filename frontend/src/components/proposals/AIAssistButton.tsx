@@ -13,15 +13,27 @@ import {
 
 interface AIAssistButtonProps {
   section: string;
-  onApply: (action: string) => void;
+  onApply: (action: string) => Promise<void> | void;
 }
 
 const suggestions = [
+  {
+    id: 'draft_from_context',
+    label: 'Gerar rascunho',
+    description: 'Cria texto com base na oportunidade e no COS',
+    icon: Sparkles,
+  },
   {
     id: 'expand',
     label: 'Expandir parágrafo',
     description: 'Desenvolve o conteúdo com mais detalhes',
     icon: Expand,
+  },
+  {
+    id: 'improve',
+    label: 'Melhorar texto',
+    description: 'Reescreve com mais clareza e estrutura',
+    icon: Type,
   },
   {
     id: 'summarize',
@@ -49,11 +61,12 @@ export function AIAssistButton({ section, onApply }: AIAssistButtonProps) {
 
   const handleApply = async (action: string) => {
     setIsApplying(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    onApply(action);
-    setIsApplying(false);
-    setOpen(false);
+    try {
+      await onApply(action);
+      setOpen(false);
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   return (

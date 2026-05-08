@@ -34,6 +34,7 @@ import {
   apiDownloadProposalWord,
   apiDownloadProposalPdf,
   apiCreateProposalSection,
+  apiGenerateProposalSectionSuggestion,
   apiUploadProposalLogo,
 } from '@/lib/api';
 
@@ -176,23 +177,32 @@ export function ProposalEditor() {
     }
   };
 
-  const handleAISuggestion = (action: string) => {
-    const suggestions: Record<string, string> = {
-      expand:
-        editorContent +
-        '<p><br></p><p><em>[Conteúdo expandido pela IA com mais detalhes e contexto relevante para esta secção.]</em></p>',
-      summarize:
-        '<p><em>[Versão resumida do texto original, mantendo os pontos-chave e eliminando redundâncias.]</em></p>',
-      'tone-formal':
-        '<p><em>[Versão com tom mais formal e profissional do texto original, adequada para submissão a organismos internacionais.]</em></p>',
-      'translate-en':
-        '<p><em>[English translation of the original text, maintaining technical terminology and professional tone.]</em></p>',
-    };
-    const newContent = suggestions[action] || editorContent;
-    setEditorContent(newContent);
-    handleContentChange(newContent);
-  };
+  const handleAISuggestion = async (action: string) => {
+    if (!selectedProposal || !activeSectionId) return;
+    try {
+      const suggestion = await apiGenerateProposalSectionSuggestion(selectedProposal.id, {
+        section_id: activeSectionId,
+        action,
+        current_content: editorContent,
+      });
+      if (!suggestion.generated_content) {
+        alert('A IA nao devolveu conteudo para esta secao.');
+        return;
+      }
 
+      const generatedContent = suggestion.generated_content.replace(/\n/g, '<br />');
+      const shouldAppend = action === 'draft_from_context' && editorContent.trim();
+      const nextContent = shouldAppend
+        ? `${editorContent}<p><br></p><p>${generatedContent}</p>`
+        : `<p>${generatedContent}</p>`;
+
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      setEditorContent(nextContent);
+      await updateSection(selectedProposal.id, activeSectionId, nextContent);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao gerar sugestao IA');
+    }
+  };
   const activeSection = selectedProposal?.sections.find(
     (s) => s.id === activeSectionId
   );

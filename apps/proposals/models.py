@@ -121,14 +121,16 @@ class Comment(models.Model):
 
 class AISuggestion(models.Model):
     ACTION_CHOICES = [
+        ('draft_from_context', 'Gerar Rascunho'),
         ('expand', 'Expandir'),
+        ('improve', 'Melhorar'),
         ('summarize', 'Resumir'),
         ('tone_formal', 'Ajustar Tom'),
         ('translate_en', 'Traduzir EN'),
     ]
 
     section = models.ForeignKey(ProposalSection, on_delete=models.CASCADE, related_name='ai_suggestions')
-    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES)
     description = models.TextField()
     generated_content = models.TextField(blank=True)
     applied = models.BooleanField(default=False)
