@@ -407,7 +407,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
     def upload_cv(self, request, pk=None, member_id=None):
         proposal = self.get_object()
         try:
-            member = proposal.proposalteammember_set.get(pk=member_id)
+            member = proposal.team_members_detail.get(pk=member_id)
         except ProposalTeamMember.DoesNotExist:
             return Response(
                 {'detail': 'Team member not found.'},
@@ -433,7 +433,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
     def remove_team_member(self, request, pk=None, member_id=None):
         proposal = self.get_object()
         try:
-            member = proposal.proposalteammember_set.get(pk=member_id)
+            member = proposal.team_members_detail.get(pk=member_id)
         except ProposalTeamMember.DoesNotExist:
             return Response(
                 {'detail': 'Team member not found.'},

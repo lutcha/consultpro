@@ -106,7 +106,7 @@ export function RichTextEditor({ value, onChange, placeholder: _placeholder, cla
         suppressContentEditableWarning
         onInput={handleInput}
         onBlur={handleInput}
-        className="flex-1 p-4 min-h-[300px] outline-none prose prose-sm max-w-none dark:prose-invert"
+        className="flex-1 p-4 min-h-[300px] outline-none overflow-x-auto prose prose-sm max-w-none dark:prose-invert"
         style={{ minHeight: '300px' }}
       />
     </div>

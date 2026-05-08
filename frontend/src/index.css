@@ -161,6 +161,22 @@
   .table-row-hover {
     @apply transition-colors hover:bg-muted/50;
   }
+
+  .proposal-ai-table {
+    @apply my-4 w-full border-collapse text-sm;
+  }
+
+  .proposal-ai-table th {
+    @apply border border-border bg-muted px-3 py-2 text-left font-semibold text-foreground;
+  }
+
+  .proposal-ai-table td {
+    @apply border border-border px-3 py-2 align-top;
+  }
+
+  .proposal-ai-table tbody tr:nth-child(even) {
+    @apply bg-muted/30;
+  }
   
   /* Scrollbar styling */
   .custom-scrollbar::-webkit-scrollbar {

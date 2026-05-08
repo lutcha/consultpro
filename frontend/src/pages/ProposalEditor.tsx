@@ -92,7 +92,7 @@ function renderMarkdownTable(rows: string[]) {
     })
     .join('');
 
-  return `<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+  return `<table class="proposal-ai-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
 }
 
 function normalizeAiMarkdown(markdown: string) {

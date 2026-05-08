@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.proposals.document_generator import generate_proposal_docx, generate_proposal_pdf
 from apps.proposals.models import Budget, Proposal
 from apps.proposals.tests.factories import (
     BudgetFactory,
@@ -221,3 +222,22 @@ class TestProposalViewSet:
         assert response.status_code == status.HTTP_200_OK
         proposal.budget.refresh_from_db()
         assert proposal.budget.total == 2000.00
+
+    def test_document_exports_render_html_tables(self):
+        proposal = ProposalFactory()
+        ProposalSectionFactory(
+            proposal=proposal,
+            section_type='custom',
+            title='Plano de Trabalho',
+            content=(
+                '<h2>Plano</h2>'
+                '<table class="proposal-ai-table">'
+                '<thead><tr><th>Fase</th><th>Periodo</th></tr></thead>'
+                '<tbody><tr><td>Diagnostico</td><td>Mes 1</td></tr></tbody>'
+                '</table>'
+                '<p>Fim.</p>'
+            ),
+        )
+
+        assert len(generate_proposal_docx(proposal)) > 0
+        assert len(generate_proposal_pdf(proposal)) > 0
