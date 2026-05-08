@@ -37,6 +37,7 @@ import {
   apiGenerateProposalSectionSuggestion,
   apiUploadProposalLogo,
 } from '@/lib/api';
+import { normalizeProposalHtml } from '@/lib/htmlContent';
 
 function escapeHtml(value: string) {
   return value
@@ -108,7 +109,12 @@ function normalizeAiMarkdown(markdown: string) {
 }
 
 function aiMarkdownToHtml(markdown: string) {
-  const lines = normalizeAiMarkdown(markdown)
+  const normalizedInput = normalizeProposalHtml(markdown);
+  if (/<\/?(p|div|strong|em|h[1-6]|ul|ol|li|table|thead|tbody|tr|th|td)(\s|>|\/)/i.test(normalizedInput)) {
+    return normalizeProposalHtml(normalizedInput);
+  }
+
+  const lines = normalizeAiMarkdown(normalizedInput)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .split('\n');
@@ -339,8 +345,9 @@ export function ProposalEditor() {
 
       const generatedContent = aiMarkdownToHtml(suggestion.generated_content);
       const shouldAppend = action === 'draft_from_context' && editorContent.trim();
+      const currentContent = normalizeProposalHtml(editorContent);
       const nextContent = shouldAppend
-        ? `${editorContent}<p><br></p>${generatedContent}`
+        ? `${currentContent}<p><br></p>${generatedContent}`
         : generatedContent;
 
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);

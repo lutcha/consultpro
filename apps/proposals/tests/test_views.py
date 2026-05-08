@@ -241,3 +241,21 @@ class TestProposalViewSet:
 
         assert len(generate_proposal_docx(proposal)) > 0
         assert len(generate_proposal_pdf(proposal)) > 0
+
+    def test_document_exports_decode_escaped_html_tables(self):
+        proposal = ProposalFactory()
+        ProposalSectionFactory(
+            proposal=proposal,
+            section_type='custom',
+            title='Plano de Trabalho',
+            content=(
+                '&lt;strong&gt;Plano&lt;/strong&gt;'
+                '&lt;table class=&quot;proposal-ai-table&quot;&gt;'
+                '&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Fase&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;'
+                '&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;Diagnostico&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;'
+                '&lt;/table&gt;'
+            ),
+        )
+
+        assert len(generate_proposal_docx(proposal)) > 0
+        assert len(generate_proposal_pdf(proposal)) > 0

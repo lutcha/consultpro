@@ -7,6 +7,7 @@ Supports placeholders for company and client logos.
 
 import io
 import os
+import html as html_lib
 from datetime import date
 from typing import Optional
 
@@ -70,7 +71,10 @@ def _html_text(node) -> str:
 
 
 def _iter_html_blocks(html: str):
-    soup = BeautifulSoup(html or '', 'html.parser')
+    html = html or ''
+    if any(marker in html for marker in ('&lt;table', '&lt;strong', '&lt;p', '&lt;h', '&lt;ul', '&lt;ol')):
+        html = html_lib.unescape(html)
+    soup = BeautifulSoup(html, 'html.parser')
     source = soup.body if soup.body else soup
     for child in source.children:
         if isinstance(child, NavigableString):

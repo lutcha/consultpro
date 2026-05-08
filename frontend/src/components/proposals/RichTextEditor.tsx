@@ -7,6 +7,7 @@ import { Bold, Italic, Underline, List, ListOrdered, Heading1, Heading2, Quote, 
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { normalizeProposalHtml } from '@/lib/htmlContent';
 
 interface RichTextEditorProps {
   value: string;
@@ -21,7 +22,7 @@ export function RichTextEditor({ value, onChange, placeholder: _placeholder, cla
 
   useEffect(() => {
     const editor = editorRef.current;
-    const nextValue = value || '';
+    const nextValue = normalizeProposalHtml(value || '');
     if (!editor || lastSyncedValueRef.current === nextValue) return;
 
     if (document.activeElement !== editor) {
@@ -32,7 +33,7 @@ export function RichTextEditor({ value, onChange, placeholder: _placeholder, cla
 
   const handleInput = useCallback(() => {
     if (editorRef.current) {
-      const nextValue = editorRef.current.innerHTML;
+      const nextValue = normalizeProposalHtml(editorRef.current.innerHTML);
       lastSyncedValueRef.current = nextValue;
       onChange(nextValue);
     }

@@ -39,6 +39,7 @@ import type {
   ApiActivity,
   MeResponse,
 } from './api';
+import { normalizeProposalHtml } from './htmlContent';
 
 function toDate(value: string | null): Date {
   return value ? new Date(value) : new Date();
@@ -193,7 +194,7 @@ export function mapApiProposalSection(
     id: String(section.id),
     type: (section.type || section.section_type) as ProposalSection['type'],
     title: section.title,
-    content: section.content,
+    content: normalizeProposalHtml(section.content || ''),
     order: section.order,
     isComplete: section.is_complete,
     comments: (section.comments || []).map(mapApiComment),
