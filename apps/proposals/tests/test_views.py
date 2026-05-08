@@ -307,3 +307,31 @@ class TestProposalViewSet:
             for row in table.rows
             for cell in row.cells
         )
+
+    def test_document_exports_rebuild_linearized_workplan_table(self):
+        proposal = ProposalFactory()
+        ProposalSectionFactory(
+            proposal=proposal,
+            section_type='workplan',
+            title='Plano de Trabalho',
+            content=(
+                '<p>Fase</p><p>Periodo</p><p>Atividades Principais</p><p>Entregaveis</p>'
+                '<p>1. Diagnostico Inicial</p><p>Mes 1</p>'
+                '<p>Reunioes individuais</p><p>Diagnostico inicial</p>'
+                '<p>2. Planeamento</p><p>Mes 1</p>'
+                '<p>Definicao de metas</p><p>Plano individual</p>'
+            ),
+        )
+
+        document = Document(io.BytesIO(generate_proposal_docx(proposal)))
+
+        assert any(
+            [cell.text for cell in row.cells] == [
+                '1. Diagnostico Inicial',
+                'Mes 1',
+                'Reunioes individuais',
+                'Diagnostico inicial',
+            ]
+            for table in document.tables
+            for row in table.rows
+        )

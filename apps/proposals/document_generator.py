@@ -33,6 +33,12 @@ from reportlab.pdfbase.ttfonts import TTFont
 from apps.proposals.models import Proposal
 
 
+TABLE_HEADER_MARKERS = {
+    ('Fase', 'Periodo', 'Atividades Principais', 'Entregaveis'),
+    ('Fase', 'Período', 'Atividades Principais', 'Entregáveis'),
+}
+
+
 def _set_cell_shading(cell, fill_color: str):
     """Set cell background color."""
     shading_elm = OxmlElement('w:shd')
@@ -123,8 +129,42 @@ def _html_table_rows(table_node: Tag) -> list[list[str]]:
     return rows
 
 
-def _add_html_table_docx(doc: Document, table_node: Tag):
-    rows = _html_table_rows(table_node)
+def _is_linearized_table_start(blocks: list[tuple[str, object]], index: int) -> tuple[str, ...] | None:
+    values = []
+    for _, node in blocks[index:index + 4]:
+        values.append(_html_text(node))
+    normalized = tuple(values)
+    for markers in TABLE_HEADER_MARKERS:
+        if normalized == markers:
+            return markers
+    return None
+
+
+def _linearized_workplan_rows(blocks: list[tuple[str, object]], start_index: int) -> tuple[list[list[str]], int]:
+    rows = [list(_is_linearized_table_start(blocks, start_index) or [])]
+    index = start_index + 4
+    current: list[str] = []
+
+    while index < len(blocks):
+        text = _html_text(blocks[index][1])
+        if not text:
+            index += 1
+            continue
+        if current and text[:2].isdigit() and text[1:3] in {'. ', ') '}:
+            break
+        current.append(text)
+        if len(current) == 4:
+            rows.append(current)
+            current = []
+        index += 1
+
+    if current:
+        rows.append(current + [''] * (4 - len(current)))
+
+    return rows, index
+
+
+def _add_table_rows_docx(doc: Document, rows: list[list[str]]):
     if not rows:
         return
 
@@ -145,8 +185,22 @@ def _add_html_table_docx(doc: Document, table_node: Tag):
                 _set_cell_shading(row_cells[cell_index], 'E2E8F0')
 
 
+def _add_html_table_docx(doc: Document, table_node: Tag):
+    rows = _html_table_rows(table_node)
+    _add_table_rows_docx(doc, rows)
+
+
 def _add_html_content_docx(doc: Document, html: str):
-    for tag_name, node in _iter_html_blocks(html):
+    blocks = list(_iter_html_blocks(html))
+    index = 0
+    while index < len(blocks):
+        tag_name, node = blocks[index]
+        linearized_headers = _is_linearized_table_start(blocks, index)
+        if linearized_headers:
+            rows, index = _linearized_workplan_rows(blocks, index)
+            _add_table_rows_docx(doc, rows)
+            doc.add_paragraph()
+            continue
         if tag_name == 'table' and isinstance(node, Tag):
             _add_html_table_docx(doc, node)
             doc.add_paragraph()
@@ -162,10 +216,31 @@ def _add_html_content_docx(doc: Document, html: str):
             text = _html_text(node)
             if text:
                 _add_paragraph(doc, text)
+        index += 1
 
 
 def _add_html_content_pdf(story: list, html: str, normal_style, heading2_style):
-    for tag_name, node in _iter_html_blocks(html):
+    blocks = list(_iter_html_blocks(html))
+    index = 0
+    while index < len(blocks):
+        tag_name, node = blocks[index]
+        linearized_headers = _is_linearized_table_start(blocks, index)
+        if linearized_headers:
+            raw_rows, index = _linearized_workplan_rows(blocks, index)
+            rows = [[Paragraph(cell, normal_style) for cell in row] for row in raw_rows]
+            table = Table(rows, repeatRows=1)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E2E8F0')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1A365D')),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#CBD5E1')),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 0.25*cm))
+            continue
         if tag_name == 'table' and isinstance(node, Tag):
             rows = [
                 [Paragraph(cell, normal_style) for cell in row]
@@ -197,6 +272,7 @@ def _add_html_content_pdf(story: list, html: str, normal_style, heading2_style):
             text = _html_text(node)
             if text:
                 story.append(Paragraph(text, normal_style))
+        index += 1
 
 
 def generate_proposal_docx(proposal: Proposal, output_path: Optional[str] = None) -> bytes:
