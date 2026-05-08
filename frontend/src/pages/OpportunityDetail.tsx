@@ -50,6 +50,17 @@ export function OpportunityDetail() {
     }
   }, [id]);
 
+  useEffect(() => {
+    if (!id || !selectedOpportunity) return;
+    if (!['queued', 'processing'].includes(selectedOpportunity.aiAnalysisStatus || '')) return;
+
+    const interval = window.setInterval(() => {
+      selectOpportunity(id, { silent: true });
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [id, selectedOpportunity?.aiAnalysisStatus, selectOpportunity]);
+
   const opportunity = selectedOpportunity;
   const cosAnalysis = opportunity?.aiExtraction?.cos_analysis as Record<string, unknown> | undefined;
   const hasCosAnalysis = Boolean(cosAnalysis && Object.keys(cosAnalysis).length > 0);
@@ -87,7 +98,7 @@ export function OpportunityDetail() {
     try {
       await apiAnalyzeOpportunityToR(opportunity.id);
       toast.success('Analise IA iniciada');
-      await selectOpportunity(opportunity.id);
+      await selectOpportunity(opportunity.id, { silent: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao iniciar analise IA';
       toast.error(message);
