@@ -2,7 +2,7 @@
 // QUALITY CHECK PAGE
 // ============================================
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -57,18 +57,34 @@ const statusLabels = {
 export function QualityCheck() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [isApproving, setIsApproving] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
   const { qcState, isRunning, runQC, applySuggestion, ignoreSuggestion, canSubmit } =
     useQCStore();
   const { selectedProposal, selectProposal } = useProposalStore();
 
   const handleApprove = async () => {
-    if (!id || !canSubmit()) return;
+    setApproveError(null);
+    if (!id) {
+      setApproveError('Nao foi possivel identificar a proposta.');
+      return;
+    }
+    if (!canSubmit()) {
+      setApproveError('A proposta ainda nao cumpre os criterios minimos para submissao.');
+      return;
+    }
+
+    setIsApproving(true);
     try {
       const result = await apiApproveProposalForSubmission(id);
       toast.success('Proposta aprovada. Projeto criado.');
-      navigate(result.project_url || `/projects/${result.project_id}`);
+      navigate(result.project_url || `/projects/${result.project_id}`, { replace: true });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Erro ao aprovar proposta');
+      const message = error instanceof Error ? error.message : 'Erro ao aprovar proposta';
+      setApproveError(message);
+      toast.error(message);
+    } finally {
+      setIsApproving(false);
     }
   };
 
@@ -130,12 +146,23 @@ export function QualityCheck() {
             <Download className="h-4 w-4 mr-2" />
             Exportar Report
           </Button>
-          <Button disabled={!canSubmit()} onClick={handleApprove}>
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Aprovar
+          <Button disabled={!canSubmit() || isApproving} onClick={handleApprove}>
+            {isApproving ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CheckCircle className="h-4 w-4 mr-2" />
+            )}
+            {isApproving ? 'A aprovar...' : 'Aprovar'}
           </Button>
         </div>
       </div>
+
+      {approveError && (
+        <div className="p-3 bg-error/10 border border-error/20 rounded-lg flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-error" />
+          <p className="text-sm text-error">{approveError}</p>
+        </div>
+      )}
 
       {/* Overall Score */}
       <Card>
@@ -333,8 +360,12 @@ export function QualityCheck() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Re-run QC
           </Button>
-          <Button disabled={!canSubmit()} onClick={handleApprove}>
-            <CheckCircle className="h-4 w-4 mr-2" />
+          <Button disabled={!canSubmit() || isApproving} onClick={handleApprove}>
+            {isApproving ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CheckCircle className="h-4 w-4 mr-2" />
+            )}
             Aprovar para Submissão
           </Button>
         </div>

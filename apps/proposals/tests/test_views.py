@@ -195,6 +195,21 @@ class TestProposalViewSet:
         assert second_response.status_code == status.HTTP_200_OK
         assert Project.objects.filter(proposal=proposal).count() == 1
 
+    def test_manager_can_approve_proposal_created_by_another_user(self, api_client):
+        owner = UserFactory(role='consultant')
+        manager = UserFactory(role='manager')
+        proposal = ProposalFactory(created_by=owner, status='qc_check')
+        api_client.force_authenticate(user=manager)
+
+        url = reverse('proposal-approve-for-submission', kwargs={'pk': proposal.pk})
+        response = api_client.post(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        proposal.refresh_from_db()
+        assert proposal.status == 'approved'
+        assert response.data['project_id'] == proposal.project.id
+        assert proposal.project.manager == manager
+
     def test_team_action(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user)
