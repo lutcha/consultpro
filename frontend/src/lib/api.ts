@@ -1035,8 +1035,18 @@ export async function apiGetScrapedOpportunity(id: number): Promise<ApiScrapedOp
   return apiRequest<ApiScrapedOpportunityDetail>(`/scraping/opportunities/${id}/`);
 }
 
-export async function apiImportScrapedOpportunity(id: number): Promise<{ opportunity_id: number; status: string }> {
-  return apiRequest<{ opportunity_id: number; status: string }>(`/scraping/opportunities/${id}/import_opportunity/`, {
+export async function apiImportScrapedOpportunity(id: number): Promise<{
+  opportunity_id: number;
+  opportunity_url?: string;
+  status: string;
+  created?: boolean;
+}> {
+  return apiRequest<{
+    opportunity_id: number;
+    opportunity_url?: string;
+    status: string;
+    created?: boolean;
+  }>(`/scraping/opportunities/${id}/import_opportunity/`, {
     method: 'POST',
   });
 }

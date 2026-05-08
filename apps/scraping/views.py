@@ -121,6 +121,7 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
         scraped_opp = self.get_object()
         
         from apps.opportunities.models import Opportunity
+        from apps.opportunities.tasks import _sync_ai_requirements
 
         description = scraped_opp.description
         if scraped_opp.deep_content_text:
@@ -128,6 +129,44 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
                 f"{description}\n\n--- Conteudo extraido da fonte/TdR ---\n"
                 f"{scraped_opp.deep_content_text}"
             ).strip()
+
+        if scraped_opp.imported_opportunity_id:
+            return Response({
+                'opportunity_id': scraped_opp.imported_opportunity_id,
+                'opportunity_url': f'/opportunities/{scraped_opp.imported_opportunity_id}',
+                'status': 'imported',
+                'created': False,
+            })
+
+        existing = Opportunity.objects.filter(url_source=scraped_opp.external_url).first()
+        if existing:
+            scraped_opp.status = 'imported'
+            scraped_opp.imported_opportunity = existing
+            scraped_opp.imported_by = request.user
+            scraped_opp.imported_at = timezone.now()
+            scraped_opp.save(update_fields=['status', 'imported_opportunity', 'imported_by', 'imported_at'])
+            return Response({
+                'opportunity_id': existing.id,
+                'opportunity_url': f'/opportunities/{existing.id}',
+                'status': 'imported',
+                'created': False,
+            })
+
+        ai_extraction = {
+            'schema': 'scraped_opportunity_import_v1',
+            'source': 'scraping',
+            'scraped_opportunity_id': scraped_opp.id,
+            'scraping_source_id': scraped_opp.source_id,
+            'scraping_source_name': scraped_opp.source.name if scraped_opp.source_id else '',
+            'external_id': scraped_opp.external_id,
+            'external_url': scraped_opp.external_url,
+            'deep_content_url': scraped_opp.deep_content_url,
+            'deep_content_status': scraped_opp.deep_content_status,
+            'deep_content_extracted_at': scraped_opp.deep_content_extracted_at.isoformat() if scraped_opp.deep_content_extracted_at else '',
+            'requirements': scraped_opp.ai_extracted_requirements or [],
+            'transformation_flags': scraped_opp.transformation_flags or {},
+            'imported_at': timezone.now().isoformat(),
+        }
         
         opportunity = Opportunity.objects.create(
             title=scraped_opp.title,
@@ -140,16 +179,24 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
             description=description,
             url_source=scraped_opp.external_url,
             ai_summary=scraped_opp.ai_summary,
+            ai_extraction=ai_extraction,
             created_by=request.user,
         )
+
+        _sync_ai_requirements(opportunity, scraped_opp.ai_extracted_requirements or [])
         
         scraped_opp.status = 'imported'
         scraped_opp.imported_opportunity = opportunity
         scraped_opp.imported_by = request.user
         scraped_opp.imported_at = timezone.now()
-        scraped_opp.save()
+        scraped_opp.save(update_fields=['status', 'imported_opportunity', 'imported_by', 'imported_at'])
         
-        return Response({'opportunity_id': opportunity.id, 'status': 'imported'})
+        return Response({
+            'opportunity_id': opportunity.id,
+            'opportunity_url': f'/opportunities/{opportunity.id}',
+            'status': 'imported',
+            'created': True,
+        })
 
     @action(detail=True, methods=['post'])
     def ignore(self, request, pk=None):
