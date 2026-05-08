@@ -59,6 +59,10 @@ function isMarkdownTableSeparator(line: string) {
   return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(line.trim());
 }
 
+function hasMarkdownTableCells(line: string) {
+  return splitMarkdownTableRow(line).length >= 3;
+}
+
 function splitMarkdownTableRow(line: string) {
   return line
     .trim()
@@ -69,12 +73,13 @@ function splitMarkdownTableRow(line: string) {
 }
 
 function renderMarkdownTable(rows: string[]) {
-  if (rows.length < 2 || !isMarkdownTableSeparator(rows[1])) {
+  if (rows.length < 2) {
     return '';
   }
 
   const headers = splitMarkdownTableRow(rows[0]);
-  const bodyRows = rows.slice(2).map(splitMarkdownTableRow);
+  const hasSeparator = isMarkdownTableSeparator(rows[1]);
+  const bodyRows = rows.slice(hasSeparator ? 2 : 1).map(splitMarkdownTableRow);
   const headerHtml = headers
     .map((header) => `<th>${formatInlineMarkdown(header)}</th>`)
     .join('');
@@ -90,8 +95,23 @@ function renderMarkdownTable(rows: string[]) {
   return `<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
 }
 
+function normalizeAiMarkdown(markdown: string) {
+  return markdown
+    .replace(/&lt;br\s*\/?&gt;/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p>/gi, '\n\n')
+    .replace(/<\/?(p|div|span)>/gi, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+}
+
 function aiMarkdownToHtml(markdown: string) {
-  const lines = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const lines = normalizeAiMarkdown(markdown)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n');
   const html: string[] = [];
   let listType: 'ul' | 'ol' | null = null;
 
@@ -111,11 +131,14 @@ function aiMarkdownToHtml(markdown: string) {
     }
 
     const nextLine = lines[index + 1]?.trim() || '';
-    if (line.includes('|') && isMarkdownTableSeparator(nextLine)) {
+    if (
+      hasMarkdownTableCells(line) &&
+      (isMarkdownTableSeparator(nextLine) || hasMarkdownTableCells(nextLine))
+    ) {
       closeList();
-      const tableRows = [line, nextLine];
-      index += 2;
-      while (index < lines.length && lines[index].trim().includes('|')) {
+      const tableRows = [line];
+      index += 1;
+      while (index < lines.length && hasMarkdownTableCells(lines[index].trim())) {
         tableRows.push(lines[index].trim());
         index += 1;
       }
