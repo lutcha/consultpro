@@ -524,8 +524,8 @@ export async function apiGenerateProposalSectionSuggestion(
 
 export async function apiApproveProposalForSubmission(
   proposalId: string
-): Promise<{ status: string; project_id: number; project_url: string }> {
-  return apiRequest<{ status: string; project_id: number; project_url: string }>(
+): Promise<{ status: string; proposal_id: number; proposal_url: string }> {
+  return apiRequest<{ status: string; proposal_id: number; proposal_url: string }>(
     `/proposals/${proposalId}/approve_for_submission/`,
     { method: 'POST' }
   );

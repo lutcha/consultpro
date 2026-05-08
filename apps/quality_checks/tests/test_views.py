@@ -156,6 +156,6 @@ class TestQualityCheckViewSet:
         assert response.status_code == status.HTTP_200_OK
 
         proposal.refresh_from_db()
-        assert proposal.status == 'approved'
-        assert Project.objects.filter(proposal=proposal).exists()
-        assert response.data['project_id'] == proposal.project.id
+        assert proposal.status == 'ready_for_submission'
+        assert not Project.objects.filter(proposal=proposal).exists()
+        assert response.data['proposal_id'] == proposal.id

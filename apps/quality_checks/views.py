@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager
-from apps.proposals.views import _ensure_project_for_proposal
+from apps.proposals.views import _set_proposal_status
 
 from .models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
 from .serializers import QualityCheckListSerializer, QualityCheckSerializer
@@ -122,12 +122,15 @@ class QualityCheckViewSet(viewsets.ModelViewSet):
         quality_check = self.get_object()
         proposal = quality_check.proposal
         with transaction.atomic():
-            proposal.status = 'approved'
-            proposal.save(update_fields=['status', 'updated_at'])
-            project = _ensure_project_for_proposal(proposal, manager=request.user)
+            _set_proposal_status(
+                proposal,
+                'ready_for_submission',
+                user=request.user,
+                note=request.data.get('note', 'QC aprovado. Proposta pronta para submissao.'),
+            )
 
         serializer = self.get_serializer(quality_check)
         data = serializer.data
-        data['project_id'] = project.id
-        data['project_url'] = f'/projects/{project.id}'
+        data['proposal_id'] = proposal.id
+        data['proposal_url'] = f'/proposals/{proposal.id}'
         return Response(data)

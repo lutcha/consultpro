@@ -94,8 +94,18 @@ export type ProposalStatus =
   | 'draft' 
   | 'in_review' 
   | 'qc_check' 
+  | 'ready_for_submission'
   | 'approved' 
   | 'submitted' 
+  | 'under_evaluation'
+  | 'rejected'
+  | 'shortlisted'
+  | 'clarifications_requested'
+  | 'bafo'
+  | 'awarded'
+  | 'contract_negotiation'
+  | 'contract_signed'
+  | 'project_initiation'
   | 'won' 
   | 'lost';
 

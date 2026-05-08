@@ -77,8 +77,8 @@ export function QualityCheck() {
     setIsApproving(true);
     try {
       const result = await apiApproveProposalForSubmission(id);
-      toast.success('Proposta aprovada. Projeto criado.');
-      navigate(result.project_url || `/projects/${result.project_id}`, { replace: true });
+      toast.success('Proposta pronta para submissao.');
+      navigate(result.proposal_url || `/proposals/${result.proposal_id}`, { replace: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao aprovar proposta';
       setApproveError(message);

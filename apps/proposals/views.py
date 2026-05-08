@@ -19,6 +19,7 @@ from .models import (
     Comment,
     Proposal,
     ProposalSection,
+    ProposalStatusHistory,
     ProposalTeamMember,
 )
 from .serializers import (
@@ -182,6 +183,26 @@ def _ensure_project_for_proposal(proposal, manager=None):
             defaults={'order': order},
         )
     return project
+
+
+def _set_proposal_status(proposal, status_value, user=None, note=''):
+    valid_statuses = {choice[0] for choice in Proposal.STATUS_CHOICES}
+    if status_value not in valid_statuses:
+        raise ValueError('Invalid proposal status.')
+
+    proposal.status = status_value
+    update_fields = ['status', 'updated_at']
+    if status_value == 'submitted' and not proposal.submitted_at:
+        proposal.submitted_at = timezone.now()
+        update_fields.append('submitted_at')
+    proposal.save(update_fields=update_fields)
+    ProposalStatusHistory.objects.create(
+        proposal=proposal,
+        status=status_value,
+        changed_by=user,
+        note=note,
+    )
+    return proposal
 
 
 class ProposalViewSet(viewsets.ModelViewSet):
@@ -365,9 +386,12 @@ class ProposalViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         proposal = self.get_object()
-        proposal.status = 'qc_check'
-        proposal.submitted_at = timezone.now()
-        proposal.save(update_fields=['status', 'submitted_at'])
+        _set_proposal_status(
+            proposal,
+            'submitted',
+            user=request.user,
+            note=request.data.get('note', 'Proposta submetida ao cliente/concurso.'),
+        )
         return Response(
             {'status': proposal.status, 'submitted_at': proposal.submitted_at}
         )
@@ -376,15 +400,49 @@ class ProposalViewSet(viewsets.ModelViewSet):
     def approve_for_submission(self, request, pk=None):
         proposal = self.get_object()
         with transaction.atomic():
-            proposal.status = 'approved'
-            proposal.save(update_fields=['status', 'updated_at'])
-            project = _ensure_project_for_proposal(proposal, manager=request.user)
+            _set_proposal_status(
+                proposal,
+                'ready_for_submission',
+                user=request.user,
+                note=request.data.get('note', 'QC aprovado. Proposta pronta para submissao.'),
+            )
 
         return Response({
             'status': proposal.status,
-            'project_id': project.id,
-            'project_url': f'/projects/{project.id}',
+            'proposal_id': proposal.id,
+            'proposal_url': f'/proposals/{proposal.id}',
         })
+
+    @action(detail=True, methods=['post'])
+    def transition_status(self, request, pk=None):
+        proposal = self.get_object()
+        next_status = request.data.get('status')
+        note = request.data.get('note', '')
+        with transaction.atomic():
+            try:
+                _set_proposal_status(
+                    proposal,
+                    next_status,
+                    user=request.user,
+                    note=note,
+                )
+            except ValueError:
+                return Response(
+                    {'detail': 'Estado de proposta invalido.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            data = {
+                'status': proposal.status,
+                'proposal_id': proposal.id,
+                'proposal_url': f'/proposals/{proposal.id}',
+            }
+            if proposal.status in ('contract_signed', 'project_initiation'):
+                project = _ensure_project_for_proposal(proposal, manager=request.user)
+                data['project_id'] = project.id
+                data['project_url'] = f'/projects/{project.id}'
+
+        return Response(data)
 
     @action(detail=True, methods=['get'])
     def team(self, request, pk=None):

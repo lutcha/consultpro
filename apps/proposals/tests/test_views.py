@@ -169,7 +169,7 @@ class TestProposalViewSet:
         assert proposal.status == 'qc_check'
         assert proposal.submitted_at is not None
 
-    def test_approve_for_submission_creates_project(self, authenticated_client):
+    def test_approve_for_submission_marks_ready_without_project(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user, status='qc_check')
 
@@ -178,12 +178,11 @@ class TestProposalViewSet:
 
         assert response.status_code == status.HTTP_200_OK
         proposal.refresh_from_db()
-        assert proposal.status == 'approved'
-        assert response.data['project_id'] == proposal.project.id
-        assert proposal.project.status == Project.Status.PLANNING
-        assert proposal.project.phases.count() == 5
+        assert proposal.status == 'ready_for_submission'
+        assert response.data['proposal_id'] == proposal.id
+        assert not Project.objects.filter(proposal=proposal).exists()
 
-    def test_approve_for_submission_is_idempotent(self, authenticated_client):
+    def test_approve_for_submission_is_idempotent_without_project(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user, status='qc_check')
 
@@ -193,7 +192,7 @@ class TestProposalViewSet:
 
         assert first_response.status_code == status.HTTP_200_OK
         assert second_response.status_code == status.HTTP_200_OK
-        assert Project.objects.filter(proposal=proposal).count() == 1
+        assert Project.objects.filter(proposal=proposal).count() == 0
 
     def test_manager_can_approve_proposal_created_by_another_user(self, api_client):
         owner = UserFactory(role='consultant')
@@ -206,9 +205,23 @@ class TestProposalViewSet:
 
         assert response.status_code == status.HTTP_200_OK
         proposal.refresh_from_db()
-        assert proposal.status == 'approved'
+        assert proposal.status == 'ready_for_submission'
+        assert response.data['proposal_id'] == proposal.id
+        assert not Project.objects.filter(proposal=proposal).exists()
+
+    def test_contract_signed_transition_creates_project(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='contract_negotiation')
+
+        url = reverse('proposal-transition-status', kwargs={'pk': proposal.pk})
+        response = client.post(url, {'status': 'contract_signed'}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        proposal.refresh_from_db()
+        assert proposal.status == 'contract_signed'
         assert response.data['project_id'] == proposal.project.id
-        assert proposal.project.manager == manager
+        assert proposal.project.status == Project.Status.PLANNING
+        assert proposal.project.phases.count() == 5
 
     def test_team_action(self, authenticated_client):
         client, user = authenticated_client

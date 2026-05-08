@@ -8,8 +8,18 @@ class Proposal(models.Model):
         ('draft', 'Rascunho'),
         ('in_review', 'Em Revisao'),
         ('qc_check', 'QC em Curso'),
+        ('ready_for_submission', 'Pronta para Submissao'),
         ('approved', 'Aprovada'),
         ('submitted', 'Submetida'),
+        ('under_evaluation', 'Em Avaliacao'),
+        ('rejected', 'Rejeitada'),
+        ('shortlisted', 'Shortlisted'),
+        ('clarifications_requested', 'Clarificacoes Pedidas'),
+        ('bafo', 'BAFO'),
+        ('awarded', 'Adjudicada'),
+        ('contract_negotiation', 'Negociacao de Contrato'),
+        ('contract_signed', 'Contrato Assinado'),
+        ('project_initiation', 'Arranque de Projeto'),
         ('won', 'Ganha'),
         ('lost', 'Perdida'),
     ]
@@ -17,7 +27,7 @@ class Proposal(models.Model):
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='proposals')
     title = models.CharField(max_length=500)
     version = models.PositiveIntegerField(default=1)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='draft')
     
     # Auto-save tracking
     auto_save_status = models.CharField(
@@ -59,6 +69,32 @@ class Proposal(models.Model):
 
     def __str__(self):
         return f"{self.title} (v{self.version})"
+
+
+class ProposalStatusHistory(models.Model):
+    proposal = models.ForeignKey(
+        Proposal,
+        on_delete=models.CASCADE,
+        related_name='status_history',
+    )
+    status = models.CharField(max_length=30, choices=Proposal.STATUS_CHOICES)
+    changed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='proposal_status_changes',
+    )
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Proposal status history'
+        verbose_name_plural = 'Proposal status histories'
+
+    def __str__(self):
+        return f"{self.proposal} -> {self.status}"
 
 
 class ProposalTeamMember(models.Model):
