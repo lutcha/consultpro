@@ -121,6 +121,13 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
         scraped_opp = self.get_object()
         
         from apps.opportunities.models import Opportunity
+
+        description = scraped_opp.description
+        if scraped_opp.deep_content_text:
+            description = (
+                f"{description}\n\n--- Conteudo extraido da fonte/TdR ---\n"
+                f"{scraped_opp.deep_content_text}"
+            ).strip()
         
         opportunity = Opportunity.objects.create(
             title=scraped_opp.title,
@@ -130,7 +137,7 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
             value=scraped_opp.value or 0,
             currency=scraped_opp.currency,
             deadline=scraped_opp.deadline or timezone.now(),
-            description=scraped_opp.description,
+            description=description,
             url_source=scraped_opp.external_url,
             ai_summary=scraped_opp.ai_summary,
             created_by=request.user,

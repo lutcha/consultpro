@@ -69,6 +69,8 @@ def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
         'duplicates_skipped': 0,
         'ingested': 0,
         'rejected': 0,
+        'deep_extracted': 0,
+        'deep_extraction_failed': 0,
         'errors': [],
     }
 
@@ -206,6 +208,11 @@ def _process_single_item(raw_item, source, batch_id, stats):
         stats['duplicates_skipped'] += 1
         return
 
+    # === Phase 1b: Deep detail/TdR extraction ===
+    deep_content = _extract_item_deep_content(raw_item, source, external_url, stats)
+    deep_text = deep_content.get('text', '')
+    analysis_description = _combined_description(description, deep_text)
+
     # === Phase 2: Deadline validation ===
     deadline_str = raw_item.get('deadline')
     published_at = None
@@ -239,12 +246,13 @@ def _process_single_item(raw_item, source, batch_id, stats):
         return 'rejected'
 
     # === Phase 3: Cabo Verde eligibility ===
-    eligibility = CaboVerdeEligibilityValidator.evaluate(raw_item)
+    eligibility_item = {**raw_item, 'description': analysis_description}
+    eligibility = CaboVerdeEligibilityValidator.evaluate(eligibility_item)
 
     # === Phase 4: Smart deduplication (title + description + deadline) ===
     is_duplicate, existing_id = SmartDeduplicator.check_duplicate(
         title=title,
-        description=description,
+        description=analysis_description,
         deadline=normalized_deadline,
         source_name=source.name,
         external_id=external_id,
@@ -259,13 +267,21 @@ def _process_single_item(raw_item, source, batch_id, stats):
         'deadline_normalized': bool(normalized_deadline),
         'eligibility_evaluated': True,
         'content_hashed': True,
+        'deep_content_status': deep_content.get('status', 'skipped'),
+        'deep_content_length': deep_content.get('length', 0),
         'processed_at': timezone.now().isoformat(),
     }
+    if deep_content.get('error'):
+        transformation_flags['deep_content_error'] = deep_content['error']
     if deadline_validation.get('warnings'):
         transformation_flags['deadline_warnings'] = deadline_validation['warnings']
 
     # Compute data quality score
-    quality_score = _compute_quality_score(raw_item, deadline_validation, eligibility)
+    quality_score = _compute_quality_score(
+        {**raw_item, 'description': analysis_description},
+        deadline_validation,
+        eligibility,
+    )
 
     # === Phase 6: Unified Upsert ===
     with transaction.atomic():
@@ -281,6 +297,10 @@ def _process_single_item(raw_item, source, batch_id, stats):
                 'country': raw_item.get('country', '')[:100],
                 'region': raw_item.get('region', '')[:100],
                 'description': description,
+                'deep_content_text': deep_text,
+                'deep_content_url': deep_content.get('url', '')[:1000] if deep_content.get('url') else '',
+                'deep_content_status': deep_content.get('status', ''),
+                'deep_content_extracted_at': timezone.now() if deep_content.get('status') == 'completed' else None,
                 'value': raw_item.get('value'),
                 'currency': raw_item.get('currency', 'USD')[:3],
                 'deadline': normalized_deadline,
@@ -337,6 +357,8 @@ def enrich_scraped_opportunity_with_ai(self, scraped_opportunity_id: int):
         text_parts.append(f"Client: {opp.client}")
     if opp.description:
         text_parts.append(f"Description: {opp.description}")
+    if opp.deep_content_text:
+        text_parts.append(f"Extracted ToR / source page content: {opp.deep_content_text}")
     if opp.sector:
         text_parts.append(f"Sector: {opp.sector}")
     if opp.country:
@@ -401,6 +423,42 @@ def enrich_scraped_opportunity_with_ai(self, scraped_opportunity_id: int):
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
         return {'status': 'failed', 'error': str(exc)}
+
+
+def _extract_item_deep_content(raw_item, source, external_url, stats) -> dict:
+    config = source.scraper_config or {}
+    if config.get('deep_extraction_enabled') is False:
+        return {'status': 'skipped', 'text': '', 'url': external_url, 'length': 0}
+
+    try:
+        from .services.deep_extraction import extract_deep_content
+
+        result = extract_deep_content(external_url, base_url=source.url)
+        if result.get('status') == 'completed':
+            stats['deep_extracted'] += 1
+        elif result.get('status') == 'failed':
+            stats['deep_extraction_failed'] += 1
+        return result
+    except Exception as exc:
+        stats['deep_extraction_failed'] += 1
+        logger.warning(
+            'Deep extraction failed for %s from %s: %s',
+            raw_item.get('title', ''),
+            external_url,
+            exc,
+            exc_info=True,
+        )
+        return {'status': 'failed', 'text': '', 'url': external_url, 'error': str(exc)[:300], 'length': 0}
+
+
+def _combined_description(description: str, deep_text: str) -> str:
+    description = (description or '').strip()
+    deep_text = (deep_text or '').strip()
+    if not deep_text:
+        return description
+    if description and deep_text.startswith(description[:100]):
+        return deep_text
+    return '\n\n'.join(part for part in [description, deep_text] if part)
 
 
 @shared_task

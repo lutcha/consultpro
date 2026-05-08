@@ -89,6 +89,12 @@ class ScrapedOpportunity(models.Model):
     # AI processing
     ai_summary = models.TextField(blank=True)
     ai_extracted_requirements = models.JSONField(default=list, blank=True)
+
+    # Deep extraction from opportunity detail pages / linked ToR PDFs
+    deep_content_text = models.TextField(blank=True)
+    deep_content_url = models.URLField(max_length=1000, blank=True)
+    deep_content_status = models.CharField(max_length=20, blank=True)
+    deep_content_extracted_at = models.DateTimeField(null=True, blank=True)
     
     # === Pipeline de Ingestão Defensiva ===
     # Proveniência: dados brutos preservados (imutáveis)
