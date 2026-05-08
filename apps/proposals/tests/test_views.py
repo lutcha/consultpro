@@ -1,4 +1,7 @@
 import pytest
+import io
+
+from docx import Document
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -239,7 +242,16 @@ class TestProposalViewSet:
             ),
         )
 
-        assert len(generate_proposal_docx(proposal)) > 0
+        docx_bytes = generate_proposal_docx(proposal)
+        document = Document(io.BytesIO(docx_bytes))
+
+        assert len(docx_bytes) > 0
+        assert any(
+            cell.text == 'Fase'
+            for table in document.tables
+            for row in table.rows
+            for cell in row.cells
+        )
         assert len(generate_proposal_pdf(proposal)) > 0
 
     def test_document_exports_decode_escaped_html_tables(self):
@@ -257,5 +269,41 @@ class TestProposalViewSet:
             ),
         )
 
-        assert len(generate_proposal_docx(proposal)) > 0
+        docx_bytes = generate_proposal_docx(proposal)
+        document = Document(io.BytesIO(docx_bytes))
+
+        assert len(docx_bytes) > 0
+        assert any(
+            cell.text == 'Fase'
+            for table in document.tables
+            for row in table.rows
+            for cell in row.cells
+        )
         assert len(generate_proposal_pdf(proposal)) > 0
+
+    def test_document_exports_render_nested_html_tables(self):
+        proposal = ProposalFactory()
+        ProposalSectionFactory(
+            proposal=proposal,
+            section_type='custom',
+            title='Plano de Trabalho',
+            content=(
+                '<p><strong>Plano</strong></p>'
+                '<div>'
+                '<p>Intro</p>'
+                '<table class="proposal-ai-table">'
+                '<thead><tr><th>Fase</th><th>Periodo</th></tr></thead>'
+                '<tbody><tr><td>Diagnostico</td><td>Mes 1</td></tr></tbody>'
+                '</table>'
+                '</div>'
+            ),
+        )
+
+        document = Document(io.BytesIO(generate_proposal_docx(proposal)))
+
+        assert any(
+            cell.text == 'Diagnostico'
+            for table in document.tables
+            for row in table.rows
+            for cell in row.cells
+        )

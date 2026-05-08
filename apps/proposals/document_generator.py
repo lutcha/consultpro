@@ -76,38 +76,73 @@ def _iter_html_blocks(html: str):
         html = html_lib.unescape(html)
     soup = BeautifulSoup(html, 'html.parser')
     source = soup.body if soup.body else soup
-    for child in source.children:
-        if isinstance(child, NavigableString):
-            text = str(child).strip()
-            if text:
-                yield 'p', text
-            continue
-        if isinstance(child, Tag):
-            yield child.name, child
+
+    def iter_children(parent):
+        for child in parent.children:
+            if isinstance(child, NavigableString):
+                text = str(child).strip()
+                if text:
+                    yield 'p', text
+                continue
+            if not isinstance(child, Tag):
+                continue
+            if child.name == 'br':
+                continue
+            if child.name == 'table':
+                yield child.name, child
+            elif child.name in {'h1', 'h2', 'h3', 'ul', 'ol'}:
+                yield child.name, child
+            elif child.find('table'):
+                yield from iter_children(child)
+            else:
+                yield child.name, child
+
+    yield from iter_children(source)
+
+
+def _set_docx_cell_text(cell, text: str, bold: bool = False):
+    cell.text = ''
+    paragraph = cell.paragraphs[0]
+    run = paragraph.add_run(text)
+    run.font.size = Pt(9)
+    run.font.name = 'Calibri'
+    if bold:
+        run.font.bold = True
+        run.font.color.rgb = RGBColor(0x1A, 0x36, 0x5D)
+
+
+def _html_table_rows(table_node: Tag) -> list[list[str]]:
+    rows = []
+    for row_node in table_node.find_all('tr'):
+        cells = row_node.find_all(['th', 'td'], recursive=False)
+        if not cells:
+            cells = row_node.find_all(['th', 'td'])
+        row = [_html_text(cell) for cell in cells]
+        if row:
+            rows.append(row)
+    return rows
 
 
 def _add_html_table_docx(doc: Document, table_node: Tag):
-    rows = table_node.find_all('tr')
+    rows = _html_table_rows(table_node)
     if not rows:
         return
 
-    first_cells = rows[0].find_all(['th', 'td'])
-    column_count = max(len(first_cells), 1)
+    column_count = max(len(row) for row in rows)
     table = doc.add_table(rows=1, cols=column_count)
     table.style = 'Table Grid'
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    for row_index, row_node in enumerate(rows):
-        cells = row_node.find_all(['th', 'td'])
+    for row_index, row in enumerate(rows):
         row_cells = table.rows[0].cells if row_index == 0 else table.add_row().cells
         for cell_index in range(column_count):
-            row_cells[cell_index].text = _html_text(cells[cell_index]) if cell_index < len(cells) else ''
+            _set_docx_cell_text(
+                row_cells[cell_index],
+                row[cell_index] if cell_index < len(row) else '',
+                bold=row_index == 0,
+            )
             if row_index == 0:
                 _set_cell_shading(row_cells[cell_index], 'E2E8F0')
-                for paragraph in row_cells[cell_index].paragraphs:
-                    for run in paragraph.runs:
-                        run.font.bold = True
-                        run.font.color.rgb = RGBColor(0x1A, 0x36, 0x5D)
 
 
 def _add_html_content_docx(doc: Document, html: str):
@@ -132,10 +167,10 @@ def _add_html_content_docx(doc: Document, html: str):
 def _add_html_content_pdf(story: list, html: str, normal_style, heading2_style):
     for tag_name, node in _iter_html_blocks(html):
         if tag_name == 'table' and isinstance(node, Tag):
-            rows = []
-            for row_node in node.find_all('tr'):
-                cells = row_node.find_all(['th', 'td'])
-                rows.append([Paragraph(_html_text(cell), normal_style) for cell in cells])
+            rows = [
+                [Paragraph(cell, normal_style) for cell in row]
+                for row in _html_table_rows(node)
+            ]
             if rows:
                 column_count = max(len(row) for row in rows)
                 for row in rows:
