@@ -38,6 +38,80 @@ import {
   apiUploadProposalLogo,
 } from '@/lib/api';
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatInlineMarkdown(value: string) {
+  return escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/_(.+?)_/g, '<em>$1</em>');
+}
+
+function aiMarkdownToHtml(markdown: string) {
+  const lines = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const html: string[] = [];
+  let listType: 'ul' | 'ol' | null = null;
+
+  const closeList = () => {
+    if (listType) {
+      html.push(`</${listType}>`);
+      listType = null;
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      closeList();
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      closeList();
+      const level = heading[1].length + 1;
+      html.push(`<h${level}>${formatInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      if (listType !== 'ul') {
+        closeList();
+        html.push('<ul>');
+        listType = 'ul';
+      }
+      html.push(`<li>${formatInlineMarkdown(bullet[1])}</li>`);
+      continue;
+    }
+
+    const numbered = line.match(/^\d+[.)]\s+(.+)$/);
+    if (numbered) {
+      if (listType !== 'ol') {
+        closeList();
+        html.push('<ol>');
+        listType = 'ol';
+      }
+      html.push(`<li>${formatInlineMarkdown(numbered[1])}</li>`);
+      continue;
+    }
+
+    closeList();
+    html.push(`<p>${formatInlineMarkdown(line)}</p>`);
+  }
+
+  closeList();
+  return html.join('');
+}
+
 export function ProposalEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -190,11 +264,11 @@ export function ProposalEditor() {
         return;
       }
 
-      const generatedContent = suggestion.generated_content.replace(/\n/g, '<br />');
+      const generatedContent = aiMarkdownToHtml(suggestion.generated_content);
       const shouldAppend = action === 'draft_from_context' && editorContent.trim();
       const nextContent = shouldAppend
-        ? `${editorContent}<p><br></p><p>${generatedContent}</p>`
-        : `<p>${generatedContent}</p>`;
+        ? `${editorContent}<p><br></p>${generatedContent}`
+        : generatedContent;
 
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       setEditorContent(nextContent);
