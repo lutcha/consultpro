@@ -125,6 +125,11 @@ function deepContentLabel(status?: string): string | null {
   return labels[status] || `Fonte: ${status}`;
 }
 
+function isImportableScrapedOpportunity(status?: string, importedOpportunityId?: string | number | null): boolean {
+  const normalized = (status || '').toLowerCase().trim();
+  return !importedOpportunityId && normalized !== 'imported' && normalized !== 'ignored' && normalized !== 'expired';
+}
+
 // ============================================
 // COMPONENTS
 // ============================================
@@ -490,7 +495,7 @@ function OpportunityDetailModal({ detail, loading, onClose, onImport, isBusy }: 
             )}
 
             {/* Actions */}
-            {detail.status === 'new' && (
+            {isImportableScrapedOpportunity(detail.status, detail.imported_opportunity) && (
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button size="sm" variant="outline" onClick={onClose}>Fechar</Button>
                 <Button size="sm" onClick={() => { onImport(String(detail.id)); onClose(); }} disabled={isBusy}>
@@ -498,7 +503,7 @@ function OpportunityDetailModal({ detail, loading, onClose, onImport, isBusy }: 
                 </Button>
               </div>
             )}
-            {detail.status !== 'new' && (
+            {!isImportableScrapedOpportunity(detail.status, detail.imported_opportunity) && (
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button size="sm" variant="outline" onClick={onClose}>Fechar</Button>
                 {detail.imported_opportunity && (
@@ -573,6 +578,7 @@ function OpportunitiesTab({
         {filtered.map((opp) => {
           const isExpanded = expanded === opp.id;
           const isBusy = busyOpportunityIds.has(opp.id);
+          const canImport = isImportableScrapedOpportunity(opp.status, opp.importedOpportunityId);
           return (
             <Card key={opp.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
@@ -606,17 +612,17 @@ function OpportunitiesTab({
                         </a>
                       </Button>
                     )}
-                    {opp.status === 'new' && (
+                    {canImport && (
                       <Button size="sm" className="h-7 text-xs px-2" onClick={() => onImport(opp.id)} disabled={isBusy}>
-                        <ArrowRight className="h-3.5 w-3.5 mr-1" />Importar para Oportunidades
+                        <ArrowRight className="h-3.5 w-3.5 mr-1" />Importar
                       </Button>
                     )}
-                    {opp.status === 'imported' && opp.importedOpportunityId && (
+                    {opp.importedOpportunityId && (
                       <Button size="sm" className="h-7 text-xs px-2" onClick={() => navigate(`/opportunities/${opp.importedOpportunityId}`)}>
                         Abrir em Oportunidades
                       </Button>
                     )}
-                    {opp.status === 'new' && (
+                    {canImport && (
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onIgnore(opp.id)} disabled={isBusy}>
                         Ignorar
                       </Button>
