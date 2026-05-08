@@ -55,6 +55,41 @@ function formatInlineMarkdown(value: string) {
     .replace(/_(.+?)_/g, '<em>$1</em>');
 }
 
+function isMarkdownTableSeparator(line: string) {
+  return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(line.trim());
+}
+
+function splitMarkdownTableRow(line: string) {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
+}
+
+function renderMarkdownTable(rows: string[]) {
+  if (rows.length < 2 || !isMarkdownTableSeparator(rows[1])) {
+    return '';
+  }
+
+  const headers = splitMarkdownTableRow(rows[0]);
+  const bodyRows = rows.slice(2).map(splitMarkdownTableRow);
+  const headerHtml = headers
+    .map((header) => `<th>${formatInlineMarkdown(header)}</th>`)
+    .join('');
+  const bodyHtml = bodyRows
+    .map((row) => {
+      const cells = headers.map((_, index) => row[index] || '');
+      return `<tr>${cells
+        .map((cell) => `<td>${formatInlineMarkdown(cell)}</td>`)
+        .join('')}</tr>`;
+    })
+    .join('');
+
+  return `<table><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+}
+
 function aiMarkdownToHtml(markdown: string) {
   const lines = markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   const html: string[] = [];
@@ -67,10 +102,25 @@ function aiMarkdownToHtml(markdown: string) {
     }
   };
 
-  for (const rawLine of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
     const line = rawLine.trim();
     if (!line) {
       closeList();
+      continue;
+    }
+
+    const nextLine = lines[index + 1]?.trim() || '';
+    if (line.includes('|') && isMarkdownTableSeparator(nextLine)) {
+      closeList();
+      const tableRows = [line, nextLine];
+      index += 2;
+      while (index < lines.length && lines[index].trim().includes('|')) {
+        tableRows.push(lines[index].trim());
+        index += 1;
+      }
+      index -= 1;
+      html.push(renderMarkdownTable(tableRows));
       continue;
     }
 
