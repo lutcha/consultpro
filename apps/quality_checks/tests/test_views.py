@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.projects.models import Project
 from apps.quality_checks.models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
 from apps.quality_checks.tests.factories import (
     ProposalFactory,
@@ -156,3 +157,5 @@ class TestQualityCheckViewSet:
 
         proposal.refresh_from_db()
         assert proposal.status == 'approved'
+        assert Project.objects.filter(proposal=proposal).exists()
+        assert response.data['project_id'] == proposal.project.id

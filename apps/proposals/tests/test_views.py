@@ -6,6 +6,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.projects.models import Project
 from apps.proposals.document_generator import generate_proposal_docx, generate_proposal_pdf
 from apps.proposals.models import Budget, Proposal
 from apps.proposals.tests.factories import (
@@ -167,6 +168,32 @@ class TestProposalViewSet:
         proposal.refresh_from_db()
         assert proposal.status == 'qc_check'
         assert proposal.submitted_at is not None
+
+    def test_approve_for_submission_creates_project(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='qc_check')
+
+        url = reverse('proposal-approve-for-submission', kwargs={'pk': proposal.pk})
+        response = client.post(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        proposal.refresh_from_db()
+        assert proposal.status == 'approved'
+        assert response.data['project_id'] == proposal.project.id
+        assert proposal.project.status == Project.Status.PLANNING
+        assert proposal.project.phases.count() == 5
+
+    def test_approve_for_submission_is_idempotent(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='qc_check')
+
+        url = reverse('proposal-approve-for-submission', kwargs={'pk': proposal.pk})
+        first_response = client.post(url)
+        second_response = client.post(url)
+
+        assert first_response.status_code == status.HTTP_200_OK
+        assert second_response.status_code == status.HTTP_200_OK
+        assert Project.objects.filter(proposal=proposal).count() == 1
 
     def test_team_action(self, authenticated_client):
         client, user = authenticated_client

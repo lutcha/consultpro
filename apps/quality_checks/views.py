@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager
+from apps.proposals.views import _ensure_project_for_proposal
 
 from .models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
 from .serializers import QualityCheckListSerializer, QualityCheckSerializer
@@ -120,8 +121,13 @@ class QualityCheckViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         quality_check = self.get_object()
         proposal = quality_check.proposal
-        proposal.status = 'approved'
-        proposal.save(update_fields=['status'])
+        with transaction.atomic():
+            proposal.status = 'approved'
+            proposal.save(update_fields=['status', 'updated_at'])
+            project = _ensure_project_for_proposal(proposal, manager=request.user)
 
         serializer = self.get_serializer(quality_check)
-        return Response(serializer.data)
+        data = serializer.data
+        data['project_id'] = project.id
+        data['project_url'] = f'/projects/{project.id}'
+        return Response(data)

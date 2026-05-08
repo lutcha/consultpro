@@ -522,6 +522,15 @@ export async function apiGenerateProposalSectionSuggestion(
   });
 }
 
+export async function apiApproveProposalForSubmission(
+  proposalId: string
+): Promise<{ status: string; project_id: number; project_url: string }> {
+  return apiRequest<{ status: string; project_id: number; project_url: string }>(
+    `/proposals/${proposalId}/approve_for_submission/`,
+    { method: 'POST' }
+  );
+}
+
 export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {
   const token = localStorage.getItem('access_token');
   const response = await fetch(`/api/proposals/${proposalId}/download_word/`, {

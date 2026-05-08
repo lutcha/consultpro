@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import IsOwnerOrAdmin
+from apps.projects.models import Project, ProjectPhase
 from apps.users.models import User
 from .document_generator import generate_proposal_docx, generate_proposal_pdf
 from .models import (
@@ -144,6 +145,43 @@ def ensure_default_sections(proposal):
                 'content': _default_section_content(proposal, section_type),
             },
         )
+
+
+def _ensure_project_for_proposal(proposal, manager=None):
+    opportunity = proposal.opportunity
+    budget = getattr(proposal, 'budget', None)
+    project, _created = Project.objects.get_or_create(
+        proposal=proposal,
+        defaults={
+            'title': proposal.title,
+            'description': opportunity.description or '',
+            'client': opportunity.client,
+            'status': Project.Status.PLANNING,
+            'start_date': None,
+            'end_date': opportunity.deadline.date() if opportunity.deadline else None,
+            'budget_total': budget.total if budget else opportunity.value,
+            'budget_currency': budget.currency if budget else opportunity.currency,
+            'manager': manager or proposal.created_by,
+            'sector': opportunity.sector,
+            'country': opportunity.country,
+            'region': getattr(opportunity, 'region', ''),
+        },
+    )
+
+    phases = [
+        ('initiating', 0),
+        ('planning', 1),
+        ('executing', 2),
+        ('monitoring', 3),
+        ('closing', 4),
+    ]
+    for name, order in phases:
+        ProjectPhase.objects.get_or_create(
+            project=project,
+            name=name,
+            defaults={'order': order},
+        )
+    return project
 
 
 class ProposalViewSet(viewsets.ModelViewSet):
@@ -333,6 +371,20 @@ class ProposalViewSet(viewsets.ModelViewSet):
         return Response(
             {'status': proposal.status, 'submitted_at': proposal.submitted_at}
         )
+
+    @action(detail=True, methods=['post'])
+    def approve_for_submission(self, request, pk=None):
+        proposal = self.get_object()
+        with transaction.atomic():
+            proposal.status = 'approved'
+            proposal.save(update_fields=['status', 'updated_at'])
+            project = _ensure_project_for_proposal(proposal, manager=request.user)
+
+        return Response({
+            'status': proposal.status,
+            'project_id': project.id,
+            'project_url': f'/projects/{project.id}',
+        })
 
     @action(detail=True, methods=['get'])
     def team(self, request, pk=None):

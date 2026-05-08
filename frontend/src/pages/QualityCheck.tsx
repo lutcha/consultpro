@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useQCStore, useProposalStore } from '@/stores';
 import { cn } from '@/lib/utils';
+import { apiApproveProposalForSubmission } from '@/lib/api';
+import { toast } from 'sonner';
 
 const checkLabels: Record<string, string> = {
   compliance: 'Conformidade com ToR',
@@ -58,6 +60,17 @@ export function QualityCheck() {
   const { qcState, isRunning, runQC, applySuggestion, ignoreSuggestion, canSubmit } =
     useQCStore();
   const { selectedProposal, selectProposal } = useProposalStore();
+
+  const handleApprove = async () => {
+    if (!id || !canSubmit()) return;
+    try {
+      const result = await apiApproveProposalForSubmission(id);
+      toast.success('Proposta aprovada. Projeto criado.');
+      navigate(result.project_url || `/projects/${result.project_id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao aprovar proposta');
+    }
+  };
 
   useEffect(() => {
     if (id) {
@@ -117,7 +130,7 @@ export function QualityCheck() {
             <Download className="h-4 w-4 mr-2" />
             Exportar Report
           </Button>
-          <Button disabled={!canSubmit()}>
+          <Button disabled={!canSubmit()} onClick={handleApprove}>
             <CheckCircle className="h-4 w-4 mr-2" />
             Aprovar
           </Button>
@@ -320,7 +333,7 @@ export function QualityCheck() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Re-run QC
           </Button>
-          <Button disabled={!canSubmit()}>
+          <Button disabled={!canSubmit()} onClick={handleApprove}>
             <CheckCircle className="h-4 w-4 mr-2" />
             Aprovar para Submissão
           </Button>
