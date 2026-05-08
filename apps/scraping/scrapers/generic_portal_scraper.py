@@ -78,6 +78,13 @@ class GenericPortalScraper(BaseScraper):
         title_elem = item.select_one(title_sel)
         title = self._clean_text(title_elem.get_text()) if title_elem else text[:250]
 
+        # Skip items whose title matches any rejection pattern (e.g. editorial articles)
+        reject_patterns = self.config.get('reject_title_patterns', [])
+        if reject_patterns and title:
+            if any(re.search(pat, title, re.I) for pat in reject_patterns):
+                logger.debug(f"GenericPortal: rejected by title pattern: {title!r}")
+                return None
+
         link_elem = item.select_one(link_sel)
         detail_url = None
         if link_elem and link_elem.get('href'):
