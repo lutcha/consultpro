@@ -8,6 +8,7 @@ import type {
   Requirement,
   Risk,
   Proposal,
+  ProposalEvent,
   ProposalSection,
   TeamMember,
   Budget,
@@ -26,6 +27,7 @@ import type {
   ApiRequirement,
   ApiRisk,
   ApiProposal,
+  ApiProposalEvent,
   ApiProposalListItem,
   ApiProposalSection,
   ApiTeamMember,
@@ -236,6 +238,25 @@ export function mapApiBudget(budget: ApiBudget | null): Budget | undefined {
   };
 }
 
+export function mapApiProposalEvent(event: ApiProposalEvent): ProposalEvent {
+  const createdBy = event.created_by_detail
+    ? `${event.created_by_detail.first_name || ''} ${event.created_by_detail.last_name || ''}`.trim() ||
+      event.created_by_detail.email
+    : undefined;
+
+  return {
+    id: String(event.id),
+    type: event.event_type,
+    typeLabel: event.event_type_display || event.event_type,
+    title: event.title,
+    notes: event.notes || '',
+    occurredAt: toDate(event.occurred_at),
+    externalUrl: event.external_url || undefined,
+    attachmentUrl: event.attachment_url || event.attachment || undefined,
+    createdBy,
+  };
+}
+
 // ============================================
 // PROPOSAL
 // ============================================
@@ -250,6 +271,7 @@ export function mapApiProposal(proposal: ApiProposal): Proposal {
     progress: proposal.progress ?? undefined,
     sections: (proposal.sections || []).map(mapApiProposalSection),
     team: (proposal.team || []).map(mapApiTeamMember),
+    events: (proposal.events || []).map(mapApiProposalEvent),
     budget: mapApiBudget(proposal.budget) || { total: 0, currency: 'USD', breakdown: [] },
     qualityScore: proposal.quality_score || undefined,
     proponentLogoUrl: proposal.proponent_logo_url || undefined,
@@ -275,6 +297,7 @@ export function mapApiProposalListItem(
     progress: proposal.progress ?? 0,
     sections: [],
     team: [],
+    events: [],
     budget: { total: 0, currency: 'USD', breakdown: [] },
     consortiumMembers: [],
     createdAt: toDate(proposal.created_at),

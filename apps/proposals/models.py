@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from apps.users.models import User
 from apps.opportunities.models import Opportunity
 
@@ -95,6 +96,51 @@ class ProposalStatusHistory(models.Model):
 
     def __str__(self):
         return f"{self.proposal} -> {self.status}"
+
+
+class ProposalEvent(models.Model):
+    EVENT_TYPE_CHOICES = [
+        ('submission', 'Submissao'),
+        ('evaluation', 'Avaliacao'),
+        ('shortlist', 'Shortlist'),
+        ('clarification', 'Clarificacao'),
+        ('bafo', 'BAFO'),
+        ('award', 'Adjudicacao'),
+        ('contracting', 'Contratacao'),
+        ('handover', 'Handover'),
+        ('note', 'Nota'),
+    ]
+
+    proposal = models.ForeignKey(
+        Proposal,
+        on_delete=models.CASCADE,
+        related_name='events',
+    )
+    event_type = models.CharField(max_length=30, choices=EVENT_TYPE_CHOICES)
+    title = models.CharField(max_length=255)
+    notes = models.TextField(blank=True)
+    occurred_at = models.DateTimeField(default=timezone.now)
+    external_url = models.URLField(blank=True)
+    attachment = models.FileField(
+        upload_to='proposals/events/%Y/%m/',
+        null=True,
+        blank=True,
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='proposal_events',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-occurred_at', '-created_at']
+
+    def __str__(self):
+        return f"{self.get_event_type_display()} - {self.proposal}"
 
 
 class ProposalTeamMember(models.Model):

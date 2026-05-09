@@ -7,6 +7,7 @@ from .models import (
     BudgetItem,
     Comment,
     Proposal,
+    ProposalEvent,
     ProposalSection,
     ProposalTeamMember,
 )
@@ -48,6 +49,40 @@ class AISuggestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AISuggestion
         fields = '__all__'
+
+
+class ProposalEventSerializer(serializers.ModelSerializer):
+    created_by_detail = UserMiniSerializer(source='created_by', read_only=True)
+    event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
+    attachment_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProposalEvent
+        fields = [
+            'id',
+            'proposal',
+            'event_type',
+            'event_type_display',
+            'title',
+            'notes',
+            'occurred_at',
+            'external_url',
+            'attachment',
+            'attachment_url',
+            'created_by',
+            'created_by_detail',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+    def get_attachment_url(self, obj):
+        if not obj.attachment:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.attachment.url)
+        return obj.attachment.url
 
 
 class ProposalTeamMemberSerializer(serializers.ModelSerializer):
@@ -100,6 +135,7 @@ class ProposalDetailSerializer(serializers.ModelSerializer):
     team = ProposalTeamMemberSerializer(
         source='team_members_detail', many=True, read_only=True
     )
+    events = ProposalEventSerializer(many=True, read_only=True)
     budget = BudgetSerializer(read_only=True)
     proponent_logo_url = serializers.SerializerMethodField()
     client_logo_url = serializers.SerializerMethodField()

@@ -6,6 +6,7 @@ from .models import (
     BudgetItem,
     Comment,
     Proposal,
+    ProposalEvent,
     ProposalSection,
     ProposalTeamMember,
 )
@@ -27,6 +28,13 @@ class ProposalTeamMemberAdmin(admin.ModelAdmin):
 class ProposalSectionAdmin(admin.ModelAdmin):
     list_display = ('proposal', 'section_type', 'title', 'order', 'is_complete')
     list_filter = ('section_type', 'is_complete')
+
+
+@admin.register(ProposalEvent)
+class ProposalEventAdmin(admin.ModelAdmin):
+    list_display = ('proposal', 'event_type', 'title', 'occurred_at', 'created_by')
+    list_filter = ('event_type', 'occurred_at')
+    search_fields = ('proposal__title', 'title', 'notes')
 
 
 @admin.register(Comment)

@@ -266,6 +266,7 @@ export const mockProposals: Proposal[] = [
       { userId: '1', role: 'Team Leader', hours: 240, cvAttached: true },
       { userId: '3', role: 'Especialista em Saúde', hours: 120, cvAttached: false },
     ],
+    events: [],
     budget: {
       total: 175000,
       currency: 'USD',

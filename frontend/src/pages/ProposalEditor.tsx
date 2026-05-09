@@ -34,6 +34,7 @@ import {
   apiDownloadProposalWord,
   apiDownloadProposalPdf,
   apiCreateProposalSection,
+  apiCreateProposalEvent,
   apiGenerateProposalSectionSuggestion,
   apiTransitionProposalStatus,
   apiUploadProposalLogo,
@@ -99,6 +100,41 @@ const proposalTransitions: Partial<
     { status: 'project_initiation', label: 'Iniciar projeto', note: 'Handover concluído e projeto iniciado.' },
   ],
 };
+
+const proposalEventTypes = [
+  { value: 'submission', label: 'Submissao' },
+  { value: 'evaluation', label: 'Avaliacao' },
+  { value: 'shortlist', label: 'Shortlist' },
+  { value: 'clarification', label: 'Clarificacao' },
+  { value: 'bafo', label: 'BAFO' },
+  { value: 'award', label: 'Adjudicacao' },
+  { value: 'contracting', label: 'Contratacao' },
+  { value: 'handover', label: 'Handover' },
+  { value: 'note', label: 'Nota' },
+];
+
+const defaultEventTitles: Record<string, string> = {
+  submission: 'Comprovativo de submissao',
+  evaluation: 'Atualizacao de avaliacao',
+  shortlist: 'Shortlist / entrevista',
+  clarification: 'Pedido de clarificacao',
+  bafo: 'Best And Final Offer',
+  award: 'Notificacao de adjudicacao',
+  contracting: 'Documento de contratacao',
+  handover: 'Handover para execucao',
+  note: 'Nota da proposta',
+};
+
+function formatDateTime(value?: Date) {
+  if (!value || Number.isNaN(value.getTime())) return '-';
+  return new Intl.DateTimeFormat('pt-PT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(value);
+}
 
 function escapeHtml(value: string) {
   return value
@@ -267,6 +303,15 @@ export function ProposalEditor() {
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [transitioningStatus, setTransitioningStatus] = useState<ProposalStatus | null>(null);
   const [pipelineError, setPipelineError] = useState<string | null>(null);
+  const [isAddingEvent, setIsAddingEvent] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    event_type: 'submission',
+    title: defaultEventTitles.submission,
+    occurred_at: new Date().toISOString().slice(0, 16),
+    external_url: '',
+    notes: '',
+    attachment: null as File | null,
+  });
   const [logos, setLogos] = useState<{
     proponent?: string;
     client?: string;
@@ -390,6 +435,50 @@ export function ProposalEditor() {
       alert(err instanceof Error ? err.message : 'Erro ao criar secao');
     } finally {
       setIsAddingSection(false);
+    }
+  };
+
+  const handleEventTypeChange = (eventType: string) => {
+    setEventForm((prev) => ({
+      ...prev,
+      event_type: eventType,
+      title:
+        !prev.title || Object.values(defaultEventTitles).includes(prev.title)
+          ? defaultEventTitles[eventType] || ''
+          : prev.title,
+    }));
+  };
+
+  const handleAddProposalEvent = async () => {
+    if (!selectedProposal || isAddingEvent || !eventForm.title.trim()) return;
+    setIsAddingEvent(true);
+    setPipelineError(null);
+    try {
+      await apiCreateProposalEvent(selectedProposal.id, {
+        event_type: eventForm.event_type,
+        title: eventForm.title.trim(),
+        notes: eventForm.notes.trim(),
+        occurred_at: eventForm.occurred_at
+          ? new Date(eventForm.occurred_at).toISOString()
+          : undefined,
+        external_url: eventForm.external_url.trim(),
+        attachment: eventForm.attachment,
+      });
+      setEventForm({
+        event_type: eventForm.event_type,
+        title: defaultEventTitles[eventForm.event_type] || '',
+        occurred_at: new Date().toISOString().slice(0, 16),
+        external_url: '',
+        notes: '',
+        attachment: null,
+      });
+      await selectProposal(selectedProposal.id);
+    } catch (err) {
+      setPipelineError(
+        err instanceof Error ? err.message : 'Erro ao registar evento da proposta'
+      );
+    } finally {
+      setIsAddingEvent(false);
     }
   };
 
@@ -633,6 +722,148 @@ export function ProposalEditor() {
         {pipelineError && (
           <p className="mt-2 text-sm text-error">{pipelineError}</p>
         )}
+        <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_1.2fr]">
+          <div className="rounded-lg border border-border bg-muted/20 p-3">
+            <p className="mb-2 text-sm font-semibold">Registar evento</p>
+            <div className="grid gap-2 md:grid-cols-2">
+              <label className="text-xs font-medium">
+                Tipo
+                <select
+                  value={eventForm.event_type}
+                  onChange={(event) => handleEventTypeChange(event.target.value)}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {proposalEventTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-medium">
+                Data
+                <Input
+                  type="datetime-local"
+                  value={eventForm.occurred_at}
+                  onChange={(event) =>
+                    setEventForm((prev) => ({ ...prev, occurred_at: event.target.value }))
+                  }
+                  className="mt-1 h-9"
+                />
+              </label>
+            </div>
+            <label className="mt-2 block text-xs font-medium">
+              Titulo
+              <Input
+                value={eventForm.title}
+                onChange={(event) =>
+                  setEventForm((prev) => ({ ...prev, title: event.target.value }))
+                }
+                className="mt-1 h-9"
+                placeholder="Ex: pedido de clarificacao recebido"
+              />
+            </label>
+            <label className="mt-2 block text-xs font-medium">
+              Link externo
+              <Input
+                value={eventForm.external_url}
+                onChange={(event) =>
+                  setEventForm((prev) => ({ ...prev, external_url: event.target.value }))
+                }
+                className="mt-1 h-9"
+                placeholder="https://..."
+              />
+            </label>
+            <label className="mt-2 block text-xs font-medium">
+              Notas
+              <textarea
+                value={eventForm.notes}
+                onChange={(event) =>
+                  setEventForm((prev) => ({ ...prev, notes: event.target.value }))
+                }
+                className="mt-1 min-h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                placeholder="Perguntas do cliente, resposta BAFO, comprovativo de submissao..."
+              />
+            </label>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="flex-1 text-xs font-medium">
+                Ficheiro
+                <Input
+                  type="file"
+                  onChange={(event) =>
+                    setEventForm((prev) => ({
+                      ...prev,
+                      attachment: event.target.files?.[0] || null,
+                    }))
+                  }
+                  className="mt-1 h-9"
+                />
+              </label>
+              <Button
+                size="sm"
+                onClick={handleAddProposalEvent}
+                disabled={isAddingEvent || !eventForm.title.trim()}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {isAddingEvent ? 'A registar...' : 'Adicionar'}
+              </Button>
+            </div>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/20 p-3">
+            <p className="mb-2 text-sm font-semibold">Historico da proposta</p>
+            {(selectedProposal.events || []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Sem eventos registados. Use esta timeline para submissao, clarificacoes, BAFO e contracting.
+              </p>
+            ) : (
+              <div className="max-h-72 space-y-2 overflow-auto pr-1">
+                {(selectedProposal.events || []).map((event) => (
+                  <div key={event.id} className="rounded-md border border-border bg-background p-2">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium">{event.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {event.typeLabel} · {formatDateTime(event.occurredAt)}
+                          {event.createdBy ? ` · ${event.createdBy}` : ''}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {event.typeLabel}
+                      </Badge>
+                    </div>
+                    {event.notes && (
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                        {event.notes}
+                      </p>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                      {event.externalUrl && (
+                        <a
+                          href={event.externalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          Abrir link
+                        </a>
+                      )}
+                      {event.attachmentUrl && (
+                        <a
+                          href={event.attachmentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          Abrir ficheiro
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Main Editor Area */}

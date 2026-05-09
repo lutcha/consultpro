@@ -18,6 +18,7 @@ from .models import (
     BudgetItem,
     Comment,
     Proposal,
+    ProposalEvent,
     ProposalSection,
     ProposalStatusHistory,
     ProposalTeamMember,
@@ -28,6 +29,7 @@ from .serializers import (
     BudgetItemSerializer,
     CommentSerializer,
     ProposalDetailSerializer,
+    ProposalEventSerializer,
     ProposalListSerializer,
     ProposalSectionSerializer,
     ProposalTeamMemberSerializer,
@@ -185,6 +187,21 @@ def _ensure_project_for_proposal(proposal, manager=None):
     return project
 
 
+PROPOSAL_STATUS_EVENT_TYPES = {
+    'submitted': 'submission',
+    'under_evaluation': 'evaluation',
+    'shortlisted': 'shortlist',
+    'clarifications_requested': 'clarification',
+    'bafo': 'bafo',
+    'awarded': 'award',
+    'contract_negotiation': 'contracting',
+    'contract_signed': 'contracting',
+    'project_initiation': 'handover',
+    'lost': 'note',
+    'rejected': 'note',
+}
+
+
 def _set_proposal_status(proposal, status_value, user=None, note=''):
     valid_statuses = {choice[0] for choice in Proposal.STATUS_CHOICES}
     if status_value not in valid_statuses:
@@ -202,6 +219,16 @@ def _set_proposal_status(proposal, status_value, user=None, note=''):
         changed_by=user,
         note=note,
     )
+    event_type = PROPOSAL_STATUS_EVENT_TYPES.get(status_value)
+    if event_type:
+        status_label = dict(Proposal.STATUS_CHOICES).get(status_value, status_value)
+        ProposalEvent.objects.create(
+            proposal=proposal,
+            event_type=event_type,
+            title=status_label,
+            notes=note,
+            created_by=user,
+        )
     return proposal
 
 
@@ -234,6 +261,32 @@ class ProposalViewSet(viewsets.ModelViewSet):
         sections = proposal.sections.all()
         serializer = ProposalSectionSerializer(sections, many=True)
         return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=['get', 'post'],
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def events(self, request, pk=None):
+        proposal = self.get_object()
+
+        if request.method == 'GET':
+            serializer = ProposalEventSerializer(
+                proposal.events.all(),
+                many=True,
+                context={'request': request},
+            )
+            return Response(serializer.data)
+
+        data = request.data.copy()
+        data['proposal'] = proposal.id
+        serializer = ProposalEventSerializer(
+            data=data,
+            context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(created_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
     def add_section(self, request, pk=None):

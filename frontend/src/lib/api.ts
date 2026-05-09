@@ -436,6 +436,23 @@ export interface ApiTeamMember {
   cv_document: string | null;
 }
 
+export interface ApiProposalEvent {
+  id: number;
+  proposal: number;
+  event_type: string;
+  event_type_display: string;
+  title: string;
+  notes: string;
+  occurred_at: string;
+  external_url: string;
+  attachment: string | null;
+  attachment_url: string | null;
+  created_by: number | null;
+  created_by_detail: { id: number; email: string; first_name: string; last_name: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiProposalListItem {
   id: number;
   title: string;
@@ -460,6 +477,7 @@ export interface ApiProposal {
   sections: ApiProposalSection[];
   team: ApiTeamMember[];
   budget: ApiBudget | null;
+  events: ApiProposalEvent[];
   quality_score: number | null;
   created_by: number | null;
   created_at: string;
@@ -545,6 +563,31 @@ export async function apiTransitionProposalStatus(
   return apiRequest(`/proposals/${proposalId}/transition_status/`, {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+}
+
+export async function apiCreateProposalEvent(
+  proposalId: string,
+  data: {
+    event_type: string;
+    title: string;
+    notes?: string;
+    occurred_at?: string;
+    external_url?: string;
+    attachment?: File | null;
+  }
+): Promise<ApiProposalEvent> {
+  const formData = new FormData();
+  formData.append('event_type', data.event_type);
+  formData.append('title', data.title);
+  if (data.notes) formData.append('notes', data.notes);
+  if (data.occurred_at) formData.append('occurred_at', data.occurred_at);
+  if (data.external_url) formData.append('external_url', data.external_url);
+  if (data.attachment) formData.append('attachment', data.attachment);
+
+  return apiRequest<ApiProposalEvent>(`/proposals/${proposalId}/events/`, {
+    method: 'POST',
+    body: formData,
   });
 }
 

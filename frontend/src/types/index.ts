@@ -81,6 +81,7 @@ export interface Proposal {
   progress?: number;
   sections: ProposalSection[];
   team: TeamMember[];
+  events: ProposalEvent[];
   budget?: Budget;
   qualityScore?: number;
   proponentLogoUrl?: string;
@@ -89,6 +90,18 @@ export interface Proposal {
   createdAt: Date;
   updatedAt: Date;
   submittedAt?: Date;
+}
+
+export interface ProposalEvent {
+  id: string;
+  type: string;
+  typeLabel: string;
+  title: string;
+  notes: string;
+  occurredAt: Date;
+  externalUrl?: string;
+  attachmentUrl?: string;
+  createdBy?: string;
 }
 
 export type ProposalStatus = 
