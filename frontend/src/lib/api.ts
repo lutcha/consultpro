@@ -176,6 +176,21 @@ export async function apiGetUsers(): Promise<PaginatedResponse<ApiUser>> {
   return apiRequest<PaginatedResponse<ApiUser>>('/users/');
 }
 
+export async function apiCreateUser(data: {
+  email: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+  role: string;
+  skills?: string[];
+  languages?: string[];
+}): Promise<ApiUser> {
+  return apiRequest<ApiUser>('/users/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function apiGetUser(id: number): Promise<ApiUser> {
   return apiRequest<ApiUser>(`/users/${id}/`);
 }
@@ -1121,6 +1136,20 @@ export async function apiUpdateTeam(
 export async function apiDeleteTeam(id: number): Promise<void> {
   return apiRequest<void>(`/teams/${id}/`, {
     method: 'DELETE',
+  });
+}
+
+export async function apiAddTeamMember(teamId: number, userId: number): Promise<ApiTeam> {
+  return apiRequest<ApiTeam>(`/teams/${teamId}/add_member/`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export async function apiRemoveTeamMember(teamId: number, userId: number): Promise<ApiTeam> {
+  return apiRequest<ApiTeam>(`/teams/${teamId}/remove_member/`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
   });
 }
 

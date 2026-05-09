@@ -20,7 +20,7 @@ import { AddInternalMemberModal } from '@/components/modals/AddInternalMemberMod
 import { AddConsultantModal } from '@/components/modals/AddConsultantModal';
 import { AddProjectTeamMemberModal } from '@/components/modals/AddProjectTeamMemberModal';
 import { CreateProjectTeamModal } from '@/components/modals/CreateProjectTeamModal';
-import type { InternalTeamMember, Consultant, ProjectTeam, ProjectTeamMember } from '@/types/teams';
+import type { ProjectTeam } from '@/types/teams';
 
 function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -380,7 +380,7 @@ function ProjectTeamsTab({ onAdd, onCreateTeam }: { onAdd: (project: ProjectTeam
 // MAIN PAGE
 // ============================================================
 export function TeamsPage() {
-  const { fetchAll, isLoading, error, clearError, internalMembers, consultants, projectTeams } = useTeamsStore();
+  const { fetchAll, isLoading, error, clearError } = useTeamsStore();
   const [showInternalModal, setShowInternalModal] = useState(false);
   const [showConsultantModal, setShowConsultantModal] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -389,28 +389,10 @@ export function TeamsPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const handleAddInternal = (data: any) => {
-    useTeamsStore.setState({ internalMembers: [...internalMembers, { ...data, id: `int-${Date.now()}` }] });
-  };
-
-  const handleAddConsultant = (data: any) => {
-    useTeamsStore.setState({ consultants: [...consultants, { ...data, id: `ext-${Date.now()}` }] });
-  };
-
-  const handleAddProjectMember = (data: ProjectTeamMember) => {
-    if (!activeProject) return;
-    const updated = projectTeams.map((p) => {
-      if (p.id !== activeProject.id) return p;
-      if (data.type === 'internal') return { ...p, internalMembers: [...p.internalMembers, data] };
-      return { ...p, externalMembers: [...p.externalMembers, data] };
-    });
-    useTeamsStore.setState({ projectTeams: updated });
-    setActiveProject(null);
-  };
-
-  const handleCreateTeam = (data: any) => {
-    useTeamsStore.setState({ projectTeams: [...projectTeams, data] });
-  };
+  const handleAddInternal = () => { fetchAll(); };
+  const handleAddConsultant = () => { fetchAll(); };
+  const handleAddProjectMember = () => { fetchAll(); setActiveProject(null); };
+  const handleCreateTeam = () => { fetchAll(); };
 
   if (isLoading) {
     return (
@@ -468,7 +450,7 @@ export function TeamsPage() {
 
       <AddInternalMemberModal open={showInternalModal} onClose={() => setShowInternalModal(false)} onAdd={handleAddInternal} />
       <AddConsultantModal open={showConsultantModal} onClose={() => setShowConsultantModal(false)} onAdd={handleAddConsultant} />
-      <AddProjectTeamMemberModal open={showProjectModal} onClose={() => setShowProjectModal(false)} onAdd={handleAddProjectMember} projectName={activeProject?.name} />
+      <AddProjectTeamMemberModal open={showProjectModal} onClose={() => setShowProjectModal(false)} onAdd={handleAddProjectMember} teamId={activeProject?.id ?? null} projectName={activeProject?.name} />
       <CreateProjectTeamModal open={showCreateTeamModal} onClose={() => setShowCreateTeamModal(false)} onAdd={handleCreateTeam} />
     </div>
   );
