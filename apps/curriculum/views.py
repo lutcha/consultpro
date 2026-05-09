@@ -22,7 +22,6 @@ from .serializers import (
 
 
 class CurriculumViewSet(viewsets.ModelViewSet):
-    queryset = Curriculum.objects.all()
     permission_classes = [IsConsultantOrManager]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'file_type']
@@ -31,26 +30,26 @@ class CurriculumViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     parser_classes = (MultiPartParser, FormParser)
 
+    def get_queryset(self):
+        return Curriculum.objects.filter(user=self.request.user)
+
     def get_serializer_class(self):
         if self.action == 'list':
             return CurriculumListSerializer
         return CurriculumDetailSerializer
 
     def perform_create(self, serializer):
-        # Auto-set the current user
         serializer.save(user=self.request.user)
 
     @action(detail=True, methods=['post'])
     def analyze(self, request, pk=None):
-        """Trigger AI analysis of the CV"""
+        """Run CV analysis synchronously and return the updated CV."""
         curriculum = self.get_object()
-        curriculum.status = 'processing'
-        curriculum.save()
-        
         from .tasks import analyze_cv_with_ai
-        analyze_cv_with_ai.delay(curriculum.id)
-        
-        return Response({'status': 'analysis started'})
+        analyze_cv_with_ai(curriculum.id)
+        curriculum.refresh_from_db()
+        serializer = CurriculumDetailSerializer(curriculum, context={'request': request})
+        return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
     def extracted(self, request, pk=None):

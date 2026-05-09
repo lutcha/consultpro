@@ -1199,6 +1199,10 @@ export async function apiGetCurricula(): Promise<PaginatedResponse<ApiCurriculum
   return apiRequest<PaginatedResponse<ApiCurriculum>>('/curriculum/');
 }
 
+export async function apiGetCurriculum(id: number): Promise<ApiCurriculum> {
+  return apiRequest<ApiCurriculum>(`/curriculum/${id}/`);
+}
+
 export async function apiUploadCV(file: File): Promise<ApiCurriculum> {
   const formData = new FormData();
   formData.append('file', file);
@@ -1213,8 +1217,8 @@ export async function apiUploadCV(file: File): Promise<ApiCurriculum> {
   });
 }
 
-export async function apiAnalyzeCV(id: number): Promise<{ status: string }> {
-  return apiRequest<{ status: string }>(`/curriculum/${id}/analyze/`, {
+export async function apiAnalyzeCV(id: number): Promise<ApiCurriculum> {
+  return apiRequest<ApiCurriculum>(`/curriculum/${id}/analyze/`, {
     method: 'POST',
   });
 }
