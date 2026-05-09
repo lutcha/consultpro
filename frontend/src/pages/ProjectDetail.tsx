@@ -37,15 +37,20 @@ import { Progress } from '@/components/ui/progress';
 import {
   apiCreateProjectArtifact,
   apiCreateProjectMilestone,
+  apiCreateProjectRisk,
+  apiCreateProjectTeamMember,
   apiCreateProjectTask,
+  apiGetUsers,
   apiGetProject,
   apiUpdateProject,
   apiUpdateProjectMilestone,
   apiUpdateProjectPhase,
+  apiUpdateProjectRisk,
+  apiUpdateProjectTeamMember,
   apiUpdateProjectStatus,
   apiUpdateProjectTask,
 } from '@/lib/api';
-import type { ApiProjectDetail, ApiProjectTask } from '@/lib/api';
+import type { ApiProjectDetail, ApiProjectRisk, ApiProjectTask, ApiUser } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 
@@ -53,6 +58,7 @@ export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<ApiProjectDetail | null>(null);
+  const [users, setUsers] = useState<ApiUser[]>([]);
   const [draft, setDraft] = useState({
     title: '',
     client: '',
@@ -92,18 +98,47 @@ export function ProjectDetail() {
     priority: 'medium' as 'low' | 'medium' | 'high' | 'critical',
     due_date: '',
   });
+  const [teamDraft, setTeamDraft] = useState({
+    user_id: '',
+    role: 'consultant',
+    allocation_percentage: '100',
+    start_date: '',
+    end_date: '',
+  });
+  const [riskDraft, setRiskDraft] = useState({
+    title: '',
+    description: '',
+    severity: 'medium' as ApiProjectRisk['severity'],
+    status: 'open' as ApiProjectRisk['status'],
+    mitigation_plan: '',
+    owner_id: '',
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [savingPhaseId, setSavingPhaseId] = useState<number | null>(null);
   const [isSavingArtifact, setIsSavingArtifact] = useState(false);
   const [isSavingMilestone, setIsSavingMilestone] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
+  const [isSavingTeamMember, setIsSavingTeamMember] = useState(false);
+  const [isSavingRisk, setIsSavingRisk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (id) loadProject(id);
+    if (id) {
+      loadProject(id);
+      loadUsers();
+    }
   }, [id]);
+
+  const loadUsers = async () => {
+    try {
+      const data = await apiGetUsers();
+      setUsers(data.results || []);
+    } catch {
+      setUsers([]);
+    }
+  };
 
   const loadProject = async (projectId: string) => {
     setIsLoading(true);
@@ -352,6 +387,104 @@ export function ProjectDetail() {
       setSaveMessage('Tarefa atualizada.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao atualizar tarefa');
+    }
+  };
+
+  const handleCreateTeamMember = async () => {
+    if (!project || !teamDraft.user_id) return;
+    setIsSavingTeamMember(true);
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      await apiCreateProjectTeamMember({
+        project: project.id,
+        user_id: Number(teamDraft.user_id),
+        role: teamDraft.role,
+        allocation_percentage: Math.max(0, Math.min(100, Number(teamDraft.allocation_percentage) || 0)),
+        start_date: teamDraft.start_date || null,
+        end_date: teamDraft.end_date || null,
+      });
+      setTeamDraft({
+        user_id: '',
+        role: 'consultant',
+        allocation_percentage: '100',
+        start_date: '',
+        end_date: '',
+      });
+      await loadProject(String(project.id));
+      setSaveMessage('Membro adicionado.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao adicionar membro');
+    } finally {
+      setIsSavingTeamMember(false);
+    }
+  };
+
+  const handleUpdateTeamMember = async (
+    memberId: number,
+    patch: { role?: string; allocation_percentage?: number; start_date?: string | null; end_date?: string | null }
+  ) => {
+    if (!project) return;
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      await apiUpdateProjectTeamMember(memberId, patch);
+      await loadProject(String(project.id));
+      setSaveMessage('Membro atualizado.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar membro');
+    }
+  };
+
+  const handleCreateRisk = async () => {
+    if (!project || !riskDraft.title.trim() || !riskDraft.description.trim()) return;
+    setIsSavingRisk(true);
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      await apiCreateProjectRisk({
+        project: project.id,
+        title: riskDraft.title.trim(),
+        description: riskDraft.description.trim(),
+        severity: riskDraft.severity,
+        status: riskDraft.status,
+        mitigation_plan: riskDraft.mitigation_plan.trim(),
+        owner_id: riskDraft.owner_id ? Number(riskDraft.owner_id) : null,
+      });
+      setRiskDraft({
+        title: '',
+        description: '',
+        severity: 'medium',
+        status: 'open',
+        mitigation_plan: '',
+        owner_id: '',
+      });
+      await loadProject(String(project.id));
+      setSaveMessage('Risco guardado.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao guardar risco');
+    } finally {
+      setIsSavingRisk(false);
+    }
+  };
+
+  const handleUpdateRisk = async (
+    riskId: number,
+    patch: Partial<ApiProjectRisk> & { owner_id?: number | null }
+  ) => {
+    if (!project) return;
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      await apiUpdateProjectRisk(riskId, patch);
+      await loadProject(String(project.id));
+      setSaveMessage('Risco atualizado.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar risco');
     }
   };
 
@@ -800,7 +933,74 @@ export function ProjectDetail() {
             <CardHeader>
               <CardTitle>Equipa do Projeto</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 lg:grid-cols-6 gap-3 rounded-md border bg-muted/20 p-3">
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Consultor</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={teamDraft.user_id}
+                    onChange={(e) =>
+                      setTeamDraft((prev) => ({ ...prev, user_id: e.target.value }))
+                    }
+                  >
+                    <option value="">Selecionar membro</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name || user.email} ({user.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Papel</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={teamDraft.role}
+                    onChange={(e) =>
+                      setTeamDraft((prev) => ({ ...prev, role: e.target.value }))
+                    }
+                  >
+                    <option value="team_lead">Team Lead</option>
+                    <option value="technical_lead">Technical Lead</option>
+                    <option value="consultant">Consultor</option>
+                    <option value="specialist">Especialista</option>
+                    <option value="support">Suporte</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Alocacao (%)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={teamDraft.allocation_percentage}
+                    onChange={(e) =>
+                      setTeamDraft((prev) => ({ ...prev, allocation_percentage: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Inicio</Label>
+                  <Input
+                    type="date"
+                    value={teamDraft.start_date}
+                    onChange={(e) =>
+                      setTeamDraft((prev) => ({ ...prev, start_date: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    className="w-full"
+                    onClick={handleCreateTeamMember}
+                    disabled={isSavingTeamMember || !teamDraft.user_id}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSavingTeamMember ? 'A guardar...' : 'Adicionar'}
+                  </Button>
+                </div>
+              </div>
               {project.team?.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
                   Nenhum membro atribuído.
@@ -810,7 +1010,7 @@ export function ProjectDetail() {
                   {project.team?.map((member) => (
                     <div
                       key={member.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                      className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-3 rounded-lg bg-muted/50"
                     >
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-bold">
@@ -823,8 +1023,20 @@ export function ProjectDetail() {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <Badge>{member.role}</Badge>
+                      <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <select
+                          className="h-8 rounded-md border bg-background px-2 text-sm"
+                          value={member.role}
+                          onChange={(e) =>
+                            handleUpdateTeamMember(member.id, { role: e.target.value })
+                          }
+                        >
+                          <option value="team_lead">Team Lead</option>
+                          <option value="technical_lead">Technical Lead</option>
+                          <option value="consultant">Consultor</option>
+                          <option value="specialist">Especialista</option>
+                          <option value="support">Suporte</option>
+                        </select>
                         <p className="text-xs text-muted-foreground mt-1">
                           {member.allocation_percentage}% alocação
                         </p>
@@ -1299,7 +1511,103 @@ export function ProjectDetail() {
             <CardHeader>
               <CardTitle>Riscos e Issues</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 lg:grid-cols-6 gap-3 rounded-md border bg-muted/20 p-3">
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Titulo</Label>
+                  <Input
+                    value={riskDraft.title}
+                    onChange={(e) =>
+                      setRiskDraft((prev) => ({ ...prev, title: e.target.value }))
+                    }
+                    placeholder="Ex: Atraso na aprovacao do plano"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Severidade</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={riskDraft.severity}
+                    onChange={(e) =>
+                      setRiskDraft((prev) => ({
+                        ...prev,
+                        severity: e.target.value as ApiProjectRisk['severity'],
+                      }))
+                    }
+                  >
+                    <option value="low">Baixo</option>
+                    <option value="medium">Medio</option>
+                    <option value="high">Alto</option>
+                    <option value="critical">Critico</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={riskDraft.status}
+                    onChange={(e) =>
+                      setRiskDraft((prev) => ({
+                        ...prev,
+                        status: e.target.value as ApiProjectRisk['status'],
+                      }))
+                    }
+                  >
+                    <option value="open">Aberto</option>
+                    <option value="mitigated">Mitigado</option>
+                    <option value="closed">Fechado</option>
+                  </select>
+                </div>
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Responsavel</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={riskDraft.owner_id}
+                    onChange={(e) =>
+                      setRiskDraft((prev) => ({ ...prev, owner_id: e.target.value }))
+                    }
+                  >
+                    <option value="">Sem responsavel</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name || user.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2 lg:col-span-3">
+                  <Label>Descricao</Label>
+                  <Textarea
+                    value={riskDraft.description}
+                    onChange={(e) =>
+                      setRiskDraft((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    rows={2}
+                    placeholder="O que pode acontecer e qual o impacto no projeto"
+                  />
+                </div>
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Plano de mitigacao</Label>
+                  <Textarea
+                    value={riskDraft.mitigation_plan}
+                    onChange={(e) =>
+                      setRiskDraft((prev) => ({ ...prev, mitigation_plan: e.target.value }))
+                    }
+                    rows={2}
+                    placeholder="Acao preventiva, responsavel e trigger"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    className="w-full"
+                    onClick={handleCreateRisk}
+                    disabled={isSavingRisk || !riskDraft.title.trim() || !riskDraft.description.trim()}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSavingRisk ? 'A guardar...' : 'Adicionar'}
+                  </Button>
+                </div>
+              </div>
               {project.risks?.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
                   Nenhum risco identificado.
@@ -1331,7 +1639,7 @@ export function ProjectDetail() {
                             </p>
                           )}
                         </div>
-                        <div className="text-right">
+                        <div className="flex flex-col gap-2 min-w-40">
                           <Badge
                             variant={
                               r.severity === 'critical' || r.severity === 'high'
@@ -1341,9 +1649,29 @@ export function ProjectDetail() {
                           >
                             {r.severity}
                           </Badge>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {r.status}
-                          </p>
+                          <select
+                            className="h-8 rounded-md border bg-background px-2 text-sm"
+                            value={r.status}
+                            onChange={(e) =>
+                              handleUpdateRisk(r.id, { status: e.target.value as ApiProjectRisk['status'] })
+                            }
+                          >
+                            <option value="open">Aberto</option>
+                            <option value="mitigated">Mitigado</option>
+                            <option value="closed">Fechado</option>
+                          </select>
+                          <select
+                            className="h-8 rounded-md border bg-background px-2 text-sm"
+                            value={r.severity}
+                            onChange={(e) =>
+                              handleUpdateRisk(r.id, { severity: e.target.value as ApiProjectRisk['severity'] })
+                            }
+                          >
+                            <option value="low">Baixo</option>
+                            <option value="medium">Medio</option>
+                            <option value="high">Alto</option>
+                            <option value="critical">Critico</option>
+                          </select>
                         </div>
                       </div>
                     </div>

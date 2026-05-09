@@ -733,23 +733,32 @@ export interface ApiProjectTask {
   updated_at: string;
 }
 
+export interface ApiProjectTeamMember {
+  id: number;
+  project: number;
+  user: { id: number; email: string; first_name: string; last_name: string; name: string; role: string };
+  role: string;
+  allocation_percentage: number;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface ApiProjectRisk {
+  id: number;
+  project: number;
+  title: string;
+  description: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'mitigated' | 'closed';
+  mitigation_plan: string;
+  owner: { id: number; email: string; first_name: string; last_name: string; name: string; role: string } | null;
+}
+
 export interface ApiProjectDetail extends ApiProject {
-  team: Array<{
-    id: number;
-    user: { id: number; email: string; first_name: string; last_name: string; name: string; role: string };
-    role: string;
-    allocation_percentage: number;
-  }>;
+  team: ApiProjectTeamMember[];
   milestones: ApiProjectMilestone[];
   tasks: ApiProjectTask[];
-  risks: Array<{
-    id: number;
-    title: string;
-    description: string;
-    severity: string;
-    status: string;
-    mitigation_plan: string;
-  }>;
+  risks: ApiProjectRisk[];
   deliverables: Array<{
     id: number;
     title: string;
@@ -855,6 +864,51 @@ export async function apiUpdateProjectTask(
   data: Partial<ApiProjectTask>
 ): Promise<ApiProjectTask> {
   return apiRequest<ApiProjectTask>(`/projects/tasks/${taskId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiCreateProjectTeamMember(
+  data: {
+    project: number;
+    user_id: number;
+    role: string;
+    allocation_percentage: number;
+    start_date?: string | null;
+    end_date?: string | null;
+  }
+): Promise<ApiProjectTeamMember> {
+  return apiRequest<ApiProjectTeamMember>('/projects/team-members/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiUpdateProjectTeamMember(
+  memberId: number,
+  data: Partial<ApiProjectTeamMember> & { user_id?: number }
+): Promise<ApiProjectTeamMember> {
+  return apiRequest<ApiProjectTeamMember>(`/projects/team-members/${memberId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiCreateProjectRisk(
+  data: Partial<ApiProjectRisk> & { owner_id?: number | null }
+): Promise<ApiProjectRisk> {
+  return apiRequest<ApiProjectRisk>('/projects/risks/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiUpdateProjectRisk(
+  riskId: number,
+  data: Partial<ApiProjectRisk> & { owner_id?: number | null }
+): Promise<ApiProjectRisk> {
+  return apiRequest<ApiProjectRisk>(`/projects/risks/${riskId}/`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
