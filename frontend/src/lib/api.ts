@@ -639,6 +639,20 @@ export interface ApiDashboardStats {
   proposals_in_progress: number;
   win_rate: number;
   upcoming_deadlines: number;
+  opportunities_by_status: Record<string, number>;
+  projects_active: number;
+  projects_completed: number;
+  projects_on_hold: number;
+  scraping_new: number;
+  scraping_with_ai: number;
+  deadline_items: Array<{
+    id: number;
+    title: string;
+    client: string;
+    deadline: string;
+    status: string;
+    days_left: number;
+  }>;
 }
 
 export interface ApiPipelineItem {

@@ -316,6 +316,13 @@ export function mapApiDashboardStats(stats: ApiDashboardStats): DashboardStats {
     proposalsInProgress: stats.proposals_in_progress,
     winRate: stats.win_rate,
     upcomingDeadlines: stats.upcoming_deadlines,
+    opportunitiesByStatus: stats.opportunities_by_status ?? {},
+    projectsActive: stats.projects_active ?? 0,
+    projectsCompleted: stats.projects_completed ?? 0,
+    projectsOnHold: stats.projects_on_hold ?? 0,
+    scrapingNew: stats.scraping_new ?? 0,
+    scrapingWithAi: stats.scraping_with_ai ?? 0,
+    deadlineItems: stats.deadline_items ?? [],
   };
 }
 

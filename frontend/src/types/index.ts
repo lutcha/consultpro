@@ -216,11 +216,27 @@ export interface QCSuggestion {
 }
 
 // Dashboard Types
+export interface DeadlineItem {
+  id: number;
+  title: string;
+  client: string;
+  deadline: string;
+  status: string;
+  days_left: number;
+}
+
 export interface DashboardStats {
   activeOpportunities: number;
   proposalsInProgress: number;
   winRate: number;
   upcomingDeadlines: number;
+  opportunitiesByStatus: Record<string, number>;
+  projectsActive: number;
+  projectsCompleted: number;
+  projectsOnHold: number;
+  scrapingNew: number;
+  scrapingWithAi: number;
+  deadlineItems: DeadlineItem[];
 }
 
 export interface PipelineItem {
