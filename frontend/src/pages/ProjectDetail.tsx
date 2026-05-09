@@ -465,7 +465,7 @@ export function ProjectDetail() {
       <Tabs defaultValue="overview">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8 lg:w-auto">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-          <TabsTrigger value="phases">Fases PMI</TabsTrigger>
+          <TabsTrigger value="phases">Fases Projeto</TabsTrigger>
           <TabsTrigger value="kanban">Tarefas</TabsTrigger>
           <TabsTrigger value="gantt">Timeline</TabsTrigger>
           <TabsTrigger value="team">Equipa</TabsTrigger>
@@ -479,7 +479,7 @@ export function ProjectDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Layers className="h-5 w-5" />
-                Fases do Projeto (PMI)
+                Fases do Projeto
               </CardTitle>
             </CardHeader>
             <CardContent>
