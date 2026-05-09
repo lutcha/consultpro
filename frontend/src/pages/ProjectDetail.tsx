@@ -31,7 +31,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { apiGetProject, apiUpdateProject, apiUpdateProjectStatus } from '@/lib/api';
+import { apiGetProject, apiUpdateProject, apiUpdateProjectPhase, apiUpdateProjectStatus } from '@/lib/api';
 import type { ApiProjectDetail } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -50,8 +50,16 @@ export function ProjectDetail() {
     progress: '0',
     description: '',
   });
+  const [phaseDrafts, setPhaseDrafts] = useState<Record<number, {
+    description: string;
+    start_date: string;
+    end_date: string;
+    completion_percentage: string;
+    is_completed: boolean;
+  }>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [savingPhaseId, setSavingPhaseId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -74,6 +82,20 @@ export function ProjectDetail() {
         progress: String(data.progress ?? 0),
         description: data.description || '',
       });
+      setPhaseDrafts(
+        Object.fromEntries(
+          (data.phases || []).map((phase) => [
+            phase.id,
+            {
+              description: phase.description || '',
+              start_date: phase.start_date || '',
+              end_date: phase.end_date || '',
+              completion_percentage: String(phase.completion_percentage ?? 0),
+              is_completed: phase.is_completed,
+            },
+          ])
+        )
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar projeto');
     } finally {
@@ -126,6 +148,49 @@ export function ProjectDetail() {
       loadProject(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao atualizar estado');
+    }
+  };
+
+  const updatePhaseDraft = (
+    phaseId: number,
+    patch: Partial<(typeof phaseDrafts)[number]>
+  ) => {
+    setPhaseDrafts((prev) => ({
+      ...prev,
+      [phaseId]: {
+        ...prev[phaseId],
+        ...patch,
+      },
+    }));
+  };
+
+  const handleSavePhase = async (phaseId: number) => {
+    const phaseDraft = phaseDrafts[phaseId];
+    if (!phaseDraft || !id) return;
+
+    setSavingPhaseId(phaseId);
+    setError(null);
+    setSaveMessage(null);
+
+    const completion = Math.max(
+      0,
+      Math.min(100, Number(phaseDraft.completion_percentage) || 0)
+    );
+
+    try {
+      await apiUpdateProjectPhase(phaseId, {
+        description: phaseDraft.description,
+        start_date: phaseDraft.start_date || null,
+        end_date: phaseDraft.end_date || null,
+        completion_percentage: phaseDraft.is_completed ? 100 : completion,
+        is_completed: phaseDraft.is_completed,
+      });
+      await loadProject(id);
+      setSaveMessage('Fase guardada.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao guardar fase');
+    } finally {
+      setSavingPhaseId(null);
     }
   };
 
@@ -314,6 +379,88 @@ export function ProjectDetail() {
                                 Fim: {formatDate(new Date(phase.end_date))}
                               </span>
                             )}
+                          </div>
+                          <div className="mt-3 space-y-3 rounded-md border bg-muted/20 p-3">
+                            <div className="space-y-2">
+                              <Label htmlFor={`phase-description-${phase.id}`}>Descricao</Label>
+                              <Textarea
+                                id={`phase-description-${phase.id}`}
+                                value={phaseDrafts[phase.id]?.description ?? ''}
+                                onChange={(e) =>
+                                  updatePhaseDraft(phase.id, { description: e.target.value })
+                                }
+                                rows={2}
+                                placeholder="Descreva o escopo e os objetivos desta fase"
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                              <div className="space-y-2">
+                                <Label htmlFor={`phase-start-${phase.id}`}>Inicio</Label>
+                                <Input
+                                  id={`phase-start-${phase.id}`}
+                                  type="date"
+                                  value={phaseDrafts[phase.id]?.start_date ?? ''}
+                                  onChange={(e) =>
+                                    updatePhaseDraft(phase.id, { start_date: e.target.value })
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor={`phase-end-${phase.id}`}>Fim</Label>
+                                <Input
+                                  id={`phase-end-${phase.id}`}
+                                  type="date"
+                                  value={phaseDrafts[phase.id]?.end_date ?? ''}
+                                  onChange={(e) =>
+                                    updatePhaseDraft(phase.id, { end_date: e.target.value })
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor={`phase-progress-${phase.id}`}>Progresso (%)</Label>
+                                <Input
+                                  id={`phase-progress-${phase.id}`}
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={phaseDrafts[phase.id]?.completion_percentage ?? '0'}
+                                  onChange={(e) =>
+                                    updatePhaseDraft(phase.id, {
+                                      completion_percentage: e.target.value,
+                                      is_completed: Number(e.target.value) >= 100,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div className="flex items-end gap-2 pb-2">
+                                <input
+                                  id={`phase-complete-${phase.id}`}
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-input"
+                                  checked={phaseDrafts[phase.id]?.is_completed ?? false}
+                                  onChange={(e) =>
+                                    updatePhaseDraft(phase.id, {
+                                      is_completed: e.target.checked,
+                                      completion_percentage: e.target.checked
+                                        ? '100'
+                                        : phaseDrafts[phase.id]?.completion_percentage ?? '0',
+                                    })
+                                  }
+                                />
+                                <Label htmlFor={`phase-complete-${phase.id}`}>Concluida</Label>
+                              </div>
+                            </div>
+                            <div className="flex justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleSavePhase(phase.id)}
+                                disabled={savingPhaseId === phase.id}
+                              >
+                                <Save className="h-4 w-4 mr-2" />
+                                {savingPhaseId === phase.id ? 'A guardar...' : 'Guardar fase'}
+                              </Button>
+                            </div>
                           </div>
                           {!phase.is_completed && (
                             <div className="mt-2">

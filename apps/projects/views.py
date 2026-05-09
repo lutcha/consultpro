@@ -193,3 +193,22 @@ class ProjectPhaseViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectPhaseSerializer
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'name', 'is_completed']
+
+    def perform_update(self, serializer):
+        phase = serializer.save()
+        update_fields = []
+        if phase.is_completed and phase.completion_percentage < 100:
+            phase.completion_percentage = 100
+            update_fields.append('completion_percentage')
+        elif phase.completion_percentage >= 100 and not phase.is_completed:
+            phase.is_completed = True
+            update_fields.append('is_completed')
+        if update_fields:
+            phase.save(update_fields=update_fields + ['updated_at'])
+
+        phases = list(phase.project.phases.all())
+        if phases:
+            phase.project.progress = int(
+                sum(p.completion_percentage for p in phases) / len(phases)
+            )
+            phase.project.save(update_fields=['progress', 'updated_at'])
