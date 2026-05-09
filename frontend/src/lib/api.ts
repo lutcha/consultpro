@@ -706,6 +706,33 @@ export interface ApiProjectArtifact {
   updated_at: string;
 }
 
+export interface ApiProjectMilestone {
+  id: number;
+  project: number;
+  title: string;
+  description: string;
+  due_date: string;
+  completed_date: string | null;
+  status: string;
+  deliverables: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiProjectTask {
+  id: number;
+  project: number;
+  title: string;
+  description: string;
+  status: 'todo' | 'in_progress' | 'review' | 'done';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  due_date: string | null;
+  assignee: { id: number; email: string; first_name: string; last_name: string; name: string; role: string } | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiProjectDetail extends ApiProject {
   team: Array<{
     id: number;
@@ -713,14 +740,8 @@ export interface ApiProjectDetail extends ApiProject {
     role: string;
     allocation_percentage: number;
   }>;
-  milestones: Array<{
-    id: number;
-    title: string;
-    description: string;
-    due_date: string;
-    completed_date: string | null;
-    status: string;
-  }>;
+  milestones: ApiProjectMilestone[];
+  tasks: ApiProjectTask[];
   risks: Array<{
     id: number;
     title: string;
@@ -796,6 +817,44 @@ export async function apiUpdateProjectPhase(
   data: Partial<ApiProjectPhase>
 ): Promise<ApiProjectPhase> {
   return apiRequest<ApiProjectPhase>(`/projects/phases/${phaseId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiCreateProjectMilestone(
+  data: Partial<ApiProjectMilestone>
+): Promise<ApiProjectMilestone> {
+  return apiRequest<ApiProjectMilestone>('/projects/milestones/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiUpdateProjectMilestone(
+  milestoneId: number,
+  data: Partial<ApiProjectMilestone>
+): Promise<ApiProjectMilestone> {
+  return apiRequest<ApiProjectMilestone>(`/projects/milestones/${milestoneId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiCreateProjectTask(
+  data: Partial<ApiProjectTask>
+): Promise<ApiProjectTask> {
+  return apiRequest<ApiProjectTask>('/projects/tasks/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiUpdateProjectTask(
+  taskId: number,
+  data: Partial<ApiProjectTask>
+): Promise<ApiProjectTask> {
+  return apiRequest<ApiProjectTask>(`/projects/tasks/${taskId}/`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });

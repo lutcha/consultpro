@@ -6,6 +6,7 @@ from .models import (
     Project,
     ProjectTeamMember,
     ProjectMilestone,
+    ProjectTask,
     ProjectRisk,
     ProjectDeliverable,
     ProjectPhase,
@@ -39,6 +40,26 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectMilestone
         fields = '__all__'
+
+
+class ProjectTaskSerializer(serializers.ModelSerializer):
+    assignee = UserMiniSerializer(read_only=True)
+    assignee_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        source='assignee',
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = ProjectTask
+        fields = [
+            'id', 'project', 'title', 'description', 'status', 'priority',
+            'due_date', 'assignee', 'assignee_id', 'created_by',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['created_by']
 
 
 class ProjectRiskSerializer(serializers.ModelSerializer):
@@ -133,6 +154,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
         source='project_team_members', many=True, read_only=True
     )
     milestones = ProjectMilestoneSerializer(many=True, read_only=True)
+    tasks = ProjectTaskSerializer(many=True, read_only=True)
     risks = ProjectRiskSerializer(
         source='project_risks', many=True, read_only=True
     )

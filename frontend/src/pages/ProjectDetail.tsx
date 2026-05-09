@@ -36,12 +36,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import {
   apiCreateProjectArtifact,
+  apiCreateProjectMilestone,
+  apiCreateProjectTask,
   apiGetProject,
   apiUpdateProject,
+  apiUpdateProjectMilestone,
   apiUpdateProjectPhase,
   apiUpdateProjectStatus,
+  apiUpdateProjectTask,
 } from '@/lib/api';
-import type { ApiProjectDetail } from '@/lib/api';
+import type { ApiProjectDetail, ApiProjectTask } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 
@@ -74,10 +78,26 @@ export function ProjectDetail() {
     notes: '',
     file: null as File | null,
   });
+  const [milestoneDraft, setMilestoneDraft] = useState({
+    title: '',
+    description: '',
+    due_date: '',
+    status: 'not_started',
+    deliverables: '',
+  });
+  const [taskDraft, setTaskDraft] = useState({
+    title: '',
+    description: '',
+    status: 'todo' as 'todo' | 'in_progress' | 'review' | 'done',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'critical',
+    due_date: '',
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [savingPhaseId, setSavingPhaseId] = useState<number | null>(null);
   const [isSavingArtifact, setIsSavingArtifact] = useState(false);
+  const [isSavingMilestone, setIsSavingMilestone] = useState(false);
+  const [isSavingTask, setIsSavingTask] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -242,6 +262,96 @@ export function ProjectDetail() {
       setError(err instanceof Error ? err.message : 'Erro ao guardar artefacto');
     } finally {
       setIsSavingArtifact(false);
+    }
+  };
+
+  const handleCreateMilestone = async () => {
+    if (!project || !milestoneDraft.title.trim() || !milestoneDraft.due_date) return;
+    setIsSavingMilestone(true);
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      await apiCreateProjectMilestone({
+        project: project.id,
+        title: milestoneDraft.title.trim(),
+        description: milestoneDraft.description.trim(),
+        due_date: milestoneDraft.due_date,
+        status: milestoneDraft.status,
+        deliverables: milestoneDraft.deliverables.trim(),
+      });
+      setMilestoneDraft({
+        title: '',
+        description: '',
+        due_date: '',
+        status: 'not_started',
+        deliverables: '',
+      });
+      await loadProject(String(project.id));
+      setSaveMessage('Marco guardado.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao guardar marco');
+    } finally {
+      setIsSavingMilestone(false);
+    }
+  };
+
+  const handleUpdateMilestoneStatus = async (milestoneId: number, status: string) => {
+    if (!project) return;
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      await apiUpdateProjectMilestone(milestoneId, { status });
+      await loadProject(String(project.id));
+      setSaveMessage('Marco atualizado.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar marco');
+    }
+  };
+
+  const handleCreateTask = async () => {
+    if (!project || !taskDraft.title.trim()) return;
+    setIsSavingTask(true);
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      await apiCreateProjectTask({
+        project: project.id,
+        title: taskDraft.title.trim(),
+        description: taskDraft.description.trim(),
+        status: taskDraft.status,
+        priority: taskDraft.priority,
+        due_date: taskDraft.due_date || null,
+      });
+      setTaskDraft({
+        title: '',
+        description: '',
+        status: 'todo',
+        priority: 'medium',
+        due_date: '',
+      });
+      await loadProject(String(project.id));
+      setSaveMessage('Tarefa guardada.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao guardar tarefa');
+    } finally {
+      setIsSavingTask(false);
+    }
+  };
+
+  const handleUpdateTaskStatus = async (taskId: number, status: ApiProjectTask['status']) => {
+    if (!project) return;
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      await apiUpdateProjectTask(taskId, { status });
+      await loadProject(String(project.id));
+      setSaveMessage('Tarefa atualizada.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar tarefa');
     }
   };
 
@@ -877,7 +987,76 @@ export function ProjectDetail() {
             <CardHeader>
               <CardTitle>Marcos</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 lg:grid-cols-6 gap-3 rounded-md border bg-muted/20 p-3">
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Titulo</Label>
+                  <Input
+                    value={milestoneDraft.title}
+                    onChange={(e) =>
+                      setMilestoneDraft((prev) => ({ ...prev, title: e.target.value }))
+                    }
+                    placeholder="Ex: Kickoff com o cliente"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Prazo</Label>
+                  <Input
+                    type="date"
+                    value={milestoneDraft.due_date}
+                    onChange={(e) =>
+                      setMilestoneDraft((prev) => ({ ...prev, due_date: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={milestoneDraft.status}
+                    onChange={(e) =>
+                      setMilestoneDraft((prev) => ({ ...prev, status: e.target.value }))
+                    }
+                  >
+                    <option value="not_started">Nao iniciado</option>
+                    <option value="in_progress">Em curso</option>
+                    <option value="completed">Concluido</option>
+                    <option value="delayed">Atrasado</option>
+                  </select>
+                </div>
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Entregaveis associados</Label>
+                  <Input
+                    value={milestoneDraft.deliverables}
+                    onChange={(e) =>
+                      setMilestoneDraft((prev) => ({ ...prev, deliverables: e.target.value }))
+                    }
+                    placeholder="Relatorio, ata, plano aprovado..."
+                  />
+                </div>
+                <div className="space-y-2 lg:col-span-5">
+                  <Label>Descricao</Label>
+                  <Textarea
+                    value={milestoneDraft.description}
+                    onChange={(e) =>
+                      setMilestoneDraft((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    rows={2}
+                    placeholder="Contexto do marco e criterio de aceitacao"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    className="w-full"
+                    onClick={handleCreateMilestone}
+                    disabled={isSavingMilestone || !milestoneDraft.title.trim() || !milestoneDraft.due_date}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSavingMilestone ? 'A guardar...' : 'Adicionar'}
+                  </Button>
+                </div>
+              </div>
+
               {project.milestones?.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
                   Nenhum marco definido.
@@ -887,15 +1066,37 @@ export function ProjectDetail() {
                   {project.milestones?.map((m) => (
                     <div
                       key={m.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                      className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-3 rounded-lg bg-muted/50"
                     >
                       <div>
                         <p className="font-medium">{m.title}</p>
                         <p className="text-sm text-muted-foreground">
                           {formatDate(new Date(m.due_date))}
                         </p>
+                        {m.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {m.description}
+                          </p>
+                        )}
+                        {m.deliverables && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Entregaveis: {m.deliverables}
+                          </p>
+                        )}
                       </div>
-                      <StatusBadge status={m.status} size="sm" />
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={m.status} size="sm" />
+                        <select
+                          className="h-8 rounded-md border bg-background px-2 text-sm"
+                          value={m.status}
+                          onChange={(e) => handleUpdateMilestoneStatus(m.id, e.target.value)}
+                        >
+                          <option value="not_started">Nao iniciado</option>
+                          <option value="in_progress">Em curso</option>
+                          <option value="completed">Concluido</option>
+                          <option value="delayed">Atrasado</option>
+                        </select>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -912,7 +1113,86 @@ export function ProjectDetail() {
                 Quadro de Tarefas
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 lg:grid-cols-6 gap-3 rounded-md border bg-muted/20 p-3">
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Titulo</Label>
+                  <Input
+                    value={taskDraft.title}
+                    onChange={(e) =>
+                      setTaskDraft((prev) => ({ ...prev, title: e.target.value }))
+                    }
+                    placeholder="Ex: Preparar agenda de kickoff"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={taskDraft.status}
+                    onChange={(e) =>
+                      setTaskDraft((prev) => ({
+                        ...prev,
+                        status: e.target.value as typeof taskDraft.status,
+                      }))
+                    }
+                  >
+                    <option value="todo">Por fazer</option>
+                    <option value="in_progress">Em curso</option>
+                    <option value="review">Revisao</option>
+                    <option value="done">Concluido</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Prioridade</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={taskDraft.priority}
+                    onChange={(e) =>
+                      setTaskDraft((prev) => ({
+                        ...prev,
+                        priority: e.target.value as typeof taskDraft.priority,
+                      }))
+                    }
+                  >
+                    <option value="low">Baixa</option>
+                    <option value="medium">Media</option>
+                    <option value="high">Alta</option>
+                    <option value="critical">Critica</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Prazo</Label>
+                  <Input
+                    type="date"
+                    value={taskDraft.due_date}
+                    onChange={(e) =>
+                      setTaskDraft((prev) => ({ ...prev, due_date: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2 lg:col-span-5">
+                  <Label>Descricao</Label>
+                  <Textarea
+                    value={taskDraft.description}
+                    onChange={(e) =>
+                      setTaskDraft((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    rows={2}
+                    placeholder="O que precisa ser feito, criterio de conclusao e dependencias"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    className="w-full"
+                    onClick={handleCreateTask}
+                    disabled={isSavingTask || !taskDraft.title.trim()}
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSavingTask ? 'A guardar...' : 'Adicionar'}
+                  </Button>
+                </div>
+              </div>
               {(() => {
                 const columns = [
                   { id: 'todo', title: 'Por Fazer' },
@@ -922,21 +1202,14 @@ export function ProjectDetail() {
                 ];
 
                 const tasks: KanbanTask[] = [
-                  ...(project.milestones?.map((m) => ({
-                    id: `milestone-${m.id}`,
-                    title: m.title,
-                    description: m.description,
-                    status: m.status === 'completed' ? 'done' : m.status === 'in_progress' ? 'in_progress' : 'todo',
-                    priority: 'medium' as const,
-                    dueDate: m.due_date ? new Date(m.due_date).toLocaleDateString('pt-PT') : undefined,
-                  })) || []),
-                  ...(project.deliverables?.map((d) => ({
-                    id: `deliverable-${d.id}`,
-                    title: d.title,
-                    description: d.description,
-                    status: d.status === 'accepted' ? 'done' : d.status === 'under_review' ? 'review' : d.status === 'submitted' ? 'review' : d.status === 'approved' ? 'done' : 'todo',
-                    priority: 'medium' as const,
-                    dueDate: d.due_date ? new Date(d.due_date).toLocaleDateString('pt-PT') : undefined,
+                  ...(project.tasks?.map((task) => ({
+                    id: String(task.id),
+                    title: task.title,
+                    description: task.description,
+                    status: task.status,
+                    priority: task.priority,
+                    assignee: task.assignee?.name,
+                    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('pt-PT') : undefined,
                   })) || []),
                 ];
 
@@ -949,11 +1222,23 @@ export function ProjectDetail() {
                     columns={columns}
                     tasks={tasks}
                     onTaskMove={(taskId, newStatus) => {
-                      console.log('Move task', taskId, 'to', newStatus);
+                      handleUpdateTaskStatus(Number(taskId), newStatus as ApiProjectTask['status']);
                     }}
                     onTaskClick={(task) => {
-                      console.log('Clicked task', task);
+                      setTaskDraft((prev) => ({
+                        ...prev,
+                        title: task.title,
+                        description: task.description || '',
+                        status: task.status as typeof taskDraft.status,
+                        priority: task.priority,
+                      }));
                     }}
+                    onAddTask={(columnId) =>
+                      setTaskDraft((prev) => ({
+                        ...prev,
+                        status: columnId as typeof taskDraft.status,
+                      }))
+                    }
                   />
                 );
               })()}

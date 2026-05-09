@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Project, ProjectTeamMember, ProjectMilestone, ProjectRisk, ProjectDeliverable
+from .models import (
+    Project,
+    ProjectTeamMember,
+    ProjectMilestone,
+    ProjectTask,
+    ProjectRisk,
+    ProjectDeliverable,
+    ProjectArtifact,
+)
 
 
 @admin.register(Project)
@@ -23,6 +31,13 @@ class ProjectMilestoneAdmin(admin.ModelAdmin):
     list_filter = ['status']
 
 
+@admin.register(ProjectTask)
+class ProjectTaskAdmin(admin.ModelAdmin):
+    list_display = ['title', 'project', 'status', 'priority', 'due_date', 'assignee']
+    list_filter = ['status', 'priority']
+    search_fields = ['title', 'description', 'project__title']
+
+
 @admin.register(ProjectRisk)
 class ProjectRiskAdmin(admin.ModelAdmin):
     list_display = ['title', 'project', 'severity', 'status']
@@ -33,3 +48,9 @@ class ProjectRiskAdmin(admin.ModelAdmin):
 class ProjectDeliverableAdmin(admin.ModelAdmin):
     list_display = ['title', 'project', 'due_date', 'status']
     list_filter = ['status']
+
+
+@admin.register(ProjectArtifact)
+class ProjectArtifactAdmin(admin.ModelAdmin):
+    list_display = ['title', 'project', 'artifact_type', 'status']
+    list_filter = ['artifact_type', 'status']

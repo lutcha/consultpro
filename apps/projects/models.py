@@ -242,6 +242,63 @@ class ProjectMilestone(models.Model):
         return f"{self.title} ({self.project.title})"
 
 
+class ProjectTask(models.Model):
+    """Operational tasks used by the project Kanban board."""
+
+    class Status(models.TextChoices):
+        TODO = 'todo', 'Por Fazer'
+        IN_PROGRESS = 'in_progress', 'Em Curso'
+        REVIEW = 'review', 'Revisao'
+        DONE = 'done', 'Concluido'
+
+    class Priority(models.TextChoices):
+        LOW = 'low', 'Baixa'
+        MEDIUM = 'medium', 'Media'
+        HIGH = 'high', 'Alta'
+        CRITICAL = 'critical', 'Critica'
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='tasks',
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.TODO,
+    )
+    priority = models.CharField(
+        max_length=20,
+        choices=Priority.choices,
+        default=Priority.MEDIUM,
+    )
+    due_date = models.DateField(null=True, blank=True)
+    assignee = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='project_tasks',
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='project_tasks_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['status', 'due_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.title} ({self.project.title})"
+
+
 class ProjectRisk(models.Model):
     """Project risks and issues tracking."""
 

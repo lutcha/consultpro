@@ -11,6 +11,7 @@ from .models import (
     Project,
     ProjectTeamMember,
     ProjectMilestone,
+    ProjectTask,
     ProjectRisk,
     ProjectDeliverable,
     ProjectPhase,
@@ -21,6 +22,7 @@ from .serializers import (
     ProjectDetailSerializer,
     ProjectTeamMemberSerializer,
     ProjectMilestoneSerializer,
+    ProjectTaskSerializer,
     ProjectRiskSerializer,
     ProjectDeliverableSerializer,
     ProjectPhaseSerializer,
@@ -181,6 +183,32 @@ class ProjectMilestoneViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectMilestoneSerializer
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'status']
+
+    def perform_create(self, serializer):
+        milestone = serializer.save()
+        self._sync_completed_date(milestone)
+
+    def perform_update(self, serializer):
+        milestone = serializer.save()
+        self._sync_completed_date(milestone)
+
+    def _sync_completed_date(self, milestone):
+        if milestone.status == ProjectMilestone.Status.COMPLETED and not milestone.completed_date:
+            milestone.completed_date = timezone.localdate()
+            milestone.save(update_fields=['completed_date', 'updated_at'])
+        elif milestone.status != ProjectMilestone.Status.COMPLETED and milestone.completed_date:
+            milestone.completed_date = None
+            milestone.save(update_fields=['completed_date', 'updated_at'])
+
+
+class ProjectTaskViewSet(viewsets.ModelViewSet):
+    queryset = ProjectTask.objects.all()
+    serializer_class = ProjectTaskSerializer
+    permission_classes = [IsConsultantOrManager]
+    filterset_fields = ['project', 'status', 'priority', 'assignee']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 class ProjectRiskViewSet(viewsets.ModelViewSet):
