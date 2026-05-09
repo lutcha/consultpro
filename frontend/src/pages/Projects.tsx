@@ -65,12 +65,22 @@ export function Projects() {
     setIsLoading(true);
     setError(null);
     try {
-      const [projectsRes, statsRes] = await Promise.all([
-        apiGetProjects(),
-        apiGetProjectStats(),
-      ]);
+      const projectsRes = await apiGetProjects();
       setProjects(projectsRes.results);
-      setStats(statsRes);
+      try {
+        const statsRes = await apiGetProjectStats();
+        setStats(statsRes);
+      } catch (statsErr) {
+        console.error('Failed to load project stats:', statsErr);
+        setStats((prev) => ({
+          ...prev,
+          total_projects: projectsRes.results.length,
+          active_projects: projectsRes.results.filter((p) => p.status === 'active').length,
+          planning_projects: projectsRes.results.filter((p) => p.status === 'planning').length,
+          completed_projects: projectsRes.results.filter((p) => p.status === 'completed').length,
+          overdue_projects: projectsRes.results.filter((p) => p.is_overdue).length,
+        }));
+      }
     } catch (err) {
       console.error('Failed to load projects:', err);
       setError(err instanceof Error ? err.message : 'Erro ao carregar projetos');
