@@ -330,3 +330,59 @@ class ProjectDeliverable(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class ProjectArtifact(models.Model):
+    """Handover and execution artefacts created during project initiation."""
+
+    class ArtifactType(models.TextChoices):
+        FINAL_PROPOSAL = 'final_proposal', 'Proposta Final'
+        CONTRACT = 'contract', 'Contrato'
+        HANDOVER = 'handover', 'Handover Package'
+        KICKOFF = 'kickoff', 'Kickoff Pack'
+        CHECKLIST = 'checklist', 'Checklist de Arranque'
+        OTHER = 'other', 'Outro'
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pendente'
+        ATTACHED = 'attached', 'Anexado'
+        APPROVED = 'approved', 'Aprovado'
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='artifacts',
+    )
+    artifact_type = models.CharField(
+        max_length=30,
+        choices=ArtifactType.choices,
+        default=ArtifactType.OTHER,
+    )
+    title = models.CharField(max_length=200)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    file = models.FileField(
+        upload_to='projects/artifacts/%Y/%m/',
+        blank=True,
+        null=True,
+    )
+    external_url = models.URLField(blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='project_artifacts_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['artifact_type', 'title']
+
+    def __str__(self):
+        return f"{self.title} ({self.project.title})"

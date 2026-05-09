@@ -8,6 +8,7 @@ from .views import (
     ProjectRiskViewSet,
     ProjectDeliverableViewSet,
     ProjectPhaseViewSet,
+    ProjectArtifactViewSet,
 )
 
 router = DefaultRouter()
@@ -17,6 +18,7 @@ router.register(r'milestones', ProjectMilestoneViewSet, basename='project-milest
 router.register(r'risks', ProjectRiskViewSet, basename='project-risk')
 router.register(r'deliverables', ProjectDeliverableViewSet, basename='project-deliverable')
 router.register(r'phases', ProjectPhaseViewSet, basename='project-phase')
+router.register(r'artifacts', ProjectArtifactViewSet, basename='project-artifact')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -2,7 +2,15 @@ from rest_framework import serializers
 
 from apps.proposals.models import Proposal
 from apps.users.models import User
-from .models import Project, ProjectTeamMember, ProjectMilestone, ProjectRisk, ProjectDeliverable, ProjectPhase
+from .models import (
+    Project,
+    ProjectTeamMember,
+    ProjectMilestone,
+    ProjectRisk,
+    ProjectDeliverable,
+    ProjectPhase,
+    ProjectArtifact,
+)
 
 
 class UserMiniSerializer(serializers.ModelSerializer):
@@ -48,6 +56,29 @@ class ProjectDeliverableSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectDeliverable
         fields = '__all__'
+
+
+class ProjectArtifactSerializer(serializers.ModelSerializer):
+    artifact_type_display = serializers.CharField(source='get_artifact_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    file_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectArtifact
+        fields = [
+            'id', 'project', 'artifact_type', 'artifact_type_display',
+            'title', 'status', 'status_display', 'file', 'file_url',
+            'external_url', 'notes', 'created_by', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['created_by']
+
+    def get_file_url(self, obj):
+        if obj.file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url
+        return None
 
 
 class ProjectPhaseSerializer(serializers.ModelSerializer):
@@ -108,6 +139,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     deliverables = ProjectDeliverableSerializer(
         source='project_deliverables', many=True, read_only=True
     )
+    artifacts = ProjectArtifactSerializer(many=True, read_only=True)
     phases = ProjectPhaseSerializer(many=True, read_only=True)
     days_remaining = serializers.IntegerField(read_only=True)
     budget_utilization = serializers.IntegerField(read_only=True)

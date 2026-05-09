@@ -20,6 +20,9 @@ import {
   LayoutGrid,
   BarChart3,
   Save,
+  FileText,
+  ExternalLink,
+  Upload,
 } from 'lucide-react';
 import { KanbanBoard, type KanbanTask } from '@/components/projects/KanbanBoard';
 import { GanttChart, type GanttItem } from '@/components/projects/GanttChart';
@@ -31,7 +34,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { apiGetProject, apiUpdateProject, apiUpdateProjectPhase, apiUpdateProjectStatus } from '@/lib/api';
+import {
+  apiCreateProjectArtifact,
+  apiGetProject,
+  apiUpdateProject,
+  apiUpdateProjectPhase,
+  apiUpdateProjectStatus,
+} from '@/lib/api';
 import type { ApiProjectDetail } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -57,9 +66,18 @@ export function ProjectDetail() {
     completion_percentage: string;
     is_completed: boolean;
   }>>({});
+  const [artifactDraft, setArtifactDraft] = useState({
+    artifact_type: 'handover',
+    title: '',
+    status: 'pending',
+    external_url: '',
+    notes: '',
+    file: null as File | null,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [savingPhaseId, setSavingPhaseId] = useState<number | null>(null);
+  const [isSavingArtifact, setIsSavingArtifact] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -194,6 +212,39 @@ export function ProjectDetail() {
     }
   };
 
+  const handleCreateArtifact = async () => {
+    if (!project || !artifactDraft.title.trim()) return;
+    setIsSavingArtifact(true);
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      await apiCreateProjectArtifact({
+        project: project.id,
+        artifact_type: artifactDraft.artifact_type,
+        title: artifactDraft.title.trim(),
+        status: artifactDraft.status,
+        external_url: artifactDraft.external_url.trim(),
+        notes: artifactDraft.notes.trim(),
+        file: artifactDraft.file,
+      });
+      setArtifactDraft({
+        artifact_type: 'handover',
+        title: '',
+        status: 'pending',
+        external_url: '',
+        notes: '',
+        file: null,
+      });
+      await loadProject(String(project.id));
+      setSaveMessage('Artefacto guardado.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao guardar artefacto');
+    } finally {
+      setIsSavingArtifact(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -302,7 +353,7 @@ export function ProjectDetail() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-7 lg:w-auto">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8 lg:w-auto">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="phases">Fases PMI</TabsTrigger>
           <TabsTrigger value="kanban">Tarefas</TabsTrigger>
@@ -310,6 +361,7 @@ export function ProjectDetail() {
           <TabsTrigger value="team">Equipa</TabsTrigger>
           <TabsTrigger value="milestones">Marcos</TabsTrigger>
           <TabsTrigger value="risks">Riscos</TabsTrigger>
+          <TabsTrigger value="artifacts">Artefactos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="phases">
@@ -666,6 +718,151 @@ export function ProjectDetail() {
                         <p className="text-xs text-muted-foreground mt-1">
                           {member.allocation_percentage}% alocação
                         </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="artifacts">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Artefactos de Arranque
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 lg:grid-cols-6 gap-3 rounded-md border bg-muted/20 p-3">
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={artifactDraft.artifact_type}
+                    onChange={(e) =>
+                      setArtifactDraft((prev) => ({ ...prev, artifact_type: e.target.value }))
+                    }
+                  >
+                    <option value="final_proposal">Proposta Final</option>
+                    <option value="contract">Contrato</option>
+                    <option value="handover">Handover Package</option>
+                    <option value="kickoff">Kickoff Pack</option>
+                    <option value="checklist">Checklist de Arranque</option>
+                    <option value="other">Outro</option>
+                  </select>
+                </div>
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Titulo</Label>
+                  <Input
+                    value={artifactDraft.title}
+                    onChange={(e) =>
+                      setArtifactDraft((prev) => ({ ...prev, title: e.target.value }))
+                    }
+                    placeholder="Ex: Contrato assinado"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={artifactDraft.status}
+                    onChange={(e) =>
+                      setArtifactDraft((prev) => ({ ...prev, status: e.target.value }))
+                    }
+                  >
+                    <option value="pending">Pendente</option>
+                    <option value="attached">Anexado</option>
+                    <option value="approved">Aprovado</option>
+                  </select>
+                </div>
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Link externo</Label>
+                  <Input
+                    value={artifactDraft.external_url}
+                    onChange={(e) =>
+                      setArtifactDraft((prev) => ({ ...prev, external_url: e.target.value }))
+                    }
+                    placeholder="https://..."
+                  />
+                </div>
+                <div className="space-y-2 lg:col-span-4">
+                  <Label>Notas</Label>
+                  <Textarea
+                    value={artifactDraft.notes}
+                    onChange={(e) =>
+                      setArtifactDraft((prev) => ({ ...prev, notes: e.target.value }))
+                    }
+                    rows={2}
+                    placeholder="Contexto, pendencias ou instrucoes para a equipa"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ficheiro</Label>
+                  <Input
+                    type="file"
+                    onChange={(e) =>
+                      setArtifactDraft((prev) => ({
+                        ...prev,
+                        file: e.target.files?.[0] || null,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    className="w-full"
+                    onClick={handleCreateArtifact}
+                    disabled={isSavingArtifact || !artifactDraft.title.trim()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {isSavingArtifact ? 'A guardar...' : 'Adicionar'}
+                  </Button>
+                </div>
+              </div>
+
+              {project.artifacts?.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Nenhum artefacto anexado.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {project.artifacts?.map((artifact) => (
+                    <div
+                      key={artifact.id}
+                      className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 rounded-lg border p-4"
+                    >
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{artifact.title}</p>
+                          <Badge variant="outline">{artifact.artifact_type_display}</Badge>
+                          <Badge>{artifact.status_display}</Badge>
+                        </div>
+                        {artifact.notes && (
+                          <p className="text-sm text-muted-foreground mt-2 whitespace-pre-line">
+                            {artifact.notes}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {artifact.file_url && (
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={artifact.file_url} target="_blank" rel="noreferrer">
+                              <FileText className="h-4 w-4 mr-2" />
+                              Ficheiro
+                            </a>
+                          </Button>
+                        )}
+                        {artifact.external_url && (
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={artifact.external_url} target="_blank" rel="noreferrer">
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                              Link
+                            </a>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}

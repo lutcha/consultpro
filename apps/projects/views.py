@@ -7,7 +7,15 @@ from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager, IsManager
 
-from .models import Project, ProjectTeamMember, ProjectMilestone, ProjectRisk, ProjectDeliverable, ProjectPhase
+from .models import (
+    Project,
+    ProjectTeamMember,
+    ProjectMilestone,
+    ProjectRisk,
+    ProjectDeliverable,
+    ProjectPhase,
+    ProjectArtifact,
+)
 from .serializers import (
     ProjectListSerializer,
     ProjectDetailSerializer,
@@ -16,6 +24,7 @@ from .serializers import (
     ProjectRiskSerializer,
     ProjectDeliverableSerializer,
     ProjectPhaseSerializer,
+    ProjectArtifactSerializer,
 )
 
 
@@ -186,6 +195,16 @@ class ProjectDeliverableViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectDeliverableSerializer
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'status']
+
+
+class ProjectArtifactViewSet(viewsets.ModelViewSet):
+    queryset = ProjectArtifact.objects.all()
+    serializer_class = ProjectArtifactSerializer
+    permission_classes = [IsConsultantOrManager]
+    filterset_fields = ['project', 'artifact_type', 'status']
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 class ProjectPhaseViewSet(viewsets.ModelViewSet):

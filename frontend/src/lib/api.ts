@@ -689,6 +689,23 @@ export interface ApiProjectPhase {
   updated_at: string;
 }
 
+export interface ApiProjectArtifact {
+  id: number;
+  project: number;
+  artifact_type: string;
+  artifact_type_display: string;
+  title: string;
+  status: string;
+  status_display: string;
+  file: string | null;
+  file_url: string | null;
+  external_url: string;
+  notes: string;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiProjectDetail extends ApiProject {
   team: Array<{
     id: number;
@@ -719,6 +736,7 @@ export interface ApiProjectDetail extends ApiProject {
     due_date: string | null;
     status: string;
   }>;
+  artifacts: ApiProjectArtifact[];
   phases: ApiProjectPhase[];
 }
 
@@ -780,6 +798,32 @@ export async function apiUpdateProjectPhase(
   return apiRequest<ApiProjectPhase>(`/projects/phases/${phaseId}/`, {
     method: 'PATCH',
     body: JSON.stringify(data),
+  });
+}
+
+export async function apiCreateProjectArtifact(
+  data: {
+    project: number;
+    artifact_type: string;
+    title: string;
+    status: string;
+    external_url?: string;
+    notes?: string;
+    file?: File | null;
+  }
+): Promise<ApiProjectArtifact> {
+  const formData = new FormData();
+  formData.append('project', String(data.project));
+  formData.append('artifact_type', data.artifact_type);
+  formData.append('title', data.title);
+  formData.append('status', data.status);
+  if (data.external_url) formData.append('external_url', data.external_url);
+  if (data.notes) formData.append('notes', data.notes);
+  if (data.file) formData.append('file', data.file);
+
+  return apiRequest<ApiProjectArtifact>('/projects/artifacts/', {
+    method: 'POST',
+    body: formData,
   });
 }
 
