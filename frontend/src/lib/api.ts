@@ -454,6 +454,7 @@ export interface ApiProposal {
   title: string;
   version: number;
   status: string;
+  progress?: number;
   opportunity: number;
   opportunity_id: number;
   sections: ApiProposalSection[];
@@ -734,6 +735,16 @@ export async function apiCreateProject(
 ): Promise<ApiProject> {
   return apiRequest<ApiProject>('/projects/', {
     method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiUpdateProject(
+  id: string,
+  data: Partial<ApiProject>
+): Promise<ApiProjectDetail> {
+  return apiRequest<ApiProjectDetail>(`/projects/${id}/`, {
+    method: 'PATCH',
     body: JSON.stringify(data),
   });
 }

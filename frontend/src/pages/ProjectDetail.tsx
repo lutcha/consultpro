@@ -19,15 +19,19 @@ import {
   CheckCircle2,
   LayoutGrid,
   BarChart3,
+  Save,
 } from 'lucide-react';
 import { KanbanBoard, type KanbanTask } from '@/components/projects/KanbanBoard';
 import { GanttChart, type GanttItem } from '@/components/projects/GanttChart';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { apiGetProject, apiUpdateProjectStatus } from '@/lib/api';
+import { apiGetProject, apiUpdateProject, apiUpdateProjectStatus } from '@/lib/api';
 import type { ApiProjectDetail } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -36,8 +40,20 @@ export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<ApiProjectDetail | null>(null);
+  const [draft, setDraft] = useState({
+    title: '',
+    client: '',
+    start_date: '',
+    end_date: '',
+    budget_total: '',
+    actual_cost: '',
+    progress: '0',
+    description: '',
+  });
   const [isLoading, setIsLoading] = useState(true);
-  const [, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) loadProject(id);
@@ -48,10 +64,58 @@ export function ProjectDetail() {
     try {
       const data = await apiGetProject(projectId);
       setProject(data);
+      setDraft({
+        title: data.title || '',
+        client: data.client || '',
+        start_date: data.start_date || '',
+        end_date: data.end_date || '',
+        budget_total: data.budget_total || '0',
+        actual_cost: data.actual_cost || '0',
+        progress: String(data.progress ?? 0),
+        description: data.description || '',
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar projeto');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveProject = async () => {
+    if (!id) return;
+    setIsSaving(true);
+    setError(null);
+    setSaveMessage(null);
+
+    const progress = Math.max(0, Math.min(100, Number(draft.progress) || 0));
+
+    try {
+      const updated = await apiUpdateProject(id, {
+        title: draft.title,
+        client: draft.client,
+        start_date: draft.start_date || null,
+        end_date: draft.end_date || null,
+        budget_total: draft.budget_total,
+        actual_cost: draft.actual_cost,
+        progress,
+        description: draft.description,
+      });
+      setProject(updated);
+      setDraft({
+        title: updated.title || '',
+        client: updated.client || '',
+        start_date: updated.start_date || '',
+        end_date: updated.end_date || '',
+        budget_total: updated.budget_total || '0',
+        actual_cost: updated.actual_cost || '0',
+        progress: String(updated.progress ?? 0),
+        description: updated.description || '',
+      });
+      setSaveMessage('Projeto guardado.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao guardar projeto');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -150,8 +214,15 @@ export function ProjectDetail() {
               {a.label}
             </Button>
           ))}
+          <Button variant="outline" onClick={handleSaveProject} disabled={isSaving}>
+            <Save className="h-4 w-4 mr-2" />
+            {isSaving ? 'A guardar...' : 'Guardar'}
+          </Button>
         </div>
       )}
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {saveMessage && <p className="text-sm text-green-700">{saveMessage}</p>}
 
       {/* Progress */}
       <Card>
@@ -264,6 +335,98 @@ export function ProjectDetail() {
         </TabsContent>
 
         <TabsContent value="overview" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Dados do Projeto</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="project-title">Titulo</Label>
+                  <Input
+                    id="project-title"
+                    value={draft.title}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="project-client">Cliente</Label>
+                  <Input
+                    id="project-client"
+                    value={draft.client}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, client: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="project-start">Inicio</Label>
+                  <Input
+                    id="project-start"
+                    type="date"
+                    value={draft.start_date}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, start_date: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="project-end">Fim previsto</Label>
+                  <Input
+                    id="project-end"
+                    type="date"
+                    value={draft.end_date}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, end_date: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="project-budget">Orcamento</Label>
+                  <Input
+                    id="project-budget"
+                    type="number"
+                    min="0"
+                    value={draft.budget_total}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, budget_total: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="project-cost">Custo real</Label>
+                  <Input
+                    id="project-cost"
+                    type="number"
+                    min="0"
+                    value={draft.actual_cost}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, actual_cost: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="project-progress">Progresso (%)</Label>
+                  <Input
+                    id="project-progress"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={draft.progress}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, progress: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="project-description">Descricao</Label>
+                <Textarea
+                  id="project-description"
+                  value={draft.description}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
+                  rows={5}
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleSaveProject} disabled={isSaving}>
+                  <Save className="h-4 w-4 mr-2" />
+                  {isSaving ? 'A guardar...' : 'Guardar projeto'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-4">

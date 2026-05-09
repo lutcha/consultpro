@@ -78,6 +78,7 @@ export interface Proposal {
   title: string;
   version: number;
   status: ProposalStatus;
+  progress?: number;
   sections: ProposalSection[];
   team: TeamMember[];
   budget?: Budget;

@@ -17,6 +17,7 @@ import {
   Calendar,
   DollarSign,
   ArrowLeft,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,6 +55,7 @@ export function Projects() {
     overdue_projects: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -61,6 +63,7 @@ export function Projects() {
 
   const loadData = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const [projectsRes, statsRes] = await Promise.all([
         apiGetProjects(),
@@ -70,6 +73,7 @@ export function Projects() {
       setStats(statsRes);
     } catch (err) {
       console.error('Failed to load projects:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao carregar projetos');
     } finally {
       setIsLoading(false);
     }
@@ -115,11 +119,19 @@ export function Projects() {
             </p>
           </div>
         </div>
-        <Button onClick={() => navigate('/projects/new')}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Projeto
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={loadData}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Atualizar
+          </Button>
+          <Button onClick={() => navigate('/projects/new')}>
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Projeto
+          </Button>
+        </div>
       </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

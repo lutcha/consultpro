@@ -1,4 +1,5 @@
 from django_filters.rest_framework import DjangoFilterBackend
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -67,7 +68,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def activate(self, request, pk=None):
         project = self.get_object()
         project.status = Project.Status.ACTIVE
-        project.save(update_fields=['status'])
+        update_fields = ['status']
+        if not project.start_date:
+            project.start_date = timezone.localdate()
+            update_fields.append('start_date')
+        project.save(update_fields=update_fields)
         return Response({'status': 'active'})
 
     @action(detail=True, methods=['post'])
