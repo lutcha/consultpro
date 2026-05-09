@@ -802,18 +802,27 @@ export interface ApiProjectRisk {
   owner: { id: number; email: string; first_name: string; last_name: string; name: string; role: string } | null;
 }
 
+export interface ApiProjectDeliverable {
+  id: number;
+  project: number;
+  phase: number | null;
+  phase_name: string | null;
+  title: string;
+  description: string;
+  due_date: string | null;
+  submitted_date: string | null;
+  status: 'draft' | 'under_review' | 'approved' | 'submitted' | 'accepted';
+  status_display: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiProjectDetail extends ApiProject {
   team: ApiProjectTeamMember[];
   milestones: ApiProjectMilestone[];
   tasks: ApiProjectTask[];
   risks: ApiProjectRisk[];
-  deliverables: Array<{
-    id: number;
-    title: string;
-    description: string;
-    due_date: string | null;
-    status: string;
-  }>;
+  deliverables: ApiProjectDeliverable[];
   artifacts: ApiProjectArtifact[];
   phases: ApiProjectPhase[];
 }
@@ -988,6 +997,29 @@ export async function apiCreateProjectArtifact(
     method: 'POST',
     body: formData,
   });
+}
+
+export async function apiCreateProjectDeliverable(
+  data: Pick<ApiProjectDeliverable, 'project' | 'title' | 'description' | 'due_date' | 'status'> & { phase?: number | null }
+): Promise<ApiProjectDeliverable> {
+  return apiRequest<ApiProjectDeliverable>('/projects/deliverables/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiUpdateProjectDeliverable(
+  id: number,
+  data: Partial<Pick<ApiProjectDeliverable, 'title' | 'description' | 'due_date' | 'submitted_date' | 'status'> & { phase: number | null }>
+): Promise<ApiProjectDeliverable> {
+  return apiRequest<ApiProjectDeliverable>(`/projects/deliverables/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiDeleteProjectDeliverable(id: number): Promise<void> {
+  return apiRequest<void>(`/projects/deliverables/${id}/`, { method: 'DELETE' });
 }
 
 // ============================================

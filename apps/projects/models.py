@@ -365,6 +365,13 @@ class ProjectDeliverable(models.Model):
         on_delete=models.CASCADE,
         related_name='project_deliverables',
     )
+    phase = models.ForeignKey(
+        'ProjectPhase',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='deliverables',
+    )
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     due_date = models.DateField(null=True, blank=True)

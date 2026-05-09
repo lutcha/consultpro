@@ -219,10 +219,10 @@ class ProjectRiskViewSet(viewsets.ModelViewSet):
 
 
 class ProjectDeliverableViewSet(viewsets.ModelViewSet):
-    queryset = ProjectDeliverable.objects.all()
+    queryset = ProjectDeliverable.objects.select_related('phase').all()
     serializer_class = ProjectDeliverableSerializer
     permission_classes = [IsConsultantOrManager]
-    filterset_fields = ['project', 'status']
+    filterset_fields = ['project', 'phase', 'status']
 
 
 class ProjectArtifactViewSet(viewsets.ModelViewSet):

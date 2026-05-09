@@ -77,9 +77,21 @@ class ProjectRiskSerializer(serializers.ModelSerializer):
 
 
 class ProjectDeliverableSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    phase_name = serializers.SerializerMethodField()
+
     class Meta:
         model = ProjectDeliverable
-        fields = '__all__'
+        fields = [
+            'id', 'project', 'phase', 'phase_name', 'title', 'description',
+            'due_date', 'submitted_date', 'status', 'status_display',
+            'created_at', 'updated_at',
+        ]
+
+    def get_phase_name(self, obj):
+        if obj.phase:
+            return obj.phase.title or obj.phase.get_name_display()
+        return None
 
 
 class ProjectArtifactSerializer(serializers.ModelSerializer):

@@ -15,7 +15,7 @@ export interface GanttItem {
   endDate: Date;
   progress: number;
   color?: string;
-  type: 'milestone' | 'task' | 'phase';
+  type: 'milestone' | 'task' | 'phase' | 'deliverable';
   status?: string;
 }
 
@@ -34,10 +34,11 @@ const statusColors: Record<string, string> = {
   draft: 'bg-yellow-500',
 };
 
-const typeIcons = {
+const typeIcons: Record<string, string> = {
   milestone: '🎯',
   task: '📋',
   phase: '📊',
+  deliverable: '📦',
 };
 
 export function GanttChart({
@@ -143,7 +144,9 @@ export function GanttChart({
                       'absolute top-2 bottom-2 rounded cursor-pointer group',
                       isMilestone
                         ? 'w-4 h-4 top-4 rotate-45 bg-amber-500'
-                        : cn('h-6 top-3', statusColors[item.status || 'not_started'] || 'bg-blue-500')
+                        : item.type === 'deliverable'
+                          ? cn('h-6 top-3 border-2 border-purple-500 bg-purple-100 dark:bg-purple-900/40')
+                          : cn('h-6 top-3', statusColors[item.status || 'not_started'] || 'bg-blue-500')
                     )}
                     style={{ left: `${left}%`, width: isMilestone ? '16px' : `${width}%` }}
                     onClick={() => onItemClick?.(item)}

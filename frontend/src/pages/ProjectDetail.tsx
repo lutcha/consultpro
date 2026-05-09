@@ -36,13 +36,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import {
   apiCreateProjectArtifact,
+  apiCreateProjectDeliverable,
   apiCreateProjectMilestone,
   apiCreateProjectRisk,
   apiCreateProjectTeamMember,
   apiCreateProjectTask,
+  apiDeleteProjectDeliverable,
   apiGetUsers,
   apiGetProject,
   apiUpdateProject,
+  apiUpdateProjectDeliverable,
   apiUpdateProjectMilestone,
   apiUpdateProjectPhase,
   apiUpdateProjectRisk,
@@ -50,7 +53,7 @@ import {
   apiUpdateProjectStatus,
   apiUpdateProjectTask,
 } from '@/lib/api';
-import type { ApiProjectDetail, ApiProjectRisk, ApiProjectTask, ApiUser } from '@/lib/api';
+import type { ApiProjectDeliverable, ApiProjectDetail, ApiProjectRisk, ApiProjectTask, ApiUser } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 
@@ -115,6 +118,15 @@ export function ProjectDetail() {
     mitigation_plan: '',
     owner_id: '',
   });
+  const [deliverableDraft, setDeliverableDraft] = useState({
+    title: '',
+    description: '',
+    phase: '',
+    due_date: '',
+    status: 'draft' as ApiProjectDeliverable['status'],
+  });
+  const [editingDeliverableId, setEditingDeliverableId] = useState<number | null>(null);
+  const [isSavingDeliverable, setIsSavingDeliverable] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [savingPhaseId, setSavingPhaseId] = useState<number | null>(null);
@@ -494,6 +506,59 @@ export function ProjectDetail() {
     }
   };
 
+  const handleSaveDeliverable = async () => {
+    if (!project || !deliverableDraft.title.trim()) return;
+    setIsSavingDeliverable(true);
+    setError(null);
+    setSaveMessage(null);
+    const payload = {
+      project: project.id,
+      title: deliverableDraft.title.trim(),
+      description: deliverableDraft.description.trim(),
+      phase: deliverableDraft.phase ? Number(deliverableDraft.phase) : null,
+      due_date: deliverableDraft.due_date || null,
+      status: deliverableDraft.status,
+    };
+    try {
+      if (editingDeliverableId) {
+        await apiUpdateProjectDeliverable(editingDeliverableId, payload);
+        setEditingDeliverableId(null);
+        setSaveMessage('Entregável atualizado.');
+      } else {
+        await apiCreateProjectDeliverable(payload);
+        setSaveMessage('Entregável guardado.');
+      }
+      setDeliverableDraft({ title: '', description: '', phase: '', due_date: '', status: 'draft' });
+      await loadProject(String(project.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao guardar entregável');
+    } finally {
+      setIsSavingDeliverable(false);
+    }
+  };
+
+  const handleEditDeliverable = (d: ApiProjectDeliverable) => {
+    setEditingDeliverableId(d.id);
+    setDeliverableDraft({
+      title: d.title,
+      description: d.description,
+      phase: d.phase ? String(d.phase) : '',
+      due_date: d.due_date || '',
+      status: d.status,
+    });
+  };
+
+  const handleDeleteDeliverable = async (deliverableId: number) => {
+    if (!project) return;
+    try {
+      await apiDeleteProjectDeliverable(deliverableId);
+      await loadProject(String(project.id));
+      setSaveMessage('Entregável removido.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao remover entregável');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -602,10 +667,11 @@ export function ProjectDetail() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8 lg:w-auto">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 lg:grid-cols-9 lg:w-auto">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-          <TabsTrigger value="phases">Fases Projeto</TabsTrigger>
+          <TabsTrigger value="phases">Fases</TabsTrigger>
           <TabsTrigger value="kanban">Tarefas</TabsTrigger>
+          <TabsTrigger value="deliverables">Entregáveis</TabsTrigger>
           <TabsTrigger value="gantt">Timeline</TabsTrigger>
           <TabsTrigger value="team">Equipa</TabsTrigger>
           <TabsTrigger value="milestones">Marcos</TabsTrigger>
@@ -1522,6 +1588,144 @@ export function ProjectDetail() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="deliverables">
+          <Card>
+            <CardHeader>
+              <CardTitle>Entregáveis do Projeto</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* Form */}
+              <div className="grid grid-cols-1 lg:grid-cols-6 gap-3 rounded-md border bg-muted/20 p-3">
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Título *</Label>
+                  <Input
+                    value={deliverableDraft.title}
+                    onChange={(e) => setDeliverableDraft((p) => ({ ...p, title: e.target.value }))}
+                    placeholder="Ex: Relatório de Diagnóstico"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Fase</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={deliverableDraft.phase}
+                    onChange={(e) => setDeliverableDraft((p) => ({ ...p, phase: e.target.value }))}
+                  >
+                    <option value="">— sem fase —</option>
+                    {project.phases?.map((ph) => (
+                      <option key={ph.id} value={ph.id}>
+                        {ph.title || ph.name_display}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Prazo</Label>
+                  <Input
+                    type="date"
+                    value={deliverableDraft.due_date}
+                    onChange={(e) => setDeliverableDraft((p) => ({ ...p, due_date: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={deliverableDraft.status}
+                    onChange={(e) =>
+                      setDeliverableDraft((p) => ({ ...p, status: e.target.value as ApiProjectDeliverable['status'] }))
+                    }
+                  >
+                    <option value="draft">Rascunho</option>
+                    <option value="under_review">Em Revisão</option>
+                    <option value="approved">Aprovado</option>
+                    <option value="submitted">Submetido</option>
+                    <option value="accepted">Aceite</option>
+                  </select>
+                </div>
+                <div className="space-y-2 lg:col-span-2">
+                  <Label>Descrição</Label>
+                  <Input
+                    value={deliverableDraft.description}
+                    onChange={(e) => setDeliverableDraft((p) => ({ ...p, description: e.target.value }))}
+                    placeholder="Breve descrição"
+                  />
+                </div>
+                <div className="flex items-end gap-2 lg:col-span-4">
+                  <Button
+                    onClick={handleSaveDeliverable}
+                    disabled={isSavingDeliverable || !deliverableDraft.title.trim()}
+                    size="sm"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {editingDeliverableId ? 'Atualizar' : 'Adicionar'}
+                  </Button>
+                  {editingDeliverableId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingDeliverableId(null);
+                        setDeliverableDraft({ title: '', description: '', phase: '', due_date: '', status: 'draft' });
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* List */}
+              {project.deliverables?.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">Nenhum entregável registado.</p>
+              ) : (
+                <div className="space-y-2">
+                  {project.deliverables?.map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between rounded-md border p-3 gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{d.title}</p>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
+                          {d.phase_name && <span>Fase: {d.phase_name}</span>}
+                          {d.due_date && <span>Prazo: {formatDate(new Date(d.due_date))}</span>}
+                          {d.description && <span className="truncate max-w-xs">{d.description}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge
+                          variant="outline"
+                          className={
+                            d.status === 'accepted' ? 'border-green-500 text-green-600' :
+                            d.status === 'approved' ? 'border-blue-500 text-blue-600' :
+                            d.status === 'submitted' ? 'border-purple-500 text-purple-600' :
+                            d.status === 'under_review' ? 'border-amber-500 text-amber-600' :
+                            ''
+                          }
+                        >
+                          {d.status_display}
+                        </Badge>
+                        <Button variant="ghost" size="sm" onClick={() => handleEditDeliverable(d)}>
+                          Editar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteDeliverable(d.id)}
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="gantt">
           <Card>
             <CardHeader>
@@ -1532,12 +1736,14 @@ export function ProjectDetail() {
             </CardHeader>
             <CardContent>
               {(() => {
+                const projectStart = new Date(project.start_date || Date.now());
+                const projectEnd = new Date(project.end_date || Date.now() + 30 * 24 * 60 * 60 * 1000);
                 const items: GanttItem[] = [
                   ...(project.phases?.map((p) => ({
                     id: `phase-${p.id}`,
-                    name: p.name_display,
-                    startDate: p.start_date ? new Date(p.start_date) : new Date(project.start_date || Date.now()),
-                    endDate: p.end_date ? new Date(p.end_date) : new Date(project.end_date || Date.now() + 30 * 24 * 60 * 60 * 1000),
+                    name: p.title || p.name_display,
+                    startDate: p.start_date ? new Date(p.start_date) : projectStart,
+                    endDate: p.end_date ? new Date(p.end_date) : projectEnd,
                     progress: p.completion_percentage,
                     type: 'phase' as const,
                     status: p.is_completed ? 'completed' : p.completion_percentage > 0 ? 'in_progress' : 'not_started',
@@ -1551,19 +1757,23 @@ export function ProjectDetail() {
                     type: 'milestone' as const,
                     status: m.status === 'completed' ? 'completed' : m.status === 'delayed' ? 'delayed' : 'not_started',
                   })) || []),
+                  ...(project.deliverables?.filter((d) => d.due_date).map((d) => ({
+                    id: `deliverable-${d.id}`,
+                    name: `📦 ${d.title}`,
+                    startDate: d.due_date ? new Date(new Date(d.due_date).getTime() - 7 * 24 * 60 * 60 * 1000) : projectStart,
+                    endDate: d.due_date ? new Date(d.due_date) : projectEnd,
+                    progress: d.status === 'accepted' || d.status === 'approved' ? 100 : d.status === 'submitted' || d.status === 'under_review' ? 60 : 0,
+                    type: 'deliverable' as const,
+                    status: d.status,
+                  })) || []),
                 ];
 
                 return items.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">
-                    Nenhum item para visualizar. Defina fases e marcos com datas.
+                    Nenhum item para visualizar. Defina fases, marcos e entregáveis com datas.
                   </p>
                 ) : (
-                  <GanttChart
-                    items={items}
-                    onItemClick={(item) => {
-                      console.log('Clicked item', item);
-                    }}
-                  />
+                  <GanttChart items={items} />
                 );
               })()}
             </CardContent>
