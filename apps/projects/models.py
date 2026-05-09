@@ -104,6 +104,26 @@ class Project(models.Model):
     def __str__(self):
         return self.title
 
+    @property
+    def days_remaining(self):
+        from django.utils import timezone
+        if self.end_date:
+            return (self.end_date - timezone.now().date()).days
+        return None
+
+    @property
+    def budget_utilization(self):
+        if self.budget_total > 0:
+            return int((self.actual_cost / self.budget_total) * 100)
+        return 0
+
+    @property
+    def is_overdue(self):
+        from django.utils import timezone
+        if self.end_date and self.status not in (Project.Status.COMPLETED, Project.Status.CLOSED):
+            return self.end_date < timezone.now().date()
+        return False
+
 
 class ProjectPhase(models.Model):
     """Project phases following PMI methodology."""
@@ -143,26 +163,6 @@ class ProjectPhase(models.Model):
 
     def __str__(self):
         return f"{self.project.title} - {self.get_name_display()}"
-
-    @property
-    def days_remaining(self):
-        from django.utils import timezone
-        if self.end_date:
-            return (self.end_date - timezone.now().date()).days
-        return None
-
-    @property
-    def budget_utilization(self):
-        if self.project.budget_total > 0:
-            return int((self.project.actual_cost / self.project.budget_total) * 100)
-        return 0
-
-    @property
-    def is_overdue(self):
-        from django.utils import timezone
-        if self.end_date and self.project.status not in (Project.Status.COMPLETED, Project.Status.CLOSED):
-            return self.end_date < timezone.now().date()
-        return False
 
 
 class ProjectTeamMember(models.Model):
