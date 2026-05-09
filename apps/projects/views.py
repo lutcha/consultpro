@@ -229,7 +229,7 @@ class ProjectArtifactViewSet(viewsets.ModelViewSet):
     queryset = ProjectArtifact.objects.all()
     serializer_class = ProjectArtifactSerializer
     permission_classes = [IsConsultantOrManager]
-    filterset_fields = ['project', 'artifact_type', 'status']
+    filterset_fields = ['project', 'phase', 'artifact_type', 'status']
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)

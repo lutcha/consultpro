@@ -679,6 +679,7 @@ export interface ApiProjectPhase {
   id: number;
   name: string;
   name_display: string;
+  title: string;
   description: string;
   start_date: string | null;
   end_date: string | null;
@@ -692,6 +693,7 @@ export interface ApiProjectPhase {
 export interface ApiProjectArtifact {
   id: number;
   project: number;
+  phase: number | null;
   artifact_type: string;
   artifact_type_display: string;
   title: string;
@@ -920,6 +922,7 @@ export async function apiCreateProjectArtifact(
     artifact_type: string;
     title: string;
     status: string;
+    phase?: number | null;
     external_url?: string;
     notes?: string;
     file?: File | null;
@@ -927,6 +930,7 @@ export async function apiCreateProjectArtifact(
 ): Promise<ApiProjectArtifact> {
   const formData = new FormData();
   formData.append('project', String(data.project));
+  if (data.phase) formData.append('phase', String(data.phase));
   formData.append('artifact_type', data.artifact_type);
   formData.append('title', data.title);
   formData.append('status', data.status);

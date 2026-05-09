@@ -144,6 +144,7 @@ class ProjectPhase(models.Model):
         max_length=20,
         choices=PhaseName.choices,
     )
+    title = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
@@ -162,7 +163,7 @@ class ProjectPhase(models.Model):
         unique_together = ['project', 'name']
 
     def __str__(self):
-        return f"{self.project.title} - {self.get_name_display()}"
+        return f"{self.project.title} - {self.title or self.get_name_display()}"
 
 
 class ProjectTeamMember(models.Model):
@@ -408,6 +409,13 @@ class ProjectArtifact(models.Model):
     project = models.ForeignKey(
         Project,
         on_delete=models.CASCADE,
+        related_name='artifacts',
+    )
+    phase = models.ForeignKey(
+        ProjectPhase,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='artifacts',
     )
     artifact_type = models.CharField(

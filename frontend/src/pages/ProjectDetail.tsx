@@ -70,6 +70,7 @@ export function ProjectDetail() {
     description: '',
   });
   const [phaseDrafts, setPhaseDrafts] = useState<Record<number, {
+    title: string;
     description: string;
     start_date: string;
     end_date: string;
@@ -78,6 +79,7 @@ export function ProjectDetail() {
   }>>({});
   const [artifactDraft, setArtifactDraft] = useState({
     artifact_type: 'handover',
+    phase: '',
     title: '',
     status: 'pending',
     external_url: '',
@@ -159,8 +161,9 @@ export function ProjectDetail() {
         Object.fromEntries(
           (data.phases || []).map((phase) => [
             phase.id,
-            {
-              description: phase.description || '',
+              {
+                title: phase.title || phase.name_display || '',
+                description: phase.description || '',
               start_date: phase.start_date || '',
               end_date: phase.end_date || '',
               completion_percentage: String(phase.completion_percentage ?? 0),
@@ -252,6 +255,7 @@ export function ProjectDetail() {
 
     try {
       await apiUpdateProjectPhase(phaseId, {
+        title: phaseDraft.title,
         description: phaseDraft.description,
         start_date: phaseDraft.start_date || null,
         end_date: phaseDraft.end_date || null,
@@ -277,6 +281,7 @@ export function ProjectDetail() {
       await apiCreateProjectArtifact({
         project: project.id,
         artifact_type: artifactDraft.artifact_type,
+        phase: artifactDraft.phase ? Number(artifactDraft.phase) : null,
         title: artifactDraft.title.trim(),
         status: artifactDraft.status,
         external_url: artifactDraft.external_url.trim(),
@@ -285,6 +290,7 @@ export function ProjectDetail() {
       });
       setArtifactDraft({
         artifact_type: 'handover',
+        phase: '',
         title: '',
         status: 'pending',
         external_url: '',
@@ -647,7 +653,7 @@ export function ProjectDetail() {
                         <div className="flex-1 pb-6">
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-semibold">{phase.name_display}</p>
+                              <p className="font-semibold">{phase.title || phase.name_display}</p>
                               <p className="text-sm text-muted-foreground">
                                 {phase.description || 'Sem descrição'}
                               </p>
@@ -676,6 +682,17 @@ export function ProjectDetail() {
                             )}
                           </div>
                           <div className="mt-3 space-y-3 rounded-md border bg-muted/20 p-3">
+                            <div className="space-y-2">
+                              <Label htmlFor={`phase-title-${phase.id}`}>Nome da fase</Label>
+                              <Input
+                                id={`phase-title-${phase.id}`}
+                                value={phaseDrafts[phase.id]?.title ?? ''}
+                                onChange={(e) =>
+                                  updatePhaseDraft(phase.id, { title: e.target.value })
+                                }
+                                placeholder={phase.name_display}
+                              />
+                            </div>
                             <div className="space-y-2">
                               <Label htmlFor={`phase-description-${phase.id}`}>Descricao</Label>
                               <Textarea
@@ -757,6 +774,29 @@ export function ProjectDetail() {
                               </Button>
                             </div>
                           </div>
+                          {project.artifacts?.some((artifact) => artifact.phase === phase.id) && (
+                            <div className="mt-3 rounded-md border p-3">
+                              <p className="text-sm font-medium mb-2">Artefactos desta fase</p>
+                              <div className="space-y-2">
+                                {project.artifacts
+                                  ?.filter((artifact) => artifact.phase === phase.id)
+                                  .map((artifact) => (
+                                    <div
+                                      key={artifact.id}
+                                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md bg-muted/40 p-2"
+                                    >
+                                      <div>
+                                        <p className="text-sm font-medium">{artifact.title}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {artifact.artifact_type_display}
+                                        </p>
+                                      </div>
+                                      <Badge variant="outline">{artifact.status_display}</Badge>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
                           {!phase.is_completed && (
                             <div className="mt-2">
                               <div className="flex items-center justify-between text-sm mb-1">
@@ -1076,6 +1116,23 @@ export function ProjectDetail() {
                     <option value="other">Outro</option>
                   </select>
                 </div>
+                <div className="space-y-2">
+                  <Label>Fase</Label>
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                    value={artifactDraft.phase}
+                    onChange={(e) =>
+                      setArtifactDraft((prev) => ({ ...prev, phase: e.target.value }))
+                    }
+                  >
+                    <option value="">Sem fase</option>
+                    {project.phases?.map((phase) => (
+                      <option key={phase.id} value={phase.id}>
+                        {phase.title || phase.name_display}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="space-y-2 lg:col-span-2">
                   <Label>Titulo</Label>
                   <Input
@@ -1161,6 +1218,13 @@ export function ProjectDetail() {
                           <p className="font-medium">{artifact.title}</p>
                           <Badge variant="outline">{artifact.artifact_type_display}</Badge>
                           <Badge>{artifact.status_display}</Badge>
+                          {artifact.phase && (
+                            <Badge variant="secondary">
+                              {project.phases?.find((phase) => phase.id === artifact.phase)?.title ||
+                                project.phases?.find((phase) => phase.id === artifact.phase)?.name_display ||
+                                'Fase'}
+                            </Badge>
+                          )}
                         </div>
                         {artifact.notes && (
                           <p className="text-sm text-muted-foreground mt-2 whitespace-pre-line">

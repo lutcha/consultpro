@@ -90,7 +90,7 @@ class ProjectArtifactSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectArtifact
         fields = [
-            'id', 'project', 'artifact_type', 'artifact_type_display',
+            'id', 'project', 'phase', 'artifact_type', 'artifact_type_display',
             'title', 'status', 'status_display', 'file', 'file_url',
             'external_url', 'notes', 'created_by', 'created_at', 'updated_at',
         ]
@@ -111,7 +111,7 @@ class ProjectPhaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectPhase
         fields = [
-            'id', 'name', 'name_display', 'description', 'start_date',
+            'id', 'name', 'name_display', 'title', 'description', 'start_date',
             'end_date', 'is_completed', 'completion_percentage', 'order',
             'created_at', 'updated_at',
         ]
