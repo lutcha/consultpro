@@ -113,6 +113,16 @@ const proposalEventTypes = [
   { value: 'note', label: 'Nota' },
 ];
 
+const proposalArtifactTypes = [
+  { value: '', label: 'Sem artefacto' },
+  { value: 'final_proposal', label: 'Proposta Final' },
+  { value: 'contract', label: 'Contrato' },
+  { value: 'handover', label: 'Handover Package' },
+  { value: 'kickoff', label: 'Kickoff Pack' },
+  { value: 'checklist', label: 'Checklist de Arranque' },
+  { value: 'other', label: 'Outro' },
+];
+
 const defaultEventTitles: Record<string, string> = {
   submission: 'Comprovativo de submissao',
   evaluation: 'Atualizacao de avaliacao',
@@ -123,6 +133,13 @@ const defaultEventTitles: Record<string, string> = {
   contracting: 'Documento de contratacao',
   handover: 'Handover para execucao',
   note: 'Nota da proposta',
+};
+
+const defaultArtifactTypeByEvent: Record<string, string> = {
+  submission: 'final_proposal',
+  bafo: 'final_proposal',
+  contracting: 'contract',
+  handover: 'handover',
 };
 
 function formatDateTime(value?: Date) {
@@ -306,6 +323,7 @@ export function ProposalEditor() {
   const [isAddingEvent, setIsAddingEvent] = useState(false);
   const [eventForm, setEventForm] = useState({
     event_type: 'submission',
+    artifact_type: 'final_proposal',
     title: defaultEventTitles.submission,
     occurred_at: new Date().toISOString().slice(0, 16),
     external_url: '',
@@ -442,6 +460,10 @@ export function ProposalEditor() {
     setEventForm((prev) => ({
       ...prev,
       event_type: eventType,
+      artifact_type:
+        !prev.artifact_type || defaultArtifactTypeByEvent[prev.event_type] === prev.artifact_type
+          ? defaultArtifactTypeByEvent[eventType] || ''
+          : prev.artifact_type,
       title:
         !prev.title || Object.values(defaultEventTitles).includes(prev.title)
           ? defaultEventTitles[eventType] || ''
@@ -456,6 +478,7 @@ export function ProposalEditor() {
     try {
       await apiCreateProposalEvent(selectedProposal.id, {
         event_type: eventForm.event_type,
+        artifact_type: eventForm.artifact_type,
         title: eventForm.title.trim(),
         notes: eventForm.notes.trim(),
         occurred_at: eventForm.occurred_at
@@ -466,6 +489,7 @@ export function ProposalEditor() {
       });
       setEventForm({
         event_type: eventForm.event_type,
+        artifact_type: eventForm.artifact_type,
         title: defaultEventTitles[eventForm.event_type] || '',
         occurred_at: new Date().toISOString().slice(0, 16),
         external_url: '',
@@ -540,6 +564,12 @@ export function ProposalEditor() {
   const activeSection = selectedProposal?.sections.find(
     (s) => s.id === activeSectionId
   );
+  const proposalEvents = selectedProposal?.events || [];
+  const hasFinalProposal = proposalEvents.some((event) => event.artifactType === 'final_proposal');
+  const hasContract = proposalEvents.some((event) => event.artifactType === 'contract');
+  const hasHandover = proposalEvents.some((event) => event.artifactType === 'handover');
+  const hasKickoff = proposalEvents.some((event) => event.artifactType === 'kickoff');
+  const handoverReady = hasFinalProposal && hasContract && hasHandover;
 
   // Build preview HTML
   const previewHtml = selectedProposal
@@ -741,6 +771,22 @@ export function ProposalEditor() {
                 </select>
               </label>
               <label className="text-xs font-medium">
+                Artefacto
+                <select
+                  value={eventForm.artifact_type}
+                  onChange={(event) =>
+                    setEventForm((prev) => ({ ...prev, artifact_type: event.target.value }))
+                  }
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {proposalArtifactTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-medium">
                 Data
                 <Input
                   type="datetime-local"
@@ -810,6 +856,34 @@ export function ProposalEditor() {
             </div>
           </div>
           <div className="rounded-lg border border-border bg-muted/20 p-3">
+            <div className="mb-3 rounded-md border border-border bg-background p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold">Checklist Contracting + Handover</p>
+                <Badge variant={handoverReady ? 'default' : 'outline'} className="text-xs">
+                  {handoverReady ? 'Pronto para projeto' : 'Em preparacao'}
+                </Badge>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {[
+                  ['Proposta final/BAFO', hasFinalProposal],
+                  ['Contrato anexado', hasContract],
+                  ['Handover package', hasHandover],
+                  ['Kickoff pack', hasKickoff],
+                ].map(([label, done]) => (
+                  <div key={String(label)} className="flex items-center gap-2 text-xs">
+                    <CheckCircle
+                      className={`h-4 w-4 ${done ? 'text-green-600' : 'text-muted-foreground'}`}
+                    />
+                    <span className={done ? 'text-foreground' : 'text-muted-foreground'}>
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Ao iniciar projeto, estes artefactos sao copiados para o separador Artefactos do projeto.
+              </p>
+            </div>
             <p className="mb-2 text-sm font-semibold">Historico da proposta</p>
             {(selectedProposal.events || []).length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -830,6 +904,12 @@ export function ProposalEditor() {
                       <Badge variant="outline" className="text-xs">
                         {event.typeLabel}
                       </Badge>
+                      {event.artifactType && (
+                        <Badge variant="secondary" className="text-xs">
+                          {proposalArtifactTypes.find((type) => type.value === event.artifactType)?.label ||
+                            event.artifactType}
+                        </Badge>
+                      )}
                     </div>
                     {event.notes && (
                       <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">

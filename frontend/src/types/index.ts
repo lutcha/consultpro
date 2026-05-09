@@ -96,6 +96,7 @@ export interface ProposalEvent {
   id: string;
   type: string;
   typeLabel: string;
+  artifactType?: string;
   title: string;
   notes: string;
   occurredAt: Date;

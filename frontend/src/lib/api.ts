@@ -441,6 +441,7 @@ export interface ApiProposalEvent {
   proposal: number;
   event_type: string;
   event_type_display: string;
+  artifact_type: string;
   title: string;
   notes: string;
   occurred_at: string;
@@ -570,6 +571,7 @@ export async function apiCreateProposalEvent(
   proposalId: string,
   data: {
     event_type: string;
+    artifact_type?: string;
     title: string;
     notes?: string;
     occurred_at?: string;
@@ -579,6 +581,7 @@ export async function apiCreateProposalEvent(
 ): Promise<ApiProposalEvent> {
   const formData = new FormData();
   formData.append('event_type', data.event_type);
+  if (data.artifact_type) formData.append('artifact_type', data.artifact_type);
   formData.append('title', data.title);
   if (data.notes) formData.append('notes', data.notes);
   if (data.occurred_at) formData.append('occurred_at', data.occurred_at);

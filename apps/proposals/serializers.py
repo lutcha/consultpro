@@ -63,6 +63,7 @@ class ProposalEventSerializer(serializers.ModelSerializer):
             'proposal',
             'event_type',
             'event_type_display',
+            'artifact_type',
             'title',
             'notes',
             'occurred_at',

@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import IsOwnerOrAdmin
-from apps.projects.models import Project, ProjectPhase
+from apps.projects.models import Project, ProjectArtifact, ProjectPhase
 from apps.users.models import User
 from .document_generator import generate_proposal_docx, generate_proposal_pdf
 from .models import (
@@ -184,7 +184,59 @@ def _ensure_project_for_proposal(proposal, manager=None):
             name=name,
             defaults={'order': order},
         )
+    _sync_proposal_events_to_project_artifacts(proposal, project, created_by=manager)
     return project
+
+
+PROPOSAL_EVENT_ARTIFACT_TYPES = {
+    'submission': ProjectArtifact.ArtifactType.FINAL_PROPOSAL,
+    'bafo': ProjectArtifact.ArtifactType.FINAL_PROPOSAL,
+    'contracting': ProjectArtifact.ArtifactType.CONTRACT,
+    'handover': ProjectArtifact.ArtifactType.HANDOVER,
+}
+
+
+def _event_artifact_type(event):
+    if event.artifact_type:
+        return event.artifact_type
+    return PROPOSAL_EVENT_ARTIFACT_TYPES.get(event.event_type)
+
+
+def _sync_proposal_events_to_project_artifacts(proposal, project, created_by=None):
+    for event in proposal.events.all():
+        artifact_type = _event_artifact_type(event)
+        if not artifact_type:
+            continue
+
+        artifact, created = ProjectArtifact.objects.get_or_create(
+            project=project,
+            title=event.title,
+            artifact_type=artifact_type,
+            defaults={
+                'status': ProjectArtifact.Status.ATTACHED
+                if event.attachment or event.external_url
+                else ProjectArtifact.Status.PENDING,
+                'external_url': event.external_url,
+                'notes': event.notes,
+                'created_by': created_by or event.created_by,
+            },
+        )
+        update_fields = []
+        if event.attachment and artifact.file != event.attachment:
+            artifact.file = event.attachment
+            update_fields.append('file')
+        if event.external_url and artifact.external_url != event.external_url:
+            artifact.external_url = event.external_url
+            update_fields.append('external_url')
+        if event.notes and artifact.notes != event.notes:
+            artifact.notes = event.notes
+            update_fields.append('notes')
+        if created:
+            continue
+        if update_fields:
+            artifact.status = ProjectArtifact.Status.ATTACHED
+            update_fields.append('status')
+            artifact.save(update_fields=update_fields + ['updated_at'])
 
 
 PROPOSAL_STATUS_EVENT_TYPES = {
@@ -200,6 +252,13 @@ PROPOSAL_STATUS_EVENT_TYPES = {
     'lost': 'note',
     'rejected': 'note',
 }
+
+
+def _event_artifact_type_from_status(status_value):
+    event_type = PROPOSAL_STATUS_EVENT_TYPES.get(status_value)
+    if not event_type:
+        return ''
+    return PROPOSAL_EVENT_ARTIFACT_TYPES.get(event_type, '')
 
 
 def _set_proposal_status(proposal, status_value, user=None, note=''):
@@ -225,6 +284,7 @@ def _set_proposal_status(proposal, status_value, user=None, note=''):
         ProposalEvent.objects.create(
             proposal=proposal,
             event_type=event_type,
+            artifact_type=_event_artifact_type_from_status(status_value),
             title=status_label,
             notes=note,
             created_by=user,
@@ -490,7 +550,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
                 'proposal_id': proposal.id,
                 'proposal_url': f'/proposals/{proposal.id}',
             }
-            if proposal.status in ('contract_signed', 'project_initiation'):
+            if proposal.status == 'project_initiation':
                 project = _ensure_project_for_proposal(proposal, manager=request.user)
                 data['project_id'] = project.id
                 data['project_url'] = f'/projects/{project.id}'

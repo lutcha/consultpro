@@ -110,6 +110,15 @@ class ProposalEvent(models.Model):
         ('handover', 'Handover'),
         ('note', 'Nota'),
     ]
+    ARTIFACT_TYPE_CHOICES = [
+        ('', 'Sem artefacto'),
+        ('final_proposal', 'Proposta Final'),
+        ('contract', 'Contrato'),
+        ('handover', 'Handover Package'),
+        ('kickoff', 'Kickoff Pack'),
+        ('checklist', 'Checklist de Arranque'),
+        ('other', 'Outro'),
+    ]
 
     proposal = models.ForeignKey(
         Proposal,
@@ -117,6 +126,11 @@ class ProposalEvent(models.Model):
         related_name='events',
     )
     event_type = models.CharField(max_length=30, choices=EVENT_TYPE_CHOICES)
+    artifact_type = models.CharField(
+        max_length=30,
+        choices=ARTIFACT_TYPE_CHOICES,
+        blank=True,
+    )
     title = models.CharField(max_length=255)
     notes = models.TextField(blank=True)
     occurred_at = models.DateTimeField(default=timezone.now)

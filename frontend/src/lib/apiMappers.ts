@@ -248,6 +248,7 @@ export function mapApiProposalEvent(event: ApiProposalEvent): ProposalEvent {
     id: String(event.id),
     type: event.event_type,
     typeLabel: event.event_type_display || event.event_type,
+    artifactType: event.artifact_type || undefined,
     title: event.title,
     notes: event.notes || '',
     occurredAt: toDate(event.occurred_at),
