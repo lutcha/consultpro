@@ -145,6 +145,10 @@ export async function apiCreateUser(data: {
   });
 }
 
+export async function apiPatchUser(id: number, data: { role?: string; availability?: string }): Promise<ApiUser> {
+  return apiRequest<ApiUser>(`/users/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
 export async function apiUpdateMe(data: Partial<MeResponse>): Promise<MeResponse> {
   return apiRequest<MeResponse>('/auth/me/', {
     method: 'PUT',

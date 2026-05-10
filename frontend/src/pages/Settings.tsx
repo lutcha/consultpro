@@ -36,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUserStore } from '@/stores';
 import { useCurriculumStore } from '@/stores/useCurriculumStore';
 import { useScrapingStore } from '@/stores/useScrapingStore';
-import { apiUpdateMe } from '@/lib/api';
+import { apiUpdateMe, apiGetUsers, apiPatchUser, apiCreateUser, type ApiUser } from '@/lib/api';
 import { toast } from 'sonner';
 import type { CVTemplate } from '@/types';
 
@@ -78,6 +78,14 @@ export function Settings() {
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateDeleting, setTemplateDeleting] = useState<string | null>(null);
 
+  // Users management
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [roleUpdating, setRoleUpdating] = useState<number | null>(null);
+  const [inviteModal, setInviteModal] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ first_name: '', last_name: '', email: '', role: 'consultant', password: 'ConsultPro2026!' });
+  const [inviteSaving, setInviteSaving] = useState(false);
+
   const [profile, setProfile] = useState({
     first_name: user?.name?.split(' ')[0] || '',
     last_name: user?.name?.split(' ').slice(1).join(' ') || '',
@@ -108,6 +116,22 @@ export function Settings() {
     fetchTemplates();
     fetchSources();
   }, [fetchTemplates, fetchSources]);
+
+  const loadUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const res = await apiGetUsers();
+      setUsers(res.results);
+    } catch {
+      toast.error('Erro ao carregar utilizadores');
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.role === 'admin' || user?.role === 'manager') loadUsers();
+  }, [user?.role]);
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setProfile((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -204,7 +228,43 @@ export function Settings() {
     setTemplateForm(f => ({ ...f, organization: value, organization_name: label }));
   };
 
+  const handleRoleChange = async (userId: number, newRole: string) => {
+    setRoleUpdating(userId);
+    try {
+      const updated = await apiPatchUser(userId, { role: newRole });
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: updated.role } : u));
+      toast.success('Role actualizado');
+    } catch {
+      toast.error('Erro ao actualizar role');
+    } finally {
+      setRoleUpdating(null);
+    }
+  };
+
+  const handleInvite = async () => {
+    if (!inviteForm.email || !inviteForm.first_name) { toast.error('Nome e email obrigatorios'); return; }
+    setInviteSaving(true);
+    try {
+      const newUser = await apiCreateUser({
+        email: inviteForm.email,
+        first_name: inviteForm.first_name,
+        last_name: inviteForm.last_name,
+        password: inviteForm.password,
+        role: inviteForm.role,
+      });
+      setUsers((prev) => [newUser, ...prev]);
+      setInviteModal(false);
+      setInviteForm({ first_name: '', last_name: '', email: '', role: 'consultant', password: 'ConsultPro2026!' });
+      toast.success(`Utilizador ${newUser.name} criado`);
+    } catch {
+      toast.error('Erro ao criar utilizador');
+    } finally {
+      setInviteSaving(false);
+    }
+  };
+
   const isAdmin = user?.role === 'admin';
+  const canManageUsers = user?.role === 'admin' || user?.role === 'manager';
 
   return (
     <div className="space-y-6">
@@ -225,7 +285,7 @@ export function Settings() {
           <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-1" /> Alertas</TabsTrigger>
           <TabsTrigger value="templates"><FileText className="h-4 w-4 mr-1" /> Templates</TabsTrigger>
           <TabsTrigger value="scraping"><Globe className="h-4 w-4 mr-1" /> Scraping</TabsTrigger>
-          {isAdmin && <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Utilizadores</TabsTrigger>}
+          {canManageUsers && <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Utilizadores</TabsTrigger>}
           <TabsTrigger value="appearance"><Palette className="h-4 w-4 mr-1" /> Tema</TabsTrigger>
         </TabsList>
 
@@ -373,16 +433,65 @@ export function Settings() {
           </Card>
         </TabsContent>
 
-        {/* Users (Admin only) */}
-        {isAdmin && (
+        {/* Users */}
+        {canManageUsers && (
           <TabsContent value="users" className="space-y-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Gestão de Utilizadores</CardTitle>
-                <Button size="sm"><Plus className="h-4 w-4 mr-1" />Convidar</Button>
+                <Button size="sm" onClick={() => setInviteModal(true)}>
+                  <Plus className="h-4 w-4 mr-1" />Convidar Utilizador
+                </Button>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">Funcionalidade de gestão de utilizadores será implementada na próxima versão.</p>
+                {isLoadingUsers ? (
+                  <div className="flex items-center gap-2 py-6 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /><span className="text-sm">A carregar...</span>
+                  </div>
+                ) : users.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Nenhum utilizador encontrado.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {users.map((u) => (
+                      <div key={u.id} className="flex items-center justify-between p-3 border rounded-lg gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <span className="text-sm font-semibold text-primary">
+                              {(u.name || u.email).slice(0, 2).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{u.name || '—'}</p>
+                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Badge variant={u.availability === 'available' ? 'default' : 'secondary'} className="text-xs hidden sm:flex">
+                            {u.availability === 'available' ? 'Disponivel' : u.availability === 'busy' ? 'Ocupado' : 'Indisponivel'}
+                          </Badge>
+                          {roleUpdating === u.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          ) : (
+                            <Select
+                              value={u.role}
+                              onValueChange={(val) => handleRoleChange(u.id, val)}
+                              disabled={u.id === user?.id}
+                            >
+                              <SelectTrigger className="h-8 w-32 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="consultant">Consultor</SelectItem>
+                                <SelectItem value="manager">Gestor</SelectItem>
+                                {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -483,6 +592,55 @@ export function Settings() {
             <Button variant="outline" onClick={() => setTemplateModal({ open: false, editing: null })}>Cancelar</Button>
             <Button onClick={handleTemplateSave} disabled={templateSaving}>
               {templateSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />A guardar...</> : <><Save className="h-4 w-4 mr-2" />Guardar</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite User Modal */}
+      <Dialog open={inviteModal} onOpenChange={(v) => { if (!v) setInviteModal(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Convidar Utilizador</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Nome *</Label>
+                <Input value={inviteForm.first_name} onChange={(e) => setInviteForm(f => ({ ...f, first_name: e.target.value }))} placeholder="João" />
+              </div>
+              <div>
+                <Label>Apelido</Label>
+                <Input value={inviteForm.last_name} onChange={(e) => setInviteForm(f => ({ ...f, last_name: e.target.value }))} placeholder="Ferreira" />
+              </div>
+            </div>
+            <div>
+              <Label>Email *</Label>
+              <Input type="email" value={inviteForm.email} onChange={(e) => setInviteForm(f => ({ ...f, email: e.target.value }))} placeholder="utilizador@consultpro.cv" />
+            </div>
+            <div>
+              <Label>Role</Label>
+              <Select value={inviteForm.role} onValueChange={(v) => setInviteForm(f => ({ ...f, role: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="consultant">Consultor</SelectItem>
+                  <SelectItem value="manager">Gestor</SelectItem>
+                  {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Password inicial</Label>
+              <Input value={inviteForm.password} onChange={(e) => setInviteForm(f => ({ ...f, password: e.target.value }))} placeholder="password" />
+              <p className="text-xs text-muted-foreground mt-1">O utilizador deve alterar na primeira sessao.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteModal(false)}>Cancelar</Button>
+            <Button onClick={handleInvite} disabled={inviteSaving}>
+              {inviteSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />A criar...</> : <><Plus className="h-4 w-4 mr-2" />Criar Utilizador</>}
             </Button>
           </DialogFooter>
         </DialogContent>
