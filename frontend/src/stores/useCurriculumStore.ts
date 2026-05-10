@@ -63,6 +63,7 @@ interface CurriculumState {
   matches: TemplateMatch[];
   suggestions: CVSuggestion[];
   isLoading: boolean;
+  isLoadingTemplates: boolean;
   isAnalyzing: boolean;
   uploadProgress: number;
   error: string | null;
@@ -86,6 +87,7 @@ export const useCurriculumStore = create<CurriculumState>((set, get) => ({
   matches: [],
   suggestions: [],
   isLoading: false,
+  isLoadingTemplates: false,
   isAnalyzing: false,
   uploadProgress: 0,
   error: null,
@@ -108,12 +110,12 @@ export const useCurriculumStore = create<CurriculumState>((set, get) => ({
   },
 
   fetchTemplates: async () => {
-    set({ isLoading: true, error: null });
+    set({ isLoadingTemplates: true, error: null });
     try {
       const res = await apiGetCVTemplates();
-      set({ templates: res.results.map(mapTemplate), isLoading: false });
+      set({ templates: res.results.map(mapTemplate), isLoadingTemplates: false });
     } catch (err) {
-      set({ error: (err as Error).message, isLoading: false });
+      set({ error: (err as Error).message, isLoadingTemplates: false });
     }
   },
 

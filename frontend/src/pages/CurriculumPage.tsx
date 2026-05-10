@@ -217,7 +217,7 @@ function CVSelector({ curricula, selected, onSelect }: {
 export function CurriculumPage() {
   const {
     curricula, selectedCV, templates, suggestions,
-    isLoading, isAnalyzing, uploadProgress, error,
+    isLoading, isLoadingTemplates, isAnalyzing, uploadProgress, error,
     fetchCurricula, fetchTemplates, fetchSuggestions,
     selectCV, uploadCV, analyzeCV, applySuggestion, clearError,
   } = useCurriculumStore();
@@ -249,6 +249,17 @@ export function CurriculumPage() {
 
   const extracted = (selectedCV?.extractedData || {}) as any;
   const score = selectedCV?.analysisScore || 0;
+
+  const completude = Math.round(
+    (['name', 'email', 'phone', 'location', 'summary'] as const)
+      .filter((f) => extracted[f]).length / 5 * 100
+  );
+  const conteudo = Math.min(
+    100,
+    (extracted.experience?.length ?? 0) * 10 +
+    (extracted.skills?.length ?? 0) * 3 +
+    (extracted.languages?.length ?? 0) * 5
+  );
 
   const sectionCards = [
     { id: 'experience', label: 'Experiencia Profissional', icon: Briefcase, data: extracted.experience },
@@ -358,10 +369,10 @@ export function CurriculumPage() {
                         {score >= 80 ? 'Excelente CV! Poucas melhorias necessarias.' : score >= 60 ? 'Bom CV. Algumas melhorias recomendadas.' : 'CV necessita de melhorias significativas.'}
                       </p>
                       <div className="w-full mt-3 space-y-2">
-                        <div className="flex justify-between text-sm"><span>Completude</span><span className="font-medium">{Math.min(score + 5, 100)}%</span></div>
-                        <Progress value={Math.min(score + 5, 100)} className="h-1.5" />
-                        <div className="flex justify-between text-sm"><span>Conteudo</span><span className="font-medium">{score}%</span></div>
-                        <Progress value={score} className="h-1.5" />
+                        <div className="flex justify-between text-sm"><span>Completude</span><span className="font-medium">{completude}%</span></div>
+                        <Progress value={completude} className="h-1.5" />
+                        <div className="flex justify-between text-sm"><span>Conteudo</span><span className="font-medium">{conteudo}%</span></div>
+                        <Progress value={conteudo} className="h-1.5" />
                       </div>
                     </CardContent>
                   </Card>
@@ -450,9 +461,20 @@ export function CurriculumPage() {
 
           {/* TAB: TEMPLATES */}
           <TabsContent value="templates" className="space-y-4">
-            {templates.length === 0 ? (
+            {isLoadingTemplates ? (
               <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">Sem templates configurados.</CardContent>
+                <CardContent className="py-12 text-center space-y-2">
+                  <Loader2 className="h-8 w-8 mx-auto text-primary animate-spin" />
+                  <p className="text-sm text-muted-foreground">Carregando templates...</p>
+                </CardContent>
+              </Card>
+            ) : templates.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center space-y-2">
+                  <Download className="h-10 w-10 mx-auto text-muted-foreground" />
+                  <p className="font-medium">Nenhum template disponivel</p>
+                  <p className="text-sm text-muted-foreground">Os templates institucionais (World Bank, UNDP, UN, EU, AfDB) serao configurados em breve.</p>
+                </CardContent>
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
