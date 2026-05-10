@@ -20,7 +20,7 @@ import { AddInternalMemberModal } from '@/components/modals/AddInternalMemberMod
 import { AddConsultantModal } from '@/components/modals/AddConsultantModal';
 import { AddProjectTeamMemberModal } from '@/components/modals/AddProjectTeamMemberModal';
 import { CreateProjectTeamModal } from '@/components/modals/CreateProjectTeamModal';
-import type { ProjectTeam } from '@/types/teams';
+import type { ProjectTeam, InternalTeamMember, Consultant } from '@/types/teams';
 
 function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
