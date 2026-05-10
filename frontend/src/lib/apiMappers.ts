@@ -8,7 +8,6 @@ import type {
   Requirement,
   Risk,
   Proposal,
-  ProposalEvent,
   ProposalSection,
   TeamMember,
   Budget,
@@ -27,7 +26,6 @@ import type {
   ApiRequirement,
   ApiRisk,
   ApiProposal,
-  ApiProposalEvent,
   ApiProposalListItem,
   ApiProposalSection,
   ApiTeamMember,
@@ -41,7 +39,6 @@ import type {
   ApiActivity,
   MeResponse,
 } from './api';
-import { normalizeProposalHtml } from './htmlContent';
 
 function toDate(value: string | null): Date {
   return value ? new Date(value) : new Date();
@@ -124,7 +121,6 @@ export function mapApiOpportunity(opp: ApiOpportunity): Opportunity {
     description: opp.description,
     torDocument: opp.tor_document || undefined,
     aiSummary: opp.ai_summary || undefined,
-    aiExtraction: opp.ai_extraction || undefined,
     aiAnalysisStatus: opp.ai_analysis_status as Opportunity['aiAnalysisStatus'],
     requirements: (opp.requirements || []).map(mapApiRequirement),
     risks: (opp.risks || []).map(mapApiRisk),
@@ -149,7 +145,6 @@ export function mapApiOpportunityListItem(
     description: '',
     torDocument: undefined,
     aiSummary: undefined,
-    aiExtraction: undefined,
     aiAnalysisStatus: undefined,
     requirements: [],
     risks: [],
@@ -194,9 +189,9 @@ export function mapApiProposalSection(
 ): ProposalSection {
   return {
     id: String(section.id),
-    type: (section.type || section.section_type) as ProposalSection['type'],
+    type: section.type as ProposalSection['type'],
     title: section.title,
-    content: normalizeProposalHtml(section.content || ''),
+    content: section.content,
     order: section.order,
     isComplete: section.is_complete,
     comments: (section.comments || []).map(mapApiComment),
@@ -238,26 +233,6 @@ export function mapApiBudget(budget: ApiBudget | null): Budget | undefined {
   };
 }
 
-export function mapApiProposalEvent(event: ApiProposalEvent): ProposalEvent {
-  const createdBy = event.created_by_detail
-    ? `${event.created_by_detail.first_name || ''} ${event.created_by_detail.last_name || ''}`.trim() ||
-      event.created_by_detail.email
-    : undefined;
-
-  return {
-    id: String(event.id),
-    type: event.event_type,
-    typeLabel: event.event_type_display || event.event_type,
-    artifactType: event.artifact_type || undefined,
-    title: event.title,
-    notes: event.notes || '',
-    occurredAt: toDate(event.occurred_at),
-    externalUrl: event.external_url || undefined,
-    attachmentUrl: event.attachment_url || event.attachment || undefined,
-    createdBy,
-  };
-}
-
 // ============================================
 // PROPOSAL
 // ============================================
@@ -269,10 +244,8 @@ export function mapApiProposal(proposal: ApiProposal): Proposal {
     title: proposal.title,
     version: proposal.version,
     status: proposal.status as Proposal['status'],
-    progress: proposal.progress ?? undefined,
     sections: (proposal.sections || []).map(mapApiProposalSection),
     team: (proposal.team || []).map(mapApiTeamMember),
-    events: (proposal.events || []).map(mapApiProposalEvent),
     budget: mapApiBudget(proposal.budget) || { total: 0, currency: 'USD', breakdown: [] },
     qualityScore: proposal.quality_score || undefined,
     proponentLogoUrl: proposal.proponent_logo_url || undefined,
@@ -295,10 +268,8 @@ export function mapApiProposalListItem(
     title: proposal.title,
     version: proposal.version,
     status: proposal.status as Proposal['status'],
-    progress: proposal.progress ?? 0,
     sections: [],
     team: [],
-    events: [],
     budget: { total: 0, currency: 'USD', breakdown: [] },
     consortiumMembers: [],
     createdAt: toDate(proposal.created_at),
@@ -316,13 +287,6 @@ export function mapApiDashboardStats(stats: ApiDashboardStats): DashboardStats {
     proposalsInProgress: stats.proposals_in_progress,
     winRate: stats.win_rate,
     upcomingDeadlines: stats.upcoming_deadlines,
-    opportunitiesByStatus: stats.opportunities_by_status ?? {},
-    projectsActive: stats.projects_active ?? 0,
-    projectsCompleted: stats.projects_completed ?? 0,
-    projectsOnHold: stats.projects_on_hold ?? 0,
-    scrapingNew: stats.scraping_new ?? 0,
-    scrapingWithAi: stats.scraping_with_ai ?? 0,
-    deadlineItems: stats.deadline_items ?? [],
   };
 }
 

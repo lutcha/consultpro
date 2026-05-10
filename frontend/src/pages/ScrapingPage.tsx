@@ -3,26 +3,22 @@
 // ============================================
 
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Globe, Play, Pause, Settings, Plus, Search, RefreshCw,
-  CheckCircle2, AlertTriangle, Clock, ArrowRight,
+  CheckCircle2, AlertTriangle, Clock, Download, ArrowRight,
   Activity, Zap, Bot, ChevronDown, ChevronUp,
-  BarChart3, Layers, Eye, DollarSign, ExternalLink, Star,
-  ChevronLeft, ChevronRight,
+  BarChart3, Layers, Eye, DollarSign,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { AddScrapingSourceModal } from '@/components/modals';
 import {
   apiCreateScrapingSource,
   apiGetScrapedOpportunities,
-  apiGetScrapedOpportunity,
   apiGetScrapingJobs,
   apiGetScrapingSources,
   apiGetScrapingStats,
@@ -32,7 +28,6 @@ import {
   apiToggleScrapingSource,
   apiUpdateScrapingSource,
   type ApiScrapedOpportunity,
-  type ApiScrapedOpportunityDetail,
   type ApiScrapingJob,
   type ApiScrapingSource,
 } from '@/lib/api';
@@ -91,8 +86,6 @@ function mapOpportunity(opp: ApiScrapedOpportunity): ScrapedOpportunity {
     publishedAt: toDate(opp.published_at),
     deadlineAlert: Boolean(opp.deadline_alert),
     aiSummary: opp.ai_summary || undefined,
-    deepContentStatus: opp.deep_content_status || undefined,
-    importedOpportunityId: opp.imported_opportunity ? String(opp.imported_opportunity) : undefined,
   };
 }
 
@@ -109,25 +102,6 @@ function mapJob(job: ApiScrapingJob): ScrapingJob {
     errorLog: job.error_log || undefined,
     executedBy: job.executed_by || 'system',
   };
-}
-
-function deepContentLabel(status?: string): string | null {
-  if (!status) return null;
-
-  const labels: Record<string, string> = {
-    extracted: 'Fonte lida',
-    completed: 'Fonte lida',
-    failed: 'Fonte nao lida',
-    skipped: 'Sem texto extraido',
-    pending: 'Leitura pendente',
-  };
-
-  return labels[status] || `Fonte: ${status}`;
-}
-
-function isImportableScrapedOpportunity(status?: string, importedOpportunityId?: string | number | null): boolean {
-  const normalized = (status || '').toLowerCase().trim();
-  return !importedOpportunityId && normalized !== 'imported' && normalized !== 'ignored' && normalized !== 'expired';
 }
 
 // ============================================
@@ -274,36 +248,33 @@ function SourcesTab({
         <Button size="sm" onClick={onAdd}><Plus className="h-4 w-4 mr-1" />Nova Fonte</Button>
       </div>
 
-      <Dialog open={!!editingSource} onOpenChange={(open) => !open && onCancelEdit()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Definicoes da Fonte</DialogTitle>
-          </DialogHeader>
-          {editingSource && (
-            <div className="space-y-3">
+      {editingSource && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Input value={editForm.name} onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Nome" />
               <Input value={editForm.url} onChange={(e) => setEditForm((prev) => ({ ...prev, url: e.target.value }))} placeholder="URL" />
-              <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={editForm.scrape_frequency} onChange={(e) => setEditForm((prev) => ({ ...prev, scrape_frequency: e.target.value }))}>
+              <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={editForm.scrape_frequency} onChange={(e) => setEditForm((prev) => ({ ...prev, scrape_frequency: e.target.value }))}>
                 <option value="hourly">Por Hora</option>
                 <option value="daily">Diario</option>
                 <option value="weekly">Semanal</option>
               </select>
-              <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" value={editForm.status} onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}>
+              <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={editForm.status} onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}>
                 <option value="active">Ativo</option>
                 <option value="paused">Pausado</option>
                 <option value="error">Erro</option>
                 <option value="disabled">Desativado</option>
               </select>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button size="sm" variant="outline" onClick={onCancelEdit} disabled={savingSource}>Cancelar</Button>
-                <Button size="sm" onClick={() => onSaveEdit(editingSource.id, editForm)} disabled={savingSource}>
-                  {savingSource ? 'A guardar...' : 'Guardar'}
-                </Button>
-              </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="outline" onClick={onCancelEdit} disabled={savingSource}>Cancelar</Button>
+              <Button size="sm" onClick={() => onSaveEdit(editingSource.id, editForm)} disabled={savingSource}>
+                {savingSource ? 'A guardar...' : 'Guardar'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((source) => (
@@ -366,180 +337,16 @@ function SourcesTab({
 }
 
 // ============================================
-// DETAIL MODAL
-// ============================================
-interface OpportunityDetailModalProps {
-  detail: ApiScrapedOpportunityDetail | null;
-  loading: boolean;
-  onClose: () => void;
-  onImport: (id: string) => void;
-  isBusy: boolean;
-}
-
-function OpportunityDetailModal({ detail, loading, onClose, onImport, isBusy }: OpportunityDetailModalProps) {
-  const navigate = useNavigate();
-  const open = loading || !!detail;
-  const qualityColor = (score: number) =>
-    score >= 0.7 ? 'text-emerald-600' : score >= 0.4 ? 'text-amber-600' : 'text-red-600';
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{loading ? 'A carregar…' : detail?.title}</DialogTitle>
-        </DialogHeader>
-        {loading && <div className="py-12 text-center text-muted-foreground">A carregar detalhe…</div>}
-        {!loading && detail && (
-          <div className="space-y-4 text-sm">
-            {/* Meta row */}
-            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-              {detail.source?.name && <span className="flex items-center gap-1"><Globe className="h-3 w-3" />{detail.source.name}</span>}
-              {detail.country && <span>{detail.country}</span>}
-              {detail.sector && <span>{detail.sector}</span>}
-              {detail.language && <span className="uppercase">{detail.language}</span>}
-              {detail.cv_eligible && (
-                <span className="flex items-center gap-1 text-emerald-600 font-medium">
-                  <Star className="h-3 w-3" />CV Elegível
-                </span>
-              )}
-              {detail.data_quality_score != null && (
-                <span className={`font-medium ${qualityColor(detail.data_quality_score)}`}>
-                  Qualidade {Math.round(detail.data_quality_score * 100)}%
-                </span>
-              )}
-            </div>
-
-            {/* Key fields */}
-            <div className="grid grid-cols-2 gap-3 p-3 bg-muted/40 rounded-lg text-xs">
-              <div>
-                <p className="text-muted-foreground mb-0.5">Prazo</p>
-                <p className="font-medium">{detail.deadline ? new Date(detail.deadline).toLocaleDateString('pt-PT') : '—'}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground mb-0.5">Valor</p>
-                <p className="font-medium">{detail.value ? `${Number(detail.value).toLocaleString('pt-PT')} ${detail.currency}` : '—'}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground mb-0.5">Organização</p>
-                <p className="font-medium">{detail.organization || detail.client || '—'}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground mb-0.5">Publicado</p>
-                <p className="font-medium">{detail.published_at ? new Date(detail.published_at).toLocaleDateString('pt-PT') : '—'}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 p-3 bg-muted/40 rounded-lg text-xs">
-              <div>
-                <p className="text-muted-foreground mb-0.5">Leitura da fonte</p>
-                <p className="font-medium">{deepContentLabel(detail.deep_content_status || undefined) || '-'}</p>
-              </div>
-              {detail.imported_opportunity && (
-                <div>
-                  <p className="text-muted-foreground mb-0.5">Oportunidade criada</p>
-                  <p className="font-medium">#{detail.imported_opportunity}</p>
-                </div>
-              )}
-            </div>
-
-            {/* External link */}
-            <a
-              href={detail.external_url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 text-blue-600 hover:underline text-xs"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />Ver fonte original
-            </a>
-
-            {/* AI Summary */}
-            {detail.ai_summary && (
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Bot className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium text-blue-900">Resumo AI</span>
-                </div>
-                <p className="text-blue-800 leading-relaxed">{detail.ai_summary}</p>
-              </div>
-            )}
-
-            {/* AI Requirements */}
-            {detail.ai_extracted_requirements && detail.ai_extracted_requirements.length > 0 && (
-              <div>
-                <p className="font-medium mb-2">Requisitos extraídos pela AI</p>
-                <ul className="space-y-1">
-                  {detail.ai_extracted_requirements.map((req, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs">
-                      <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
-                      {typeof req === 'string' ? req : req.description}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Description */}
-            {detail.description && (
-              <div>
-                <p className="font-medium mb-1">Descrição</p>
-                <p className="text-muted-foreground leading-relaxed whitespace-pre-line line-clamp-6">{detail.description}</p>
-              </div>
-            )}
-
-            {/* Deep content */}
-            {detail.deep_content_text && (
-              <div>
-                <p className="font-medium mb-1">Conteúdo extraído da fonte</p>
-                <p className="text-muted-foreground leading-relaxed whitespace-pre-line line-clamp-6 text-xs bg-muted/40 p-3 rounded">{detail.deep_content_text}</p>
-              </div>
-            )}
-
-            {/* Actions */}
-            {isImportableScrapedOpportunity(detail.status, detail.imported_opportunity) && (
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <Button size="sm" variant="outline" onClick={onClose}>Fechar</Button>
-                <Button size="sm" onClick={() => { onImport(String(detail.id)); onClose(); }} disabled={isBusy}>
-                  <ArrowRight className="h-3.5 w-3.5 mr-1" />Importar para Oportunidades
-                </Button>
-              </div>
-            )}
-            {!isImportableScrapedOpportunity(detail.status, detail.imported_opportunity) && (
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <Button size="sm" variant="outline" onClick={onClose}>Fechar</Button>
-                {detail.imported_opportunity && (
-                  <Button size="sm" onClick={() => navigate(`/opportunities/${detail.imported_opportunity}`)}>
-                    Abrir em Oportunidades
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================
 // TAB: OPPORTUNITIES
 // ============================================
 interface OpportunitiesTabProps {
   opportunities: ScrapedOpportunity[];
   busyOpportunityIds: Set<string>;
-  page: number;
-  totalCount: number;
-  pageSize: number;
   onImport: (id: string) => void;
   onIgnore: (id: string) => void;
-  onView: (id: string) => void;
-  onPageChange: (page: number) => void;
 }
 
-function OpportunitiesTab({
-  opportunities, busyOpportunityIds, page, totalCount, pageSize,
-  onImport, onIgnore, onView, onPageChange,
-}: OpportunitiesTabProps) {
-  const navigate = useNavigate();
+function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnore }: OpportunitiesTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -549,10 +356,6 @@ function OpportunitiesTab({
     const matchesStatus = !statusFilter || o.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const start = (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, totalCount);
 
   return (
     <div className="space-y-4">
@@ -570,15 +373,10 @@ function OpportunitiesTab({
         </select>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Fluxo: ver detalhes da oportunidade, confirmar a fonte e clicar em Importar para Oportunidades. Depois ela fica disponivel no modulo Oportunidades para criar proposta.
-      </p>
-
       <div className="space-y-3">
         {filtered.map((opp) => {
           const isExpanded = expanded === opp.id;
           const isBusy = busyOpportunityIds.has(opp.id);
-          const canImport = isImportableScrapedOpportunity(opp.status, opp.importedOpportunityId);
           return (
             <Card key={opp.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-4">
@@ -588,41 +386,24 @@ function OpportunitiesTab({
                       <h4 className="font-semibold text-sm">{opp.title}</h4>
                       <OpportunityStatusBadge status={opp.status} />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{opp.organization} – {opp.country || '–'}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{opp.organization} - {opp.country || '-'}</p>
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        Prazo: {opp.deadline ? opp.deadline.toLocaleDateString('pt-PT') : '–'}
-                      </span>
-                      {opp.sector && <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" />{opp.sector}</span>}
+                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Prazo: {opp.deadline ? opp.deadline.toLocaleDateString('pt-PT') : '-'}</span>
+                      <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" />{opp.sector || '-'}</span>
                       {opp.value && <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{opp.value.toLocaleString('pt-PT')} {opp.currency}</span>}
-                      {deepContentLabel(opp.deepContentStatus) && (
-                        <span>{deepContentLabel(opp.deepContentStatus)}</span>
-                      )}
                     </div>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-1 shrink-0">
-                    <Button size="sm" variant="outline" className="h-7 text-xs px-2" title="Ver detalhe" onClick={() => onView(opp.id)}>
-                      <Eye className="h-3.5 w-3.5 mr-1" />Ver
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="outline" className="h-7 text-xs"><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
+                      <a href={opp.externalUrl} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" /></a>
                     </Button>
-                    {opp.externalUrl && (
-                      <Button size="sm" variant="outline" className="h-7 text-xs px-2" title="Abrir fonte" asChild>
-                        <a href={opp.externalUrl} target="_blank" rel="noreferrer">
-                          <ExternalLink className="h-3.5 w-3.5 mr-1" />Fonte
-                        </a>
-                      </Button>
-                    )}
-                    {canImport && (
-                      <Button size="sm" className="h-7 text-xs px-2" onClick={() => onImport(opp.id)} disabled={isBusy}>
+                    {opp.status === 'new' && (
+                      <Button size="sm" className="h-7 text-xs" onClick={() => onImport(opp.id)} disabled={isBusy}>
                         <ArrowRight className="h-3.5 w-3.5 mr-1" />Importar
                       </Button>
                     )}
-                    {opp.importedOpportunityId && (
-                      <Button size="sm" className="h-7 text-xs px-2" onClick={() => navigate(`/opportunities/${opp.importedOpportunityId}`)}>
-                        Abrir em Oportunidades
-                      </Button>
-                    )}
-                    {canImport && (
+                    {opp.status === 'new' && (
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onIgnore(opp.id)} disabled={isBusy}>
                         Ignorar
                       </Button>
@@ -631,7 +412,7 @@ function OpportunitiesTab({
                 </div>
 
                 {isExpanded && opp.aiSummary && (
-                  <div className="mt-3 pt-3 border-t">
+                  <div className="mt-3 pt-3 border-t space-y-3">
                     <div className="p-3 bg-blue-50/50 rounded-lg">
                       <div className="flex items-center gap-2 mb-1">
                         <Bot className="h-4 w-4 text-blue-600" />
@@ -644,7 +425,7 @@ function OpportunitiesTab({
 
                 {opp.aiSummary && (
                   <Button variant="ghost" size="sm" className="w-full mt-2 h-7 text-xs" onClick={() => setExpanded(isExpanded ? null : opp.id)}>
-                    {isExpanded ? <><ChevronUp className="h-3 w-3 mr-1" />Recolher</> : <><ChevronDown className="h-3 w-3 mr-1" />Ver Resumo AI</>}
+                    {isExpanded ? <><ChevronUp className="h-3 w-3 mr-1" /> Recolher</> : <><ChevronDown className="h-3 w-3 mr-1" /> Ver Resumo AI</>}
                   </Button>
                 )}
               </CardContent>
@@ -652,28 +433,7 @@ function OpportunitiesTab({
           );
         })}
       </div>
-
-      {filtered.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          <p>Nenhuma oportunidade encontrada.</p>
-          <p className="text-sm mt-1">Execute uma fonte ativa e consulte o Histórico de Jobs.</p>
-        </div>
-      )}
-
-      {totalCount > pageSize && (
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-xs text-muted-foreground">{start}–{end} de {totalCount} oportunidades</p>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-8 w-8 p-0" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs text-muted-foreground">Pág. {page} / {totalPages}</span>
-            <Button size="sm" variant="outline" className="h-8 w-8 p-0" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+      {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground">Nenhuma oportunidade encontrada.</div>}
     </div>
   );
 }
@@ -732,14 +492,9 @@ function JobLogsTab({ jobs, sources }: JobLogsTabProps) {
 // ============================================
 // MAIN PAGE
 // ============================================
-const PAGE_SIZE = 20;
-
 export function ScrapingPage() {
-  const navigate = useNavigate();
   const [sources, setSources] = useState<ScrapingSource[]>([]);
   const [opportunities, setOpportunities] = useState<ScrapedOpportunity[]>([]);
-  const [opportunitiesTotalCount, setOpportunitiesTotalCount] = useState(0);
-  const [opportunitiesPage, setOpportunitiesPage] = useState(1);
   const [jobs, setJobs] = useState<ScrapingJob[]>([]);
   const [stats, setStats] = useState<ScrapingStats | null>(null);
   const [showSourceModal, setShowSourceModal] = useState(false);
@@ -749,33 +504,24 @@ export function ScrapingPage() {
   const [runningSourceIds, setRunningSourceIds] = useState<Set<string>>(new Set());
   const [busyOpportunityIds, setBusyOpportunityIds] = useState<Set<string>>(new Set());
   const [savingSource, setSavingSource] = useState(false);
-  const [viewingDetail, setViewingDetail] = useState<ApiScrapedOpportunityDetail | null>(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
 
   const refreshSources = useCallback(async () => {
     const response = await apiGetScrapingSources();
     setSources(response.results.map(mapSource));
   }, []);
 
-  const refreshOpportunities = useCallback(async (page: number) => {
-    const response = await apiGetScrapedOpportunities(page);
-    setOpportunities(response.results.map(mapOpportunity));
-    setOpportunitiesTotalCount(response.count);
-  }, []);
-
-  const refreshAll = useCallback(async (page = 1) => {
+  const refreshAll = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const [sourcesResponse, opportunitiesResponse, jobsResponse, statsResponse] = await Promise.all([
         apiGetScrapingSources(),
-        apiGetScrapedOpportunities(page),
+        apiGetScrapedOpportunities(),
         apiGetScrapingJobs(),
         apiGetScrapingStats(),
       ]);
       setSources(sourcesResponse.results.map(mapSource));
       setOpportunities(opportunitiesResponse.results.map(mapOpportunity));
-      setOpportunitiesTotalCount(opportunitiesResponse.count);
       setJobs(jobsResponse.results.map(mapJob));
       setStats(statsResponse);
     } catch (err) {
@@ -803,7 +549,7 @@ export function ScrapingPage() {
       });
       toast.success('Fonte criada');
       setShowSourceModal(false);
-      await refreshAll();
+      await refreshSources();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao criar fonte';
       setError(message);
@@ -839,7 +585,7 @@ export function ScrapingPage() {
     try {
       await apiRunScrapingSource(Number(id));
       toast.success('Scraping iniciado');
-      await refreshAll();
+      await refreshSources();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao executar scraping';
       setError(message);
@@ -870,42 +616,15 @@ export function ScrapingPage() {
     }
   };
 
-  const handleViewOpportunity = async (id: string) => {
-    setLoadingDetail(true);
-    setViewingDetail(null);
-    try {
-      const detail = await apiGetScrapedOpportunity(Number(id));
-      setViewingDetail(detail);
-    } catch (err) {
-      toast.error('Erro ao carregar detalhe');
-    } finally {
-      setLoadingDetail(false);
-    }
-  };
-
-  const handlePageChange = async (page: number) => {
-    setOpportunitiesPage(page);
-    await refreshOpportunities(page);
-  };
-
   const handleImportOpportunity = async (id: string) => {
     setBusyOpportunityIds((prev) => new Set(prev).add(id));
     setError(null);
     try {
-      const result = await apiImportScrapedOpportunity(Number(id));
+      await apiImportScrapedOpportunity(Number(id));
       setOpportunities((prev) =>
-        prev.map((o) => (
-          o.id === id
-            ? { ...o, status: 'imported' as const, importedOpportunityId: String(result.opportunity_id) }
-            : o
-        ))
+        prev.map((o) => (o.id === id ? { ...o, status: 'imported' as const } : o))
       );
-      toast.success('Oportunidade importada', {
-        action: {
-          label: 'Ver Oportunidade →',
-          onClick: () => navigate(`/opportunities/${result.opportunity_id}`),
-        },
-      });
+      toast.success('Oportunidade importada');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao importar oportunidade';
       setError(message);
@@ -948,7 +667,7 @@ export function ScrapingPage() {
           <h1 className="text-2xl font-bold tracking-tight">Web Scraping</h1>
           <p className="text-muted-foreground text-sm">Monitorize fontes de oportunidades internacionais (UN, Banco Mundial, UE, etc.).</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refreshAll()} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={refreshAll} disabled={loading}>
           <RefreshCw className="h-4 w-4 mr-1" />
           Atualizar
         </Button>
@@ -986,13 +705,8 @@ export function ScrapingPage() {
               <OpportunitiesTab
                 opportunities={opportunities}
                 busyOpportunityIds={busyOpportunityIds}
-                page={opportunitiesPage}
-                totalCount={opportunitiesTotalCount}
-                pageSize={PAGE_SIZE}
                 onImport={handleImportOpportunity}
                 onIgnore={handleIgnoreOpportunity}
-                onView={handleViewOpportunity}
-                onPageChange={handlePageChange}
               />
             </TabsContent>
             <TabsContent value="jobs" className="space-y-4">
@@ -1003,13 +717,6 @@ export function ScrapingPage() {
       )}
 
       <AddScrapingSourceModal open={showSourceModal} onClose={() => setShowSourceModal(false)} onAdd={handleAddSource} />
-      <OpportunityDetailModal
-        detail={viewingDetail}
-        loading={loadingDetail}
-        onClose={() => { setViewingDetail(null); setLoadingDetail(false); }}
-        onImport={handleImportOpportunity}
-        isBusy={viewingDetail ? busyOpportunityIds.has(String(viewingDetail.id)) : false}
-      />
     </div>
   );
 }

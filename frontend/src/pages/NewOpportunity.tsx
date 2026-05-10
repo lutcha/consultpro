@@ -2,10 +2,9 @@
 // NEW OPPORTUNITY PAGE
 // ============================================
 
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Upload } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiCreateOpportunity, apiGetOpportunity, apiUpdateOpportunity, apiUploadToR } from '@/lib/api';
+import { apiCreateOpportunity, apiUploadToR } from '@/lib/api';
 
 const SECTORS = [
   'Educação',
@@ -43,22 +42,10 @@ const COUNTRIES = [
   'Outro',
 ];
 
-const CURRENCIES = ['ECV', 'EUR', 'USD', 'GBP'];
-const EVALUATION_CRITERIA = [
-  { value: 'qcbs', label: 'QCBS (Qualidade e Custo)' },
-  { value: 'cqs', label: 'CQS (Qualidade apenas)' },
-  { value: 'lcs', label: 'LCS (Custo mais baixo)' },
-  { value: 'fbs', label: 'FBS (Baseado em Fixo)' },
-];
-
-function mergeOptions(options: string[], value: string) {
-  return value && !options.includes(value) ? [value, ...options] : options;
-}
+const CURRENCIES = ['USD', 'EUR', 'GBP'];
 
 export function NewOpportunity() {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-  const isEditing = Boolean(id);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [torFile, setTorFile] = useState<File | null>(null);
@@ -71,52 +58,12 @@ export function NewOpportunity() {
     currency: 'USD',
     deadline: '',
     description: '',
-    evaluation_criteria: 'qcbs',
+    evaluation_criteria: '',
     technical_weight: 70,
     financial_weight: 30,
     reference_number: '',
     url_source: '',
   });
-  const sectorOptions = mergeOptions(SECTORS, formData.sector);
-  const countryOptions = mergeOptions(COUNTRIES, formData.country);
-  const currencyOptions = mergeOptions(CURRENCIES, formData.currency);
-
-  useEffect(() => {
-    if (!id) return;
-
-    let isMounted = true;
-    setIsLoading(true);
-    setError(null);
-    apiGetOpportunity(id)
-      .then((opportunity) => {
-        if (!isMounted) return;
-        setFormData({
-          title: opportunity.title || '',
-          client: opportunity.client || '',
-          sector: opportunity.sector || '',
-          country: opportunity.country || '',
-          value: opportunity.value || '',
-          currency: opportunity.currency || 'USD',
-          deadline: opportunity.deadline ? opportunity.deadline.slice(0, 10) : '',
-          description: opportunity.description || '',
-          evaluation_criteria: opportunity.evaluation_criteria || 'qcbs',
-          technical_weight: opportunity.technical_weight || 70,
-          financial_weight: opportunity.financial_weight || 30,
-          reference_number: opportunity.reference_number || '',
-          url_source: opportunity.url_source || '',
-        });
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Erro ao carregar oportunidade');
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [id]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -130,25 +77,15 @@ export function NewOpportunity() {
     setError(null);
 
     try {
-      const payload = {
+      const opportunity = await apiCreateOpportunity({
         ...formData,
         value: formData.value,
-        deadline: formData.deadline ? `${formData.deadline}T00:00:00-01:00` : '',
-        technical_weight: Number(formData.technical_weight),
-        financial_weight: Number(formData.financial_weight),
-        evaluation_criteria: formData.evaluation_criteria || 'qcbs',
-      };
-      const opportunity = isEditing && id
-        ? await apiUpdateOpportunity(id, payload)
-        : await apiCreateOpportunity({ ...payload, status: 'new' });
+        status: 'new',
+      });
 
+      // Upload ToR if selected
       if (torFile && opportunity.id) {
-        try {
-          await apiUploadToR(String(opportunity.id), torFile);
-        } catch (uploadError) {
-          const uploadMessage = uploadError instanceof Error ? uploadError.message : 'Erro ao carregar ToR';
-          toast.error(`Oportunidade criada, mas o upload do ToR falhou: ${uploadMessage}`);
-        }
+        await apiUploadToR(String(opportunity.id), torFile);
       }
 
       navigate(`/opportunities/${opportunity.id}`);
@@ -165,7 +102,7 @@ export function NewOpportunity() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
         </Button>
-        <h1 className="text-2xl font-bold">{isEditing ? 'Editar Oportunidade' : 'Nova Oportunidade'}</h1>
+        <h1 className="text-2xl font-bold">Nova Oportunidade</h1>
       </div>
 
       {error && (
@@ -229,7 +166,7 @@ export function NewOpportunity() {
                     <SelectValue placeholder="Selecionar setor" />
                   </SelectTrigger>
                   <SelectContent>
-                    {sectorOptions.map((s) => (
+                    {SECTORS.map((s) => (
                       <SelectItem key={s} value={s}>
                         {s}
                       </SelectItem>
@@ -249,7 +186,7 @@ export function NewOpportunity() {
                     <SelectValue placeholder="Selecionar país" />
                   </SelectTrigger>
                   <SelectContent>
-                    {countryOptions.map((c) => (
+                    {COUNTRIES.map((c) => (
                       <SelectItem key={c} value={c}>
                         {c}
                       </SelectItem>
@@ -284,7 +221,7 @@ export function NewOpportunity() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {currencyOptions.map((c) => (
+                    {CURRENCIES.map((c) => (
                       <SelectItem key={c} value={c}>
                         {c}
                       </SelectItem>
@@ -319,23 +256,14 @@ export function NewOpportunity() {
 
             <div className="space-y-2">
               <Label htmlFor="evaluation_criteria">Critérios de Avaliação</Label>
-              <Select
+              <Textarea
+                id="evaluation_criteria"
+                name="evaluation_criteria"
                 value={formData.evaluation_criteria}
-                onValueChange={(v) =>
-                  setFormData((prev) => ({ ...prev, evaluation_criteria: v }))
-                }
-              >
-                <SelectTrigger id="evaluation_criteria">
-                  <SelectValue placeholder="Selecionar criterio" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EVALUATION_CRITERIA.map((criteria) => (
-                    <SelectItem key={criteria.value} value={criteria.value}>
-                      {criteria.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={handleChange}
+                placeholder="QCBS, LCS, etc."
+                rows={2}
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -408,7 +336,7 @@ export function NewOpportunity() {
           </Button>
           <Button type="submit" disabled={isLoading}>
             <Save className="h-4 w-4 mr-2" />
-            {isLoading ? 'A guardar...' : isEditing ? 'Guardar Alteracoes' : 'Criar Oportunidade'}
+            {isLoading ? 'A criar...' : 'Criar Oportunidade'}
           </Button>
         </div>
       </form>

@@ -29,7 +29,6 @@ export interface Opportunity {
   description: string;
   torDocument?: string;
   aiSummary?: string;
-  aiExtraction?: Record<string, unknown>;
   aiAnalysisStatus?: AIAnalysisStatus;
   requirements: Requirement[];
   risks: Risk[];
@@ -78,10 +77,8 @@ export interface Proposal {
   title: string;
   version: number;
   status: ProposalStatus;
-  progress?: number;
   sections: ProposalSection[];
   team: TeamMember[];
-  events: ProposalEvent[];
   budget?: Budget;
   qualityScore?: number;
   proponentLogoUrl?: string;
@@ -92,35 +89,12 @@ export interface Proposal {
   submittedAt?: Date;
 }
 
-export interface ProposalEvent {
-  id: string;
-  type: string;
-  typeLabel: string;
-  artifactType?: string;
-  title: string;
-  notes: string;
-  occurredAt: Date;
-  externalUrl?: string;
-  attachmentUrl?: string;
-  createdBy?: string;
-}
-
 export type ProposalStatus = 
   | 'draft' 
   | 'in_review' 
   | 'qc_check' 
-  | 'ready_for_submission'
   | 'approved' 
   | 'submitted' 
-  | 'under_evaluation'
-  | 'rejected'
-  | 'shortlisted'
-  | 'clarifications_requested'
-  | 'bafo'
-  | 'awarded'
-  | 'contract_negotiation'
-  | 'contract_signed'
-  | 'project_initiation'
   | 'won' 
   | 'lost';
 
@@ -142,8 +116,7 @@ export type SectionType =
   | 'team' 
   | 'workplan' 
   | 'budget' 
-  | 'annexes'
-  | 'custom';
+  | 'annexes';
 
 export interface TeamMember {
   userId: string;
@@ -216,27 +189,11 @@ export interface QCSuggestion {
 }
 
 // Dashboard Types
-export interface DeadlineItem {
-  id: number;
-  title: string;
-  client: string;
-  deadline: string;
-  status: string;
-  days_left: number;
-}
-
 export interface DashboardStats {
   activeOpportunities: number;
   proposalsInProgress: number;
   winRate: number;
   upcomingDeadlines: number;
-  opportunitiesByStatus: Record<string, number>;
-  projectsActive: number;
-  projectsCompleted: number;
-  projectsOnHold: number;
-  scrapingNew: number;
-  scrapingWithAi: number;
-  deadlineItems: DeadlineItem[];
 }
 
 export interface PipelineItem {
@@ -372,7 +329,6 @@ export interface ScrapedOpportunity {
   publishedAt?: Date;
   deadlineAlert: boolean;
   aiSummary?: string;
-  deepContentStatus?: string;
   importedOpportunityId?: string;
 }
 

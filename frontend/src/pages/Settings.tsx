@@ -13,7 +13,6 @@ import {
   FileText,
   Globe,
   Users,
-  Bot,
   Moon,
   Sun,
   Monitor,
@@ -31,11 +30,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUserStore } from '@/stores';
 import { useCurriculumStore } from '@/stores/useCurriculumStore';
 import { useScrapingStore } from '@/stores/useScrapingStore';
-import { apiGetAIProviderStatus, apiUpdateAIProvider, apiUpdateMe, type ApiAIProviderStatus } from '@/lib/api';
+import { apiUpdateMe } from '@/lib/api';
 import { toast } from 'sonner';
 
 export function Settings() {
@@ -44,9 +42,6 @@ export function Settings() {
   const { templates, fetchTemplates } = useCurriculumStore();
   const { sources, fetchSources } = useScrapingStore();
   const [isLoading, setIsLoading] = useState(false);
-  const [aiStatus, setAiStatus] = useState<ApiAIProviderStatus | null>(null);
-  const [selectedAIProvider, setSelectedAIProvider] = useState('');
-  const [selectedAIModel, setSelectedAIModel] = useState('');
 
   const [profile, setProfile] = useState({
     first_name: user?.name?.split(' ')[0] || '',
@@ -77,13 +72,6 @@ export function Settings() {
   useEffect(() => {
     fetchTemplates();
     fetchSources();
-    apiGetAIProviderStatus()
-      .then((status) => {
-        setAiStatus(status);
-        setSelectedAIProvider(status.active_provider);
-        setSelectedAIModel(status.selected_model || status.active_model);
-      })
-      .catch(() => toast.error('Erro ao carregar configuração IA'));
   }, [fetchTemplates, fetchSources]);
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -121,26 +109,6 @@ export function Settings() {
 
   const isAdmin = user?.role === 'admin';
 
-  const handleSaveAIProvider = async () => {
-    if (!selectedAIProvider) return;
-    setIsLoading(true);
-    try {
-      const status = await apiUpdateAIProvider({
-        provider: selectedAIProvider,
-        model: selectedAIModel,
-      });
-      setAiStatus(status);
-      setSelectedAIProvider(status.active_provider);
-      setSelectedAIModel(status.selected_model || status.active_model);
-      toast.success('Provider IA atualizado');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro ao atualizar provider IA';
-      toast.error(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -154,13 +122,12 @@ export function Settings() {
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-8">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
           <TabsTrigger value="profile"><User className="h-4 w-4 mr-1" /> Perfil</TabsTrigger>
           <TabsTrigger value="password"><Lock className="h-4 w-4 mr-1" /> Password</TabsTrigger>
           <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-1" /> Alertas</TabsTrigger>
           <TabsTrigger value="templates"><FileText className="h-4 w-4 mr-1" /> Templates</TabsTrigger>
           <TabsTrigger value="scraping"><Globe className="h-4 w-4 mr-1" /> Scraping</TabsTrigger>
-          <TabsTrigger value="ai"><Bot className="h-4 w-4 mr-1" /> IA</TabsTrigger>
           {isAdmin && <TabsTrigger value="users"><Users className="h-4 w-4 mr-1" /> Utilizadores</TabsTrigger>}
           <TabsTrigger value="appearance"><Palette className="h-4 w-4 mr-1" /> Tema</TabsTrigger>
         </TabsList>
@@ -281,100 +248,6 @@ export function Settings() {
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* AI */}
-        <TabsContent value="ai" className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle>Configuração de IA</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              {!aiStatus ? (
-                <p className="text-muted-foreground">Carregando configuração IA...</p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div className="rounded-lg border p-3">
-                      <p className="text-sm text-muted-foreground">Provider ativo</p>
-                      <p className="font-semibold">{aiStatus.active_provider}</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-sm text-muted-foreground">Modelo ativo</p>
-                      <p className="font-semibold">{aiStatus.active_model}</p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-sm text-muted-foreground">Mock</p>
-                      <Badge variant={aiStatus.is_mock ? 'destructive' : 'default'}>
-                        {aiStatus.is_mock ? 'Ativo' : 'Desativado'}
-                      </Badge>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-sm text-muted-foreground">AI_ALWAYS_MOCK</p>
-                      <Badge variant={aiStatus.always_mock ? 'destructive' : 'secondary'}>
-                        {aiStatus.always_mock ? 'True' : 'False'}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
-                      <div>
-                        <Label>Provider</Label>
-                        <Select value={selectedAIProvider} onValueChange={(value) => {
-                          setSelectedAIProvider(value);
-                          const provider = aiStatus.providers.find((item) => item.id === value);
-                          setSelectedAIModel(provider?.model || '');
-                        }}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Escolher provider" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {aiStatus.providers.map((provider) => (
-                              <SelectItem
-                                key={provider.id}
-                                value={provider.id}
-                                disabled={!provider.api_key_configured && provider.id !== 'mock'}
-                              >
-                                {provider.id}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label>Modelo</Label>
-                        <Input
-                          value={selectedAIModel}
-                          onChange={(event) => setSelectedAIModel(event.target.value)}
-                          placeholder="Modelo do provider"
-                        />
-                      </div>
-                      <Button onClick={handleSaveAIProvider} disabled={isLoading || !isAdmin}>
-                        <Save className="h-4 w-4 mr-2" />
-                        Guardar IA
-                      </Button>
-                    </div>
-
-                    {aiStatus.providers.map((provider) => (
-                      <div key={provider.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <p className="font-medium">{provider.id}</p>
-                          <p className="text-sm text-muted-foreground">{provider.model}</p>
-                        </div>
-                        <Badge variant={provider.api_key_configured ? 'default' : 'secondary'}>
-                          {provider.api_key_configured ? 'Chave configurada' : 'Sem chave'}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-
-                  <p className="text-sm text-muted-foreground">
-                    A seleção do provider/modelo em produção é feita por variáveis de ambiente na DigitalOcean.
-                    Esta tela mostra o estado sem expor chaves secretas.
-                  </p>
-                </>
-              )}
             </CardContent>
           </Card>
         </TabsContent>

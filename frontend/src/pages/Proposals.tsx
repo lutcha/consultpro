@@ -46,7 +46,6 @@ export function Proposals() {
   }, [fetchProposals]);
 
   const calculateProgress = (proposal: (typeof proposals)[0]) => {
-    if (typeof proposal.progress === 'number') return proposal.progress;
     if (!proposal.sections || proposal.sections.length === 0) return 0;
     const completed = proposal.sections.filter((s) => s.isComplete).length;
     return Math.round((completed / proposal.sections.length) * 100);
@@ -189,7 +188,7 @@ export function Proposals() {
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/proposals/${proposal.id}`);
+                                navigate(`/proposals/${proposal.id}/edit`);
                               }}
                             >
                               <Edit className="mr-2 h-4 w-4" />

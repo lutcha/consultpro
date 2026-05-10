@@ -9,11 +9,7 @@ import {
   apiGetProposal,
   apiUpdateProposalSection,
 } from '@/lib/api';
-import {
-  mapApiProposal,
-  mapApiProposalListItem,
-  mapApiProposalSection,
-} from '@/lib/apiMappers';
+import { mapApiProposal, mapApiProposalListItem } from '@/lib/apiMappers';
 
 interface ProposalState {
   proposals: Proposal[];
@@ -29,8 +25,7 @@ interface ProposalState {
   updateSection: (
     proposalId: string,
     sectionId: string,
-    content: string,
-    isComplete?: boolean
+    content: string
   ) => Promise<void>;
   updateStatus: (id: string, status: ProposalStatus) => void;
   addProposal: (proposal: Proposal) => void;
@@ -85,16 +80,13 @@ export const useProposalStore = create<ProposalState>((set, _get) => ({
     }
   },
 
-  updateSection: async (proposalId, sectionId, content, isComplete) => {
+  updateSection: async (proposalId, sectionId, content) => {
     set({ autoSaveStatus: 'saving' });
     try {
-      const payload: { content: string; is_complete?: boolean } = { content };
-      if (typeof isComplete === 'boolean') {
-        payload.is_complete = isComplete;
-      }
-      const updatedSection = mapApiProposalSection(
-        await apiUpdateProposalSection(proposalId, sectionId, payload)
-      );
+      await apiUpdateProposalSection(proposalId, sectionId, {
+        content,
+        is_complete: content.length > 50,
+      });
 
       set((state) => ({
         proposals: state.proposals.map((prop) =>
@@ -102,7 +94,9 @@ export const useProposalStore = create<ProposalState>((set, _get) => ({
             ? {
                 ...prop,
                 sections: prop.sections.map((sec) =>
-                  sec.id === sectionId ? updatedSection : sec
+                  sec.id === sectionId
+                    ? { ...sec, content, isComplete: content.length > 50 }
+                    : sec
                 ),
                 updatedAt: new Date(),
               }
@@ -113,7 +107,9 @@ export const useProposalStore = create<ProposalState>((set, _get) => ({
             ? {
                 ...state.selectedProposal,
                 sections: state.selectedProposal.sections.map((sec) =>
-                  sec.id === sectionId ? updatedSection : sec
+                  sec.id === sectionId
+                    ? { ...sec, content, isComplete: content.length > 50 }
+                    : sec
                 ),
                 updatedAt: new Date(),
               }
@@ -130,10 +126,6 @@ export const useProposalStore = create<ProposalState>((set, _get) => ({
       proposals: state.proposals.map((prop) =>
         prop.id === id ? { ...prop, status, updatedAt: new Date() } : prop
       ),
-      selectedProposal:
-        state.selectedProposal?.id === id
-          ? { ...state.selectedProposal, status, updatedAt: new Date() }
-          : state.selectedProposal,
     }));
   },
 

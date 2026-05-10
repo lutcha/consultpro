@@ -8,10 +8,6 @@ function getToken(): string | null {
   return localStorage.getItem('access_token');
 }
 
-function getRefreshToken(): string | null {
-  return localStorage.getItem('refresh_token');
-}
-
 function setTokens(access: string, refresh: string) {
   localStorage.setItem('access_token', access);
   localStorage.setItem('refresh_token', refresh);
@@ -22,35 +18,9 @@ export function clearTokens() {
   localStorage.removeItem('refresh_token');
 }
 
-async function refreshAccessToken(): Promise<string | null> {
-  const refresh = getRefreshToken();
-  if (!refresh) return null;
-
-  const response = await fetch(`${API_BASE}/auth/token/refresh/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh }),
-  });
-
-  if (!response.ok) {
-    clearTokens();
-    return null;
-  }
-
-  const data = await response.json() as Partial<LoginResponse>;
-  if (!data.access) {
-    clearTokens();
-    return null;
-  }
-
-  setTokens(data.access, data.refresh || refresh);
-  return data.access;
-}
-
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {},
-  retryOnUnauthorized = true
+  options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   const token = getToken();
@@ -67,23 +37,10 @@ async function apiRequest<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  let response = await fetch(url, {
+  const response = await fetch(url, {
     ...options,
     headers,
   });
-
-  if (response.status === 401 && retryOnUnauthorized) {
-    const refreshedToken = await refreshAccessToken();
-    if (refreshedToken) {
-      response = await fetch(url, {
-        ...options,
-        headers: {
-          ...headers,
-          Authorization: `Bearer ${refreshedToken}`,
-        },
-      });
-    }
-  }
 
   if (response.status === 401) {
     clearTokens();
@@ -92,15 +49,8 @@ async function apiRequest<T>(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    const fieldErrors = Object.entries(errorData)
-      .filter(([key]) => !['detail', 'message'].includes(key))
-      .map(([key, value]) => {
-        const message = Array.isArray(value) ? value.join(', ') : String(value);
-        return `${key}: ${message}`;
-      })
-      .join('; ');
     throw new Error(
-      errorData.detail || errorData.message || fieldErrors || `API Error: ${response.status}`
+      errorData.detail || errorData.message || `API Error: ${response.status}`
     );
   }
 
@@ -176,6 +126,10 @@ export async function apiGetUsers(): Promise<PaginatedResponse<ApiUser>> {
   return apiRequest<PaginatedResponse<ApiUser>>('/users/');
 }
 
+export async function apiGetUser(id: number): Promise<ApiUser> {
+  return apiRequest<ApiUser>(`/users/${id}/`);
+}
+
 export async function apiCreateUser(data: {
   email: string;
   first_name: string;
@@ -189,10 +143,6 @@ export async function apiCreateUser(data: {
     method: 'POST',
     body: JSON.stringify(data),
   });
-}
-
-export async function apiGetUser(id: number): Promise<ApiUser> {
-  return apiRequest<ApiUser>(`/users/${id}/`);
 }
 
 export async function apiUpdateMe(data: Partial<MeResponse>): Promise<MeResponse> {
@@ -242,7 +192,6 @@ export interface ApiOpportunity {
   reference_number: string;
   url_source: string;
   ai_summary: string | null;
-  ai_extraction: Record<string, unknown>;
   ai_analysis_status: string;
   created_by: number | null;
   assigned_to: number | null;
@@ -304,16 +253,6 @@ export async function apiCreateOpportunity(
   });
 }
 
-export async function apiUpdateOpportunity(
-  id: string,
-  data: Partial<ApiOpportunity>
-): Promise<ApiOpportunity> {
-  return apiRequest<ApiOpportunity>(`/opportunities/${id}/`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
 export async function apiUploadToR(
   id: string,
   file: File
@@ -330,24 +269,6 @@ export async function apiUploadToR(
   );
 }
 
-export async function apiAnalyzeOpportunityToR(
-  id: string
-): Promise<{ ai_analysis_status: string; task: string }> {
-  return apiRequest<{ ai_analysis_status: string; task: string }>(
-    `/opportunities/${id}/analyze_tor/`,
-    { method: 'POST' }
-  );
-}
-
-export async function apiCreateProposalFromOpportunity(
-  id: string
-): Promise<{ proposal_id: number; proposal_url?: string; status: string; created?: boolean }> {
-  return apiRequest<{ proposal_id: number; proposal_url?: string; status: string; created?: boolean }>(
-    `/opportunities/${id}/create_proposal/`,
-    { method: 'POST' }
-  );
-}
-
 export async function apiUpdateOpportunityStatus(
   id: string,
   status: string
@@ -355,32 +276,6 @@ export async function apiUpdateOpportunityStatus(
   return apiRequest<ApiOpportunity>(`/opportunities/${id}/`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),
-  });
-}
-
-export interface ApiAIProviderStatus {
-  active_provider: string;
-  active_model: string;
-  is_mock: boolean;
-  always_mock: boolean;
-  selected_model: string;
-  providers: Array<{
-    id: string;
-    model: string;
-    api_key_configured: boolean;
-  }>;
-}
-
-export async function apiGetAIProviderStatus(): Promise<ApiAIProviderStatus> {
-  return apiRequest<ApiAIProviderStatus>('/ai/providers/status/');
-}
-
-export async function apiUpdateAIProvider(
-  data: { provider: string; model?: string }
-): Promise<ApiAIProviderStatus> {
-  return apiRequest<ApiAIProviderStatus>('/ai/providers/status/', {
-    method: 'PATCH',
-    body: JSON.stringify(data),
   });
 }
 
@@ -427,8 +322,7 @@ export interface ApiAISuggestion {
 export interface ApiProposalSection {
   id: number;
   proposal: number;
-  type?: string;
-  section_type?: string;
+  type: string;
   title: string;
   content: string;
   order: number;
@@ -451,24 +345,6 @@ export interface ApiTeamMember {
   cv_document: string | null;
 }
 
-export interface ApiProposalEvent {
-  id: number;
-  proposal: number;
-  event_type: string;
-  event_type_display: string;
-  artifact_type: string;
-  title: string;
-  notes: string;
-  occurred_at: string;
-  external_url: string;
-  attachment: string | null;
-  attachment_url: string | null;
-  created_by: number | null;
-  created_by_detail: { id: number; email: string; first_name: string; last_name: string } | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ApiProposalListItem {
   id: number;
   title: string;
@@ -487,13 +363,11 @@ export interface ApiProposal {
   title: string;
   version: number;
   status: string;
-  progress?: number;
   opportunity: number;
   opportunity_id: number;
   sections: ApiProposalSection[];
   team: ApiTeamMember[];
   budget: ApiBudget | null;
-  events: ApiProposalEvent[];
   quality_score: number | null;
   created_by: number | null;
   created_at: string;
@@ -535,78 +409,6 @@ export async function apiUpdateProposalSection(
       body: JSON.stringify(data),
     }
   );
-}
-
-export async function apiCreateProposalSection(
-  proposalId: string,
-  data: { title: string; section_type?: string; content?: string }
-): Promise<ApiProposalSection> {
-  return apiRequest<ApiProposalSection>(`/proposals/${proposalId}/add_section/`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiGenerateProposalSectionSuggestion(
-  proposalId: string,
-  data: { section_id: string; action: string; current_content?: string }
-): Promise<ApiAISuggestion> {
-  return apiRequest<ApiAISuggestion>(`/proposals/${proposalId}/ai_suggest/`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiApproveProposalForSubmission(
-  proposalId: string
-): Promise<{ status: string; proposal_id: number; proposal_url: string }> {
-  return apiRequest<{ status: string; proposal_id: number; proposal_url: string }>(
-    `/proposals/${proposalId}/approve_for_submission/`,
-    { method: 'POST' }
-  );
-}
-
-export async function apiTransitionProposalStatus(
-  proposalId: string,
-  data: { status: string; note?: string }
-): Promise<{
-  status: string;
-  proposal_id: number;
-  proposal_url: string;
-  project_id?: number;
-  project_url?: string;
-}> {
-  return apiRequest(`/proposals/${proposalId}/transition_status/`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiCreateProposalEvent(
-  proposalId: string,
-  data: {
-    event_type: string;
-    artifact_type?: string;
-    title: string;
-    notes?: string;
-    occurred_at?: string;
-    external_url?: string;
-    attachment?: File | null;
-  }
-): Promise<ApiProposalEvent> {
-  const formData = new FormData();
-  formData.append('event_type', data.event_type);
-  if (data.artifact_type) formData.append('artifact_type', data.artifact_type);
-  formData.append('title', data.title);
-  if (data.notes) formData.append('notes', data.notes);
-  if (data.occurred_at) formData.append('occurred_at', data.occurred_at);
-  if (data.external_url) formData.append('external_url', data.external_url);
-  if (data.attachment) formData.append('attachment', data.attachment);
-
-  return apiRequest<ApiProposalEvent>(`/proposals/${proposalId}/events/`, {
-    method: 'POST',
-    body: formData,
-  });
 }
 
 export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {
@@ -654,24 +456,10 @@ export interface ApiDashboardStats {
   proposals_in_progress: number;
   win_rate: number;
   upcoming_deadlines: number;
-  opportunities_by_status: Record<string, number>;
-  projects_active: number;
-  projects_completed: number;
-  projects_on_hold: number;
-  scraping_new: number;
-  scraping_with_ai: number;
-  deadline_items: Array<{
-    id: number;
-    title: string;
-    client: string;
-    deadline: string;
-    status: string;
-    days_left: number;
-  }>;
 }
 
 export interface ApiPipelineItem {
-  id: string;
+  id: number;
   title: string;
   client: string;
   deadline: string | null;
@@ -754,7 +542,6 @@ export interface ApiProjectPhase {
   id: number;
   name: string;
   name_display: string;
-  title: string;
   description: string;
   start_date: string | null;
   end_date: string | null;
@@ -765,94 +552,36 @@ export interface ApiProjectPhase {
   updated_at: string;
 }
 
-export interface ApiProjectArtifact {
-  id: number;
-  project: number;
-  phase: number | null;
-  artifact_type: string;
-  artifact_type_display: string;
-  title: string;
-  status: string;
-  status_display: string;
-  file: string | null;
-  file_url: string | null;
-  external_url: string;
-  notes: string;
-  created_by: number | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ApiProjectMilestone {
-  id: number;
-  project: number;
-  title: string;
-  description: string;
-  due_date: string;
-  completed_date: string | null;
-  status: string;
-  deliverables: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ApiProjectTask {
-  id: number;
-  project: number;
-  title: string;
-  description: string;
-  status: 'todo' | 'in_progress' | 'review' | 'done';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  due_date: string | null;
-  assignee: { id: number; email: string; first_name: string; last_name: string; name: string; role: string } | null;
-  created_by: number | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ApiProjectTeamMember {
-  id: number;
-  project: number;
-  user: { id: number; email: string; first_name: string; last_name: string; name: string; role: string };
-  role: string;
-  allocation_percentage: number;
-  start_date: string | null;
-  end_date: string | null;
-}
-
-export interface ApiProjectRisk {
-  id: number;
-  project: number;
-  title: string;
-  description: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'mitigated' | 'closed';
-  mitigation_plan: string;
-  owner: { id: number; email: string; first_name: string; last_name: string; name: string; role: string } | null;
-}
-
-export interface ApiProjectDeliverable {
-  id: number;
-  project: number;
-  phase: number | null;
-  phase_name: string | null;
-  title: string;
-  description: string;
-  due_date: string | null;
-  submitted_date: string | null;
-  status: 'draft' | 'under_review' | 'approved' | 'submitted' | 'accepted';
-  status_display: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ApiProjectDetail extends ApiProject {
-  team: ApiProjectTeamMember[];
-  milestones: ApiProjectMilestone[];
-  tasks: ApiProjectTask[];
-  risks: ApiProjectRisk[];
-  deliverables: ApiProjectDeliverable[];
-  artifacts: ApiProjectArtifact[];
+  team: Array<{
+    id: number;
+    user: { id: number; email: string; first_name: string; last_name: string; name: string; role: string };
+    role: string;
+    allocation_percentage: number;
+  }>;
+  milestones: Array<{
+    id: number;
+    title: string;
+    description: string;
+    due_date: string;
+    completed_date: string | null;
+    status: string;
+  }>;
+  risks: Array<{
+    id: number;
+    title: string;
+    description: string;
+    severity: string;
+    status: string;
+    mitigation_plan: string;
+  }>;
+  deliverables: Array<{
+    id: number;
+    title: string;
+    description: string;
+    due_date: string | null;
+    status: string;
+  }>;
   phases: ApiProjectPhase[];
 }
 
@@ -869,16 +598,6 @@ export async function apiCreateProject(
 ): Promise<ApiProject> {
   return apiRequest<ApiProject>('/projects/', {
     method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiUpdateProject(
-  id: string,
-  data: Partial<ApiProject>
-): Promise<ApiProjectDetail> {
-  return apiRequest<ApiProjectDetail>(`/projects/${id}/`, {
-    method: 'PATCH',
     body: JSON.stringify(data),
   });
 }
@@ -915,140 +634,6 @@ export async function apiUpdateProjectPhase(
     method: 'PATCH',
     body: JSON.stringify(data),
   });
-}
-
-export async function apiCreateProjectMilestone(
-  data: Partial<ApiProjectMilestone>
-): Promise<ApiProjectMilestone> {
-  return apiRequest<ApiProjectMilestone>('/projects/milestones/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiUpdateProjectMilestone(
-  milestoneId: number,
-  data: Partial<ApiProjectMilestone>
-): Promise<ApiProjectMilestone> {
-  return apiRequest<ApiProjectMilestone>(`/projects/milestones/${milestoneId}/`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiCreateProjectTask(
-  data: Partial<ApiProjectTask>
-): Promise<ApiProjectTask> {
-  return apiRequest<ApiProjectTask>('/projects/tasks/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiUpdateProjectTask(
-  taskId: number,
-  data: Partial<ApiProjectTask>
-): Promise<ApiProjectTask> {
-  return apiRequest<ApiProjectTask>(`/projects/tasks/${taskId}/`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiCreateProjectTeamMember(
-  data: {
-    project: number;
-    user_id: number;
-    role: string;
-    allocation_percentage: number;
-    start_date?: string | null;
-    end_date?: string | null;
-  }
-): Promise<ApiProjectTeamMember> {
-  return apiRequest<ApiProjectTeamMember>('/projects/team-members/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiUpdateProjectTeamMember(
-  memberId: number,
-  data: Partial<ApiProjectTeamMember> & { user_id?: number }
-): Promise<ApiProjectTeamMember> {
-  return apiRequest<ApiProjectTeamMember>(`/projects/team-members/${memberId}/`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiCreateProjectRisk(
-  data: Partial<ApiProjectRisk> & { owner_id?: number | null }
-): Promise<ApiProjectRisk> {
-  return apiRequest<ApiProjectRisk>('/projects/risks/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiUpdateProjectRisk(
-  riskId: number,
-  data: Partial<ApiProjectRisk> & { owner_id?: number | null }
-): Promise<ApiProjectRisk> {
-  return apiRequest<ApiProjectRisk>(`/projects/risks/${riskId}/`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiCreateProjectArtifact(
-  data: {
-    project: number;
-    artifact_type: string;
-    title: string;
-    status: string;
-    phase?: number | null;
-    external_url?: string;
-    notes?: string;
-    file?: File | null;
-  }
-): Promise<ApiProjectArtifact> {
-  const formData = new FormData();
-  formData.append('project', String(data.project));
-  if (data.phase) formData.append('phase', String(data.phase));
-  formData.append('artifact_type', data.artifact_type);
-  formData.append('title', data.title);
-  formData.append('status', data.status);
-  if (data.external_url) formData.append('external_url', data.external_url);
-  if (data.notes) formData.append('notes', data.notes);
-  if (data.file) formData.append('file', data.file);
-
-  return apiRequest<ApiProjectArtifact>('/projects/artifacts/', {
-    method: 'POST',
-    body: formData,
-  });
-}
-
-export async function apiCreateProjectDeliverable(
-  data: Pick<ApiProjectDeliverable, 'project' | 'title' | 'description' | 'due_date' | 'status'> & { phase?: number | null }
-): Promise<ApiProjectDeliverable> {
-  return apiRequest<ApiProjectDeliverable>('/projects/deliverables/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiUpdateProjectDeliverable(
-  id: number,
-  data: Partial<Pick<ApiProjectDeliverable, 'title' | 'description' | 'due_date' | 'submitted_date' | 'status'> & { phase: number | null }>
-): Promise<ApiProjectDeliverable> {
-  return apiRequest<ApiProjectDeliverable>(`/projects/deliverables/${id}/`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function apiDeleteProjectDeliverable(id: number): Promise<void> {
-  return apiRequest<void>(`/projects/deliverables/${id}/`, { method: 'DELETE' });
 }
 
 // ============================================
@@ -1289,47 +874,6 @@ export interface ApiScrapedOpportunity {
   published_at: string | null;
   deadline_alert: boolean;
   ai_summary: string;
-  deep_content_status?: string | null;
-  deep_content_extracted_at?: string | null;
-  cv_eligible?: boolean;
-  data_quality_score?: number;
-  imported_opportunity?: number | null;
-  scraped_at?: string;
-  source_name?: string;
-}
-
-export interface ApiScrapedOpportunityDetail {
-  id: number;
-  source: ApiScrapingSource;
-  external_id: string;
-  external_url: string;
-  title: string;
-  organization: string;
-  client: string;
-  sector: string;
-  country: string;
-  region: string;
-  description: string;
-  deep_content_text: string | null;
-  deep_content_url: string | null;
-  deep_content_status: string | null;
-  value: string;
-  currency: string;
-  deadline: string | null;
-  deadline_meta: Record<string, unknown> | null;
-  status: string;
-  published_at: string | null;
-  deadline_alert: boolean;
-  ai_summary: string | null;
-  ai_extracted_requirements: Array<{ description: string; priority?: string }> | null;
-  cv_eligible: boolean;
-  eligibility: Record<string, unknown> | null;
-  data_quality_score: number;
-  language: string;
-  sector_tags: string[];
-  imported_opportunity: number | null;
-  imported_at: string | null;
-  scraped_at: string;
 }
 
 export interface ApiScrapingJob {
@@ -1378,26 +922,12 @@ export async function apiToggleScrapingSource(id: number): Promise<{ status: str
   });
 }
 
-export async function apiGetScrapedOpportunities(page = 1): Promise<PaginatedResponse<ApiScrapedOpportunity>> {
-  return apiRequest<PaginatedResponse<ApiScrapedOpportunity>>(`/scraping/opportunities/?page=${page}`);
+export async function apiGetScrapedOpportunities(): Promise<PaginatedResponse<ApiScrapedOpportunity>> {
+  return apiRequest<PaginatedResponse<ApiScrapedOpportunity>>('/scraping/opportunities/');
 }
 
-export async function apiGetScrapedOpportunity(id: number): Promise<ApiScrapedOpportunityDetail> {
-  return apiRequest<ApiScrapedOpportunityDetail>(`/scraping/opportunities/${id}/`);
-}
-
-export async function apiImportScrapedOpportunity(id: number): Promise<{
-  opportunity_id: number;
-  opportunity_url?: string;
-  status: string;
-  created?: boolean;
-}> {
-  return apiRequest<{
-    opportunity_id: number;
-    opportunity_url?: string;
-    status: string;
-    created?: boolean;
-  }>(`/scraping/opportunities/${id}/import_opportunity/`, {
+export async function apiImportScrapedOpportunity(id: number): Promise<{ opportunity_id: number; status: string }> {
+  return apiRequest<{ opportunity_id: number; status: string }>(`/scraping/opportunities/${id}/import_opportunity/`, {
     method: 'POST',
   });
 }

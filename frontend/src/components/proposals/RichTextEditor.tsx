@@ -7,7 +7,6 @@ import { Bold, Italic, Underline, List, ListOrdered, Heading1, Heading2, Quote, 
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { normalizeProposalHtml } from '@/lib/htmlContent';
 
 interface RichTextEditorProps {
   value: string;
@@ -18,24 +17,17 @@ interface RichTextEditorProps {
 
 export function RichTextEditor({ value, onChange, placeholder: _placeholder, className }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const lastSyncedValueRef = useRef('');
 
+  // Update editor content when value prop changes (from outside)
   useEffect(() => {
-    const editor = editorRef.current;
-    const nextValue = normalizeProposalHtml(value || '');
-    if (!editor || lastSyncedValueRef.current === nextValue) return;
-
-    if (document.activeElement !== editor) {
-      editor.innerHTML = nextValue;
-      lastSyncedValueRef.current = nextValue;
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value || '';
     }
-  }, [value]);
+  }, []);
 
   const handleInput = useCallback(() => {
     if (editorRef.current) {
-      const nextValue = normalizeProposalHtml(editorRef.current.innerHTML);
-      lastSyncedValueRef.current = nextValue;
-      onChange(nextValue);
+      onChange(editorRef.current.innerHTML);
     }
   }, [onChange]);
 
@@ -107,8 +99,9 @@ export function RichTextEditor({ value, onChange, placeholder: _placeholder, cla
         suppressContentEditableWarning
         onInput={handleInput}
         onBlur={handleInput}
-        className="flex-1 p-4 min-h-[300px] outline-none overflow-x-auto prose prose-sm max-w-none dark:prose-invert"
+        className="flex-1 p-4 min-h-[300px] outline-none prose prose-sm max-w-none dark:prose-invert"
         style={{ minHeight: '300px' }}
+        dangerouslySetInnerHTML={{ __html: value || '' }}
       />
     </div>
   );

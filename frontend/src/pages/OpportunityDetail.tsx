@@ -9,14 +9,12 @@ import {
   CheckCircle,
   XCircle,
   MessageSquare,
-  Pencil,
   Download,
   CheckSquare,
   AlertTriangle,
   FileText,
   Grid3X3,
   ShieldAlert,
-  FilePlus2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,39 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useOpportunityStore } from '@/stores';
 import { formatDate, formatCurrency, cn } from '@/lib/utils';
-import { apiAnalyzeOpportunityToR, apiCreateProposalFromOpportunity } from '@/lib/api';
-import { toast } from 'sonner';
 import type { Requirement, Risk } from '@/types';
-
-function countCosItems(value: unknown): number {
-  if (Array.isArray(value)) return value.length;
-  if (value && typeof value === 'object') return Object.keys(value).length;
-  return value ? 1 : 0;
-}
-
-function humanizeKey(value: string): string {
-  return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function formatCosValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') return 'Sem dados.';
-  if (Array.isArray(value)) {
-    if (value.length === 0) return 'Sem dados.';
-    return value
-      .map((item) => `- ${formatCosValue(item).replace(/\n/g, '\n  ')}`)
-      .join('\n');
-  }
-  if (typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>);
-    if (entries.length === 0) return 'Sem dados.';
-    return entries
-      .map(([key, item]) => `${humanizeKey(key)}: ${formatCosValue(item)}`)
-      .join('\n');
-  }
-  return String(value);
-}
 
 export function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
@@ -67,8 +33,6 @@ export function OpportunityDetail() {
   const { selectedOpportunity, selectOpportunity, updateStatus, isLoading } =
     useOpportunityStore();
   const [activeTab, setActiveTab] = useState('summary');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isCreatingProposal, setIsCreatingProposal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -76,20 +40,7 @@ export function OpportunityDetail() {
     }
   }, [id]);
 
-  useEffect(() => {
-    if (!id || !selectedOpportunity) return;
-    if (!['queued', 'processing'].includes(selectedOpportunity.aiAnalysisStatus || '')) return;
-
-    const interval = window.setInterval(() => {
-      selectOpportunity(id, { silent: true });
-    }, 5000);
-
-    return () => window.clearInterval(interval);
-  }, [id, selectedOpportunity?.aiAnalysisStatus, selectOpportunity]);
-
   const opportunity = selectedOpportunity;
-  const cosAnalysis = opportunity?.aiExtraction?.cos_analysis as Record<string, unknown> | undefined;
-  const hasCosAnalysis = Boolean(cosAnalysis && Object.keys(cosAnalysis).length > 0);
 
   if (isLoading) {
     return <OpportunityDetailSkeleton />;
@@ -119,34 +70,6 @@ export function OpportunityDetail() {
     await updateStatus(opportunity.id, 'no_go');
   };
 
-  const handleAnalyzeTor = async () => {
-    setIsAnalyzing(true);
-    try {
-      await apiAnalyzeOpportunityToR(opportunity.id);
-      toast.success('Analise IA iniciada');
-      await selectOpportunity(opportunity.id, { silent: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro ao iniciar analise IA';
-      toast.error(message);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleCreateProposal = async () => {
-    setIsCreatingProposal(true);
-    try {
-      const result = await apiCreateProposalFromOpportunity(opportunity.id);
-      toast.success(result.created ? 'Proposta criada' : 'Proposta existente aberta');
-      navigate(`/proposals/${result.proposal_id}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro ao criar proposta';
-      toast.error(message);
-    } finally {
-      setIsCreatingProposal(false);
-    }
-  };
-
   const requirementsByCategory = opportunity.requirements.reduce(
     (acc, req) => {
       if (!acc[req.category]) acc[req.category] = [];
@@ -163,12 +86,6 @@ export function OpportunityDetail() {
     financial: 'Financeiros',
   };
 
-  const priorityLabels: Record<string, string> = {
-    mandatory: 'Obrigatório',
-    preferred: 'Preferencial',
-    optional: 'Opcional',
-  };
-
   const aiStatusLabels: Record<string, string> = {
     pending: 'Pendente',
     queued: 'Em fila',
@@ -176,17 +93,6 @@ export function OpportunityDetail() {
     completed: 'Completa',
     failed: 'Falhou',
   };
-
-  const cosSections = [
-    ['Matriz TdR', cosAnalysis?.tor_dissection_matrix],
-    ['Estratégia', cosAnalysis?.proposal_strategy],
-    ['Metodologia', cosAnalysis?.methodology_blueprint],
-    ['Equipa', cosAnalysis?.team_requirements],
-    ['Plano', cosAnalysis?.workplan_requirements],
-    ['Orçamento', cosAnalysis?.budget_requirements],
-    ['Submissão', cosAnalysis?.submission_requirements],
-    ['QC', cosAnalysis?.qc_checklist],
-  ] as const;
 
   return (
     <div className="space-y-6">
@@ -232,10 +138,6 @@ export function OpportunityDetail() {
           <CheckCircle className="h-4 w-4 mr-2" />
           Go — Avançar
         </Button>
-        <Button onClick={handleCreateProposal} disabled={isCreatingProposal}>
-          <FilePlus2 className="h-4 w-4 mr-2" />
-          {isCreatingProposal ? 'A criar...' : 'Criar Proposta'}
-        </Button>
         <Button
           variant="outline"
           onClick={handleNoGo}
@@ -248,10 +150,6 @@ export function OpportunityDetail() {
         <Button variant="outline">
           <MessageSquare className="h-4 w-4 mr-2" />
           Adicionar Nota
-        </Button>
-        <Button variant="outline" onClick={() => navigate(`/opportunities/${opportunity.id}/edit`)}>
-          <Pencil className="h-4 w-4 mr-2" />
-          Editar
         </Button>
       </div>
 
@@ -298,52 +196,15 @@ export function OpportunityDetail() {
                 {opportunity.aiSummary || 'Ainda sem resumo IA para esta oportunidade.'}
               </p>
               <div className="flex gap-2 mt-4">
-                <Button variant="outline" size="sm" onClick={handleAnalyzeTor} disabled={isAnalyzing}>
-                  {isAnalyzing ? 'A iniciar...' : 'Regenerar'}
+                <Button variant="outline" size="sm">
+                  Regenerar
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => navigate(`/opportunities/${id}/edit`)}>
+                <Button variant="outline" size="sm">
                   Editar
                 </Button>
               </div>
             </CardContent>
           </Card>
-
-          {hasCosAnalysis && cosAnalysis && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Extração COS</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {cosSections.map(([label, value]) => (
-                    <div key={label as string} className="rounded-lg border p-3">
-                      <p className="text-sm font-medium">{label as string}</p>
-                      <p className="text-2xl font-bold mt-1">{countCosItems(value)}</p>
-                    </div>
-                  ))}
-                </div>
-                <Accordion type="multiple" className="mt-4">
-                  {cosSections.map(([label, value]) => (
-                    <AccordionItem key={label as string} value={label as string}>
-                      <AccordionTrigger>
-                        <div className="flex items-center gap-2">
-                          <span>{label as string}</span>
-                          <Badge variant="secondary" className="text-xs">
-                            {countCosItems(value)}
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <pre className="whitespace-pre-wrap rounded-lg bg-muted/50 p-3 text-sm leading-relaxed text-muted-foreground">
-                          {formatCosValue(value)}
-                        </pre>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Requirements */}
           <Card>
@@ -393,7 +254,7 @@ export function OpportunityDetail() {
                               <div className="flex-1">
                                 <p className="text-sm">{req.description}</p>
                                 <Badge variant="outline" className="mt-1 text-xs">
-                                  {priorityLabels[req.priority] || req.priority}
+                                  {req.priority}
                                 </Badge>
                               </div>
                             </div>
@@ -461,7 +322,7 @@ export function OpportunityDetail() {
                       <tr key={req.id} className="border-b border-border">
                         <td className="p-2">{req.description}</td>
                         <td className="p-2">
-                          <Badge variant="outline">{priorityLabels[req.priority] || req.priority}</Badge>
+                          <Badge variant="outline">{req.priority}</Badge>
                         </td>
                         <td className="p-2">
                           {req.coveredIn || '—'}

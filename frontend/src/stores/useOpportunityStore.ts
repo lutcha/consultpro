@@ -22,7 +22,7 @@ interface OpportunityState {
 
   // Actions
   setOpportunities: (opportunities: Opportunity[]) => void;
-  selectOpportunity: (id: string, options?: { silent?: boolean }) => Promise<void>;
+  selectOpportunity: (id: string) => Promise<void>;
   updateStatus: (id: string, status: OpportunityStatus) => Promise<void>;
   addOpportunity: (opportunity: Opportunity) => void;
   updateOpportunity: (id: string, updates: Partial<Opportunity>) => void;
@@ -37,27 +37,19 @@ export const useOpportunityStore = create<OpportunityState>((set, _get) => ({
 
   setOpportunities: (opportunities) => set({ opportunities }),
 
-  selectOpportunity: async (id, options) => {
-    if (!options?.silent) {
-      set({ isLoading: true, error: null });
-    }
+  selectOpportunity: async (id) => {
+    set({ isLoading: true, error: null });
     try {
       const data = await apiGetOpportunity(id);
       const opportunity = mapApiOpportunity(data);
-      set((state) => ({
-        selectedOpportunity: opportunity,
-        opportunities: state.opportunities.map((opp) =>
-          opp.id === id ? { ...opp, ...opportunity } : opp
-        ),
-        isLoading: false,
-      }));
+      set({ selectedOpportunity: opportunity, isLoading: false });
     } catch (error) {
       set({
         error:
           error instanceof Error
             ? error.message
             : 'Failed to fetch opportunity',
-        isLoading: options?.silent ? _get().isLoading : false,
+        isLoading: false,
       });
     }
   },

@@ -167,7 +167,7 @@ export function ProposalTable({ proposals }: ProposalTableProps) {
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/proposals/${proposal.id}`);
+                        navigate(`/proposals/${proposal.id}/edit`);
                       }}
                     >
                       <Edit className="mr-2 h-4 w-4" />

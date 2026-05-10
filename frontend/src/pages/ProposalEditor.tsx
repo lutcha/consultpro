@@ -33,282 +33,13 @@ import { useProposalStore } from '@/stores';
 import {
   apiDownloadProposalWord,
   apiDownloadProposalPdf,
-  apiCreateProposalSection,
-  apiCreateProposalEvent,
-  apiGenerateProposalSectionSuggestion,
-  apiTransitionProposalStatus,
   apiUploadProposalLogo,
 } from '@/lib/api';
-import { normalizeProposalHtml } from '@/lib/htmlContent';
-import { StatusBadge } from '@/components/shared/StatusBadge';
-import type { ProposalStatus } from '@/types';
-
-const proposalPipeline: { status: ProposalStatus; label: string }[] = [
-  { status: 'draft', label: 'Draft' },
-  { status: 'qc_check', label: 'QC' },
-  { status: 'ready_for_submission', label: 'Pronta' },
-  { status: 'submitted', label: 'Submetida' },
-  { status: 'under_evaluation', label: 'Avaliação' },
-  { status: 'shortlisted', label: 'Shortlist' },
-  { status: 'clarifications_requested', label: 'Clarificações' },
-  { status: 'bafo', label: 'BAFO' },
-  { status: 'awarded', label: 'Adjudicada' },
-  { status: 'contract_negotiation', label: 'Contrato' },
-  { status: 'contract_signed', label: 'Assinado' },
-  { status: 'project_initiation', label: 'Projeto' },
-];
-
-const proposalTransitions: Partial<
-  Record<ProposalStatus, { status: ProposalStatus; label: string; note: string }[]>
-> = {
-  ready_for_submission: [
-    { status: 'submitted', label: 'Registar submissão', note: 'Proposta submetida ao cliente/concurso.' },
-  ],
-  submitted: [
-    { status: 'under_evaluation', label: 'Marcar em avaliação', note: 'Cliente/concurso iniciou avaliação.' },
-  ],
-  under_evaluation: [
-    { status: 'shortlisted', label: 'Shortlisted', note: 'Proposta selecionada para fase seguinte.' },
-    { status: 'clarifications_requested', label: 'Clarificações pedidas', note: 'Cliente pediu clarificações.' },
-    { status: 'awarded', label: 'Adjudicada', note: 'Proposta selecionada como vencedora.' },
-    { status: 'lost', label: 'Perdida', note: 'Proposta perdeu para outro concorrente.' },
-    { status: 'rejected', label: 'Rejeitada', note: 'Proposta rejeitada pelo cliente/concurso.' },
-  ],
-  shortlisted: [
-    { status: 'clarifications_requested', label: 'Clarificações', note: 'Cliente pediu clarificações após shortlist.' },
-    { status: 'bafo', label: 'BAFO', note: 'Cliente pediu Best And Final Offer.' },
-    { status: 'awarded', label: 'Adjudicada', note: 'Proposta selecionada como vencedora.' },
-    { status: 'lost', label: 'Perdida', note: 'Proposta perdida após shortlist.' },
-  ],
-  clarifications_requested: [
-    { status: 'under_evaluation', label: 'Voltar à avaliação', note: 'Clarificações respondidas.' },
-    { status: 'bafo', label: 'BAFO', note: 'Cliente pediu BAFO após clarificações.' },
-    { status: 'awarded', label: 'Adjudicada', note: 'Proposta selecionada após clarificações.' },
-    { status: 'lost', label: 'Perdida', note: 'Proposta perdida após clarificações.' },
-  ],
-  bafo: [
-    { status: 'awarded', label: 'Adjudicada', note: 'BAFO aceite e proposta vencedora.' },
-    { status: 'lost', label: 'Perdida', note: 'BAFO não venceu.' },
-  ],
-  awarded: [
-    { status: 'contract_negotiation', label: 'Iniciar negociação', note: 'Iniciada negociação contratual.' },
-  ],
-  contract_negotiation: [
-    { status: 'contract_signed', label: 'Contrato assinado', note: 'Contrato assinado por ambas as partes.' },
-  ],
-  contract_signed: [
-    { status: 'project_initiation', label: 'Iniciar projeto', note: 'Handover concluído e projeto iniciado.' },
-  ],
-};
-
-const proposalEventTypes = [
-  { value: 'submission', label: 'Submissao' },
-  { value: 'evaluation', label: 'Avaliacao' },
-  { value: 'shortlist', label: 'Shortlist' },
-  { value: 'clarification', label: 'Clarificacao' },
-  { value: 'bafo', label: 'BAFO' },
-  { value: 'award', label: 'Adjudicacao' },
-  { value: 'contracting', label: 'Contratacao' },
-  { value: 'handover', label: 'Handover' },
-  { value: 'note', label: 'Nota' },
-];
-
-const proposalArtifactTypes = [
-  { value: '', label: 'Sem artefacto' },
-  { value: 'final_proposal', label: 'Proposta Final' },
-  { value: 'contract', label: 'Contrato' },
-  { value: 'handover', label: 'Handover Package' },
-  { value: 'kickoff', label: 'Kickoff Pack' },
-  { value: 'checklist', label: 'Checklist de Arranque' },
-  { value: 'other', label: 'Outro' },
-];
-
-const defaultEventTitles: Record<string, string> = {
-  submission: 'Comprovativo de submissao',
-  evaluation: 'Atualizacao de avaliacao',
-  shortlist: 'Shortlist / entrevista',
-  clarification: 'Pedido de clarificacao',
-  bafo: 'Best And Final Offer',
-  award: 'Notificacao de adjudicacao',
-  contracting: 'Documento de contratacao',
-  handover: 'Handover para execucao',
-  note: 'Nota da proposta',
-};
-
-const defaultArtifactTypeByEvent: Record<string, string> = {
-  submission: 'final_proposal',
-  bafo: 'final_proposal',
-  contracting: 'contract',
-  handover: 'handover',
-};
-
-function formatDateTime(value?: Date) {
-  if (!value || Number.isNaN(value.getTime())) return '-';
-  return new Intl.DateTimeFormat('pt-PT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(value);
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function formatInlineMarkdown(value: string) {
-  return escapeHtml(value)
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/__(.+?)__/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/_(.+?)_/g, '<em>$1</em>');
-}
-
-function isMarkdownTableSeparator(line: string) {
-  return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(line.trim());
-}
-
-function hasMarkdownTableCells(line: string) {
-  return splitMarkdownTableRow(line).length >= 3;
-}
-
-function splitMarkdownTableRow(line: string) {
-  return line
-    .trim()
-    .replace(/^\|/, '')
-    .replace(/\|$/, '')
-    .split('|')
-    .map((cell) => cell.trim());
-}
-
-function renderMarkdownTable(rows: string[]) {
-  if (rows.length < 2) {
-    return '';
-  }
-
-  const headers = splitMarkdownTableRow(rows[0]);
-  const hasSeparator = isMarkdownTableSeparator(rows[1]);
-  const bodyRows = rows.slice(hasSeparator ? 2 : 1).map(splitMarkdownTableRow);
-  const headerHtml = headers
-    .map((header) => `<th>${formatInlineMarkdown(header)}</th>`)
-    .join('');
-  const bodyHtml = bodyRows
-    .map((row) => {
-      const cells = headers.map((_, index) => row[index] || '');
-      return `<tr>${cells
-        .map((cell) => `<td>${formatInlineMarkdown(cell)}</td>`)
-        .join('')}</tr>`;
-    })
-    .join('');
-
-  return `<table class="proposal-ai-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
-}
-
-function normalizeAiMarkdown(markdown: string) {
-  return markdown
-    .replace(/&lt;br\s*\/?&gt;/gi, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>\s*<p>/gi, '\n\n')
-    .replace(/<\/?(p|div|span)>/gi, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>');
-}
-
-function aiMarkdownToHtml(markdown: string) {
-  const normalizedInput = normalizeProposalHtml(markdown);
-  if (/<\/?(p|div|strong|em|h[1-6]|ul|ol|li|table|thead|tbody|tr|th|td)(\s|>|\/)/i.test(normalizedInput)) {
-    return normalizeProposalHtml(normalizedInput);
-  }
-
-  const lines = normalizeAiMarkdown(normalizedInput)
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n');
-  const html: string[] = [];
-  let listType: 'ul' | 'ol' | null = null;
-
-  const closeList = () => {
-    if (listType) {
-      html.push(`</${listType}>`);
-      listType = null;
-    }
-  };
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const rawLine = lines[index];
-    const line = rawLine.trim();
-    if (!line) {
-      closeList();
-      continue;
-    }
-
-    const nextLine = lines[index + 1]?.trim() || '';
-    if (
-      hasMarkdownTableCells(line) &&
-      (isMarkdownTableSeparator(nextLine) || hasMarkdownTableCells(nextLine))
-    ) {
-      closeList();
-      const tableRows = [line];
-      index += 1;
-      while (index < lines.length && hasMarkdownTableCells(lines[index].trim())) {
-        tableRows.push(lines[index].trim());
-        index += 1;
-      }
-      index -= 1;
-      html.push(renderMarkdownTable(tableRows));
-      continue;
-    }
-
-    const heading = line.match(/^(#{1,3})\s+(.+)$/);
-    if (heading) {
-      closeList();
-      const level = heading[1].length + 1;
-      html.push(`<h${level}>${formatInlineMarkdown(heading[2])}</h${level}>`);
-      continue;
-    }
-
-    const bullet = line.match(/^[-*]\s+(.+)$/);
-    if (bullet) {
-      if (listType !== 'ul') {
-        closeList();
-        html.push('<ul>');
-        listType = 'ul';
-      }
-      html.push(`<li>${formatInlineMarkdown(bullet[1])}</li>`);
-      continue;
-    }
-
-    const numbered = line.match(/^\d+[.)]\s+(.+)$/);
-    if (numbered) {
-      if (listType !== 'ol') {
-        closeList();
-        html.push('<ol>');
-        listType = 'ol';
-      }
-      html.push(`<li>${formatInlineMarkdown(numbered[1])}</li>`);
-      continue;
-    }
-
-    closeList();
-    html.push(`<p>${formatInlineMarkdown(line)}</p>`);
-  }
-
-  closeList();
-  return html.join('');
-}
 
 export function ProposalEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { selectedProposal, selectProposal, updateSection, updateStatus, autoSaveStatus } =
+  const { selectedProposal, selectProposal, updateSection, autoSaveStatus } =
     useProposalStore();
   const [activeSectionId, setActiveSectionId] = useState<string>('');
   const [editorContent, setEditorContent] = useState('');
@@ -316,20 +47,6 @@ export function ProposalEditor() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [consortiumMembers, setConsortiumMembers] = useState<string[]>([]);
   const [newMember, setNewMember] = useState('');
-  const [newSectionTitle, setNewSectionTitle] = useState('');
-  const [isAddingSection, setIsAddingSection] = useState(false);
-  const [transitioningStatus, setTransitioningStatus] = useState<ProposalStatus | null>(null);
-  const [pipelineError, setPipelineError] = useState<string | null>(null);
-  const [isAddingEvent, setIsAddingEvent] = useState(false);
-  const [eventForm, setEventForm] = useState({
-    event_type: 'submission',
-    artifact_type: 'final_proposal',
-    title: defaultEventTitles.submission,
-    occurred_at: new Date().toISOString().slice(0, 16),
-    external_url: '',
-    notes: '',
-    attachment: null as File | null,
-  });
   const [logos, setLogos] = useState<{
     proponent?: string;
     client?: string;
@@ -439,137 +156,26 @@ export function ProposalEditor() {
     setConsortiumMembers((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleAddSection = async () => {
-    if (!selectedProposal || !newSectionTitle.trim() || isAddingSection) return;
-    setIsAddingSection(true);
-    try {
-      const section = await apiCreateProposalSection(selectedProposal.id, {
-        title: newSectionTitle.trim(),
-      });
-      setNewSectionTitle('');
-      await selectProposal(selectedProposal.id);
-      setActiveSectionId(String(section.id));
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao criar secao');
-    } finally {
-      setIsAddingSection(false);
-    }
-  };
-
-  const handleEventTypeChange = (eventType: string) => {
-    setEventForm((prev) => ({
-      ...prev,
-      event_type: eventType,
-      artifact_type:
-        !prev.artifact_type || defaultArtifactTypeByEvent[prev.event_type] === prev.artifact_type
-          ? defaultArtifactTypeByEvent[eventType] || ''
-          : prev.artifact_type,
-      title:
-        !prev.title || Object.values(defaultEventTitles).includes(prev.title)
-          ? defaultEventTitles[eventType] || ''
-          : prev.title,
-    }));
-  };
-
-  const handleAddProposalEvent = async () => {
-    if (!selectedProposal || isAddingEvent || !eventForm.title.trim()) return;
-    setIsAddingEvent(true);
-    setPipelineError(null);
-    try {
-      await apiCreateProposalEvent(selectedProposal.id, {
-        event_type: eventForm.event_type,
-        artifact_type: eventForm.artifact_type,
-        title: eventForm.title.trim(),
-        notes: eventForm.notes.trim(),
-        occurred_at: eventForm.occurred_at
-          ? new Date(eventForm.occurred_at).toISOString()
-          : undefined,
-        external_url: eventForm.external_url.trim(),
-        attachment: eventForm.attachment,
-      });
-      setEventForm({
-        event_type: eventForm.event_type,
-        artifact_type: eventForm.artifact_type,
-        title: defaultEventTitles[eventForm.event_type] || '',
-        occurred_at: new Date().toISOString().slice(0, 16),
-        external_url: '',
-        notes: '',
-        attachment: null,
-      });
-      await selectProposal(selectedProposal.id);
-    } catch (err) {
-      setPipelineError(
-        err instanceof Error ? err.message : 'Erro ao registar evento da proposta'
-      );
-    } finally {
-      setIsAddingEvent(false);
-    }
-  };
-
-  const handleAISuggestion = async (action: string) => {
-    if (!selectedProposal || !activeSectionId) return;
-    try {
-      const suggestion = await apiGenerateProposalSectionSuggestion(selectedProposal.id, {
-        section_id: activeSectionId,
-        action,
-        current_content: editorContent,
-      });
-      if (!suggestion.generated_content) {
-        alert('A IA nao devolveu conteudo para esta secao.');
-        return;
-      }
-
-      const generatedContent = aiMarkdownToHtml(suggestion.generated_content);
-      const shouldAppend = action === 'draft_from_context' && editorContent.trim();
-      const currentContent = normalizeProposalHtml(editorContent);
-      const nextContent = shouldAppend
-        ? `${currentContent}<p><br></p>${generatedContent}`
-        : generatedContent;
-
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      setEditorContent(nextContent);
-      await updateSection(selectedProposal.id, activeSectionId, nextContent);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao gerar sugestao IA');
-    }
-  };
-
-  const handleProposalTransition = async (
-    nextStatus: ProposalStatus,
-    note: string
-  ) => {
-    if (!selectedProposal || transitioningStatus) return;
-    setPipelineError(null);
-    setTransitioningStatus(nextStatus);
-    try {
-      const result = await apiTransitionProposalStatus(selectedProposal.id, {
-        status: nextStatus,
-        note,
-      });
-      updateStatus(selectedProposal.id, result.status as ProposalStatus);
-      if (result.project_url) {
-        navigate(result.project_url);
-        return;
-      }
-      await selectProposal(selectedProposal.id);
-    } catch (err) {
-      setPipelineError(
-        err instanceof Error ? err.message : 'Erro ao atualizar estado da proposta'
-      );
-    } finally {
-      setTransitioningStatus(null);
-    }
+  const handleAISuggestion = (action: string) => {
+    const suggestions: Record<string, string> = {
+      expand:
+        editorContent +
+        '<p><br></p><p><em>[Conteúdo expandido pela IA com mais detalhes e contexto relevante para esta secção.]</em></p>',
+      summarize:
+        '<p><em>[Versão resumida do texto original, mantendo os pontos-chave e eliminando redundâncias.]</em></p>',
+      'tone-formal':
+        '<p><em>[Versão com tom mais formal e profissional do texto original, adequada para submissão a organismos internacionais.]</em></p>',
+      'translate-en':
+        '<p><em>[English translation of the original text, maintaining technical terminology and professional tone.]</em></p>',
+    };
+    const newContent = suggestions[action] || editorContent;
+    setEditorContent(newContent);
+    handleContentChange(newContent);
   };
 
   const activeSection = selectedProposal?.sections.find(
     (s) => s.id === activeSectionId
   );
-  const proposalEvents = selectedProposal?.events || [];
-  const hasFinalProposal = proposalEvents.some((event) => event.artifactType === 'final_proposal');
-  const hasContract = proposalEvents.some((event) => event.artifactType === 'contract');
-  const hasHandover = proposalEvents.some((event) => event.artifactType === 'handover');
-  const hasKickoff = proposalEvents.some((event) => event.artifactType === 'kickoff');
-  const handoverReady = hasFinalProposal && hasContract && hasHandover;
 
   // Build preview HTML
   const previewHtml = selectedProposal
@@ -647,7 +253,6 @@ export function ProposalEditor() {
             <h1 className="text-xl font-bold">{selectedProposal.title}</h1>
             <div className="flex items-center gap-2 mt-1">
               <Badge variant="outline">v{selectedProposal.version}</Badge>
-              <StatusBadge status={selectedProposal.status} size="sm" />
               <Badge
                 variant={autoSaveStatus === 'saved' ? 'default' : 'secondary'}
                 className="text-xs"
@@ -690,264 +295,8 @@ export function ProposalEditor() {
         </div>
       </div>
 
-      {/* Proposal Pipeline */}
-      <div className="mt-3 rounded-lg border border-border bg-card p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="mb-2 flex items-center gap-2">
-              <p className="text-sm font-semibold">Pipeline da Proposta</p>
-              <StatusBadge status={selectedProposal.status} size="sm" />
-            </div>
-            <div className="flex gap-1 overflow-x-auto pb-1">
-              {proposalPipeline.map((step, index) => {
-                const currentIndex = proposalPipeline.findIndex(
-                  (item) => item.status === selectedProposal.status
-                );
-                const isCurrent = step.status === selectedProposal.status;
-                const isDone = currentIndex >= 0 && index < currentIndex;
-                return (
-                  <div
-                    key={step.status}
-                    className={`shrink-0 rounded-md border px-2 py-1 text-xs ${
-                      isCurrent
-                        ? 'border-primary bg-primary/10 text-primary font-medium'
-                        : isDone
-                        ? 'border-green-200 bg-green-50 text-green-700'
-                        : 'border-border bg-muted/40 text-muted-foreground'
-                    }`}
-                  >
-                    {step.label}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {selectedProposal.status === 'draft' || selectedProposal.status === 'in_review' ? (
-              <Button size="sm" onClick={() => navigate(`/proposals/${id}/qc`)}>
-                <Send className="h-4 w-4 mr-2" />
-                Submeter para QC
-              </Button>
-            ) : selectedProposal.status === 'qc_check' ? (
-              <Button size="sm" onClick={() => navigate(`/proposals/${id}/qc`)}>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Concluir QC
-              </Button>
-            ) : (
-              (proposalTransitions[selectedProposal.status] || []).map((action) => (
-                <Button
-                  key={action.status}
-                  size="sm"
-                  variant={action.status === 'lost' || action.status === 'rejected' ? 'outline' : 'default'}
-                  disabled={transitioningStatus !== null}
-                  onClick={() => handleProposalTransition(action.status, action.note)}
-                >
-                  {transitioningStatus === action.status ? 'A atualizar...' : action.label}
-                </Button>
-              ))
-            )}
-          </div>
-        </div>
-        {pipelineError && (
-          <p className="mt-2 text-sm text-error">{pipelineError}</p>
-        )}
-        <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_1.2fr]">
-          <div className="rounded-lg border border-border bg-muted/20 p-3">
-            <p className="mb-2 text-sm font-semibold">Registar evento</p>
-            <div className="grid gap-2 md:grid-cols-2">
-              <label className="text-xs font-medium">
-                Tipo
-                <select
-                  value={eventForm.event_type}
-                  onChange={(event) => handleEventTypeChange(event.target.value)}
-                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {proposalEventTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs font-medium">
-                Artefacto
-                <select
-                  value={eventForm.artifact_type}
-                  onChange={(event) =>
-                    setEventForm((prev) => ({ ...prev, artifact_type: event.target.value }))
-                  }
-                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {proposalArtifactTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs font-medium">
-                Data
-                <Input
-                  type="datetime-local"
-                  value={eventForm.occurred_at}
-                  onChange={(event) =>
-                    setEventForm((prev) => ({ ...prev, occurred_at: event.target.value }))
-                  }
-                  className="mt-1 h-9"
-                />
-              </label>
-            </div>
-            <label className="mt-2 block text-xs font-medium">
-              Titulo
-              <Input
-                value={eventForm.title}
-                onChange={(event) =>
-                  setEventForm((prev) => ({ ...prev, title: event.target.value }))
-                }
-                className="mt-1 h-9"
-                placeholder="Ex: pedido de clarificacao recebido"
-              />
-            </label>
-            <label className="mt-2 block text-xs font-medium">
-              Link externo
-              <Input
-                value={eventForm.external_url}
-                onChange={(event) =>
-                  setEventForm((prev) => ({ ...prev, external_url: event.target.value }))
-                }
-                className="mt-1 h-9"
-                placeholder="https://..."
-              />
-            </label>
-            <label className="mt-2 block text-xs font-medium">
-              Notas
-              <textarea
-                value={eventForm.notes}
-                onChange={(event) =>
-                  setEventForm((prev) => ({ ...prev, notes: event.target.value }))
-                }
-                className="mt-1 min-h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                placeholder="Perguntas do cliente, resposta BAFO, comprovativo de submissao..."
-              />
-            </label>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
-              <label className="flex-1 text-xs font-medium">
-                Ficheiro
-                <Input
-                  type="file"
-                  onChange={(event) =>
-                    setEventForm((prev) => ({
-                      ...prev,
-                      attachment: event.target.files?.[0] || null,
-                    }))
-                  }
-                  className="mt-1 h-9"
-                />
-              </label>
-              <Button
-                size="sm"
-                onClick={handleAddProposalEvent}
-                disabled={isAddingEvent || !eventForm.title.trim()}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {isAddingEvent ? 'A registar...' : 'Adicionar'}
-              </Button>
-            </div>
-          </div>
-          <div className="rounded-lg border border-border bg-muted/20 p-3">
-            <div className="mb-3 rounded-md border border-border bg-background p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold">Checklist Contracting + Handover</p>
-                <Badge variant={handoverReady ? 'default' : 'outline'} className="text-xs">
-                  {handoverReady ? 'Pronto para projeto' : 'Em preparacao'}
-                </Badge>
-              </div>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {[
-                  ['Proposta final/BAFO', hasFinalProposal],
-                  ['Contrato anexado', hasContract],
-                  ['Handover package', hasHandover],
-                  ['Kickoff pack', hasKickoff],
-                ].map(([label, done]) => (
-                  <div key={String(label)} className="flex items-center gap-2 text-xs">
-                    <CheckCircle
-                      className={`h-4 w-4 ${done ? 'text-green-600' : 'text-muted-foreground'}`}
-                    />
-                    <span className={done ? 'text-foreground' : 'text-muted-foreground'}>
-                      {label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Ao iniciar projeto, estes artefactos sao copiados para o separador Artefactos do projeto.
-              </p>
-            </div>
-            <p className="mb-2 text-sm font-semibold">Historico da proposta</p>
-            {(selectedProposal.events || []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Sem eventos registados. Use esta timeline para submissao, clarificacoes, BAFO e contracting.
-              </p>
-            ) : (
-              <div className="max-h-72 space-y-2 overflow-auto pr-1">
-                {(selectedProposal.events || []).map((event) => (
-                  <div key={event.id} className="rounded-md border border-border bg-background p-2">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium">{event.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {event.typeLabel} · {formatDateTime(event.occurredAt)}
-                          {event.createdBy ? ` · ${event.createdBy}` : ''}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {event.typeLabel}
-                      </Badge>
-                      {event.artifactType && (
-                        <Badge variant="secondary" className="text-xs">
-                          {proposalArtifactTypes.find((type) => type.value === event.artifactType)?.label ||
-                            event.artifactType}
-                        </Badge>
-                      )}
-                    </div>
-                    {event.notes && (
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
-                        {event.notes}
-                      </p>
-                    )}
-                    <div className="mt-2 flex flex-wrap gap-3 text-xs">
-                      {event.externalUrl && (
-                        <a
-                          href={event.externalUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          Abrir link
-                        </a>
-                      )}
-                      {event.attachmentUrl && (
-                        <a
-                          href={event.attachmentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          Abrir ficheiro
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Main Editor Area */}
-      <div className="flex-1 flex overflow-hidden mt-3">
+      <div className="flex-1 flex overflow-hidden mt-4">
         {/* Left Sidebar - Sections & Logos */}
         <div className="w-64 flex-shrink-0 flex flex-col border-r border-border overflow-auto">
           {/* Logos Section */}
@@ -1026,28 +375,6 @@ export function ProposalEditor() {
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               Secções
             </h3>
-            <div className="flex gap-1 mb-3">
-              <Input
-                value={newSectionTitle}
-                onChange={(e) => setNewSectionTitle(e.target.value)}
-                placeholder="Nova secao"
-                className="h-7 text-xs"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddSection();
-                  }
-                }}
-              />
-              <Button
-                size="sm"
-                className="h-7 px-2"
-                onClick={handleAddSection}
-                disabled={isAddingSection || !newSectionTitle.trim()}
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
             <div className="space-y-1">
               {selectedProposal.sections.map((section) => (
                 <button
@@ -1113,11 +440,11 @@ export function ProposalEditor() {
               </Button>
               <Button size="sm" onClick={() => {
                 if (activeSection) {
-                  updateSection(selectedProposal.id, activeSectionId, editorContent, true);
+                  updateSection(selectedProposal.id, activeSectionId, editorContent);
                 }
-              }} disabled={activeSection?.isComplete}>
+              }}>
                 <CheckCircle className="h-4 w-4 mr-2" />
-                {activeSection?.isComplete ? 'Completo' : 'Marcar como Completo'}
+                Marcar como Completo
               </Button>
             </div>
           </div>

@@ -266,7 +266,6 @@ export const mockProposals: Proposal[] = [
       { userId: '1', role: 'Team Leader', hours: 240, cvAttached: true },
       { userId: '3', role: 'Especialista em Saúde', hours: 120, cvAttached: false },
     ],
-    events: [],
     budget: {
       total: 175000,
       currency: 'USD',
@@ -287,13 +286,6 @@ export const mockDashboardStats: DashboardStats = {
   proposalsInProgress: 5,
   winRate: 68,
   upcomingDeadlines: 3,
-  opportunitiesByStatus: {},
-  projectsActive: 0,
-  projectsCompleted: 0,
-  projectsOnHold: 0,
-  scrapingNew: 0,
-  scrapingWithAi: 0,
-  deadlineItems: [],
 };
 
 // Mock Pipeline
