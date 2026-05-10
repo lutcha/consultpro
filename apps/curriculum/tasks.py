@@ -14,15 +14,21 @@ def _extract_text(curriculum) -> str:
     if not curriculum.file:
         return ''
     try:
-        file_path = curriculum.file.path
         if curriculum.file_type == 'pdf':
             from pypdf import PdfReader
-            reader = PdfReader(file_path)
-            return '\n'.join(page.extract_text() or '' for page in reader.pages)
+            with curriculum.file.open('rb') as fh:
+                reader = PdfReader(fh)
+                text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+            logger.info('CV %s: extracted %d chars from PDF', curriculum.id, len(text))
+            return text
         if curriculum.file_type in ('docx', 'doc'):
+            import io
             from docx import Document
-            doc = Document(file_path)
-            return '\n'.join(p.text for p in doc.paragraphs)
+            with curriculum.file.open('rb') as fh:
+                doc = Document(io.BytesIO(fh.read()))
+            text = '\n'.join(p.text for p in doc.paragraphs)
+            logger.info('CV %s: extracted %d chars from DOCX', curriculum.id, len(text))
+            return text
     except Exception as exc:
         logger.warning('Text extraction failed for CV %s: %s', curriculum.id, exc)
     return ''
@@ -145,7 +151,9 @@ def _ai_extract(text: str) -> dict:
             return {}
 
         raw = service._clean_json_response(raw)
-        return json.loads(raw)
+        result = json.loads(raw)
+        logger.info('CV AI extraction succeeded: keys=%s', list(result.keys()))
+        return result
 
     except Exception as exc:
         logger.warning('CV AI extraction failed: %s', exc)
