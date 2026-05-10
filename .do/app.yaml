@@ -367,6 +367,39 @@ jobs:
     value: ${db.PORT}
     scope: RUN_AND_BUILD_TIME
 
+- name: seed-cv-templates
+  github:
+    repo: lutcha/consultpro
+    branch: main
+    deploy_on_push: true
+  dockerfile_path: docker/Dockerfile
+  run_command: python manage.py loaddata apps/curriculum/fixtures/cv_templates.json
+  kind: POST_DEPLOY
+  instance_size_slug: basic-xs
+  envs:
+  - key: DJANGO_SETTINGS_MODULE
+    value: config.settings.production
+    scope: RUN_AND_BUILD_TIME
+  - key: SECRET_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+  - key: POSTGRES_DB
+    value: ${db.DATABASE}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_USER
+    value: ${db.USERNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_PASSWORD
+    value: ${db.PASSWORD}
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+  - key: POSTGRES_HOST
+    value: ${db.HOSTNAME}
+    scope: RUN_AND_BUILD_TIME
+  - key: POSTGRES_PORT
+    value: ${db.PORT}
+    scope: RUN_AND_BUILD_TIME
+
 databases:
 - name: db
   cluster_name: consultpro-db

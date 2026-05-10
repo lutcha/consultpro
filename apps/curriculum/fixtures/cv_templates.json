@@ -1,0 +1,203 @@
+[
+  {
+    "model": "curriculum.cvtemplate",
+    "pk": 1,
+    "fields": {
+      "name": "World Bank Standard CV",
+      "organization": "world_bank",
+      "organization_name": "World Bank",
+      "description": "Formato padrao do Banco Mundial para consultores em projetos financiados. Inclui secoes obrigatorias de experiencia relevante, educacao e declaracao de disponibilidade.",
+      "required_sections": [
+        {"id": "personal", "name": "Dados Pessoais", "required": true},
+        {"id": "education", "name": "Educacao", "required": true},
+        {"id": "experience", "name": "Experiencia Profissional", "required": true},
+        {"id": "languages", "name": "Idiomas", "required": true},
+        {"id": "certifications", "name": "Certificacoes e Formacoes", "required": false},
+        {"id": "references", "name": "Referencias", "required": false}
+      ],
+      "format_rules": [
+        {"rule": "Maximo 4 paginas"},
+        {"rule": "Fonte Arial ou Times New Roman, tamanho 11"},
+        {"rule": "Experiencia em ordem cronologica inversa"},
+        {"rule": "Incluir percentagem de tempo dedicado a cada projeto"}
+      ],
+      "max_length_pages": 4,
+      "file_template": "",
+      "example_url": "",
+      "is_active": true
+    }
+  },
+  {
+    "model": "curriculum.cvtemplate",
+    "pk": 2,
+    "fields": {
+      "name": "UNDP P11 Form",
+      "organization": "un",
+      "organization_name": "UNDP",
+      "description": "Formulario P11 do PNUD (United Nations Development Programme). Formato estruturado obrigatorio para todas as candidaturas ao PNUD e agencias do sistema ONU.",
+      "required_sections": [
+        {"id": "personal", "name": "Informacoes Pessoais", "required": true},
+        {"id": "education", "name": "Educacao e Qualificacoes", "required": true},
+        {"id": "experience", "name": "Historico Profissional", "required": true},
+        {"id": "languages", "name": "Proficiencia em Linguas", "required": true},
+        {"id": "publications", "name": "Publicacoes e Relatorios", "required": false},
+        {"id": "references", "name": "Referencias (3 minimo)", "required": true}
+      ],
+      "format_rules": [
+        {"rule": "Usar exclusivamente o formulario P11 oficial"},
+        {"rule": "Nao substituir por CV livre"},
+        {"rule": "Assinar e datar o documento"},
+        {"rule": "Indicar nivel de idioma por escala UN: Basico/Bom/Muito Bom/Fluente"}
+      ],
+      "max_length_pages": 6,
+      "file_template": "",
+      "example_url": "",
+      "is_active": true
+    }
+  },
+  {
+    "model": "curriculum.cvtemplate",
+    "pk": 3,
+    "fields": {
+      "name": "UN System Standard CV",
+      "organization": "un",
+      "organization_name": "United Nations",
+      "description": "CV padrao para o sistema das Nacoes Unidas (excluindo PNUD que usa P11). Aplicavel a UNICEF, UNFPA, WFP, FAO, WHO e outras agencias especializadas.",
+      "required_sections": [
+        {"id": "personal", "name": "Dados Pessoais", "required": true},
+        {"id": "summary", "name": "Sumario Profissional", "required": true},
+        {"id": "education", "name": "Educacao", "required": true},
+        {"id": "experience", "name": "Experiencia Profissional", "required": true},
+        {"id": "skills", "name": "Competencias Tecnicas", "required": true},
+        {"id": "languages", "name": "Idiomas", "required": true}
+      ],
+      "format_rules": [
+        {"rule": "Maximo 3 paginas"},
+        {"rule": "Descricao de impacto mensuravel em cada experiencia"},
+        {"rule": "Alinhar competencias com os valores da ONU"},
+        {"rule": "Indicar missoes internacionais e contextos frageis"}
+      ],
+      "max_length_pages": 3,
+      "file_template": "",
+      "example_url": "",
+      "is_active": true
+    }
+  },
+  {
+    "model": "curriculum.cvtemplate",
+    "pk": 4,
+    "fields": {
+      "name": "EU/EC Expert CV",
+      "organization": "eu",
+      "organization_name": "European Union",
+      "description": "Formato Europass adaptado para peritos em projetos financiados pela Comissao Europeia (EuropeAid/INTPA). Obrigatorio para contratos de consultoria EU.",
+      "required_sections": [
+        {"id": "personal", "name": "Informacoes Pessoais", "required": true},
+        {"id": "expertise", "name": "Areas de Especializacao", "required": true},
+        {"id": "education", "name": "Educacao", "required": true},
+        {"id": "experience", "name": "Experiencia Profissional", "required": true},
+        {"id": "languages", "name": "Competencias Linguisticas", "required": true},
+        {"id": "membership", "name": "Memberships Profissionais", "required": false}
+      ],
+      "format_rules": [
+        {"rule": "Seguir modelo Europass"},
+        {"rule": "Maximo 5 paginas"},
+        {"rule": "Indicar valor contratual e percentagem de tempo em cada missao"},
+        {"rule": "Separar experiencia nacional de internacional"},
+        {"rule": "Declaracao de exclusividade assinada"}
+      ],
+      "max_length_pages": 5,
+      "file_template": "",
+      "example_url": "",
+      "is_active": true
+    }
+  },
+  {
+    "model": "curriculum.cvtemplate",
+    "pk": 5,
+    "fields": {
+      "name": "AfDB CV Format",
+      "organization": "afdb",
+      "organization_name": "African Development Bank",
+      "description": "Formato do Banco Africano de Desenvolvimento para consultores em projetos regionais e nacionais em Africa. Enfase em experiencia no continente africano.",
+      "required_sections": [
+        {"id": "personal", "name": "Dados Pessoais", "required": true},
+        {"id": "summary", "name": "Perfil Profissional", "required": true},
+        {"id": "education", "name": "Formacao Academica", "required": true},
+        {"id": "experience", "name": "Experiencia Profissional", "required": true},
+        {"id": "africa_experience", "name": "Experiencia em Africa", "required": true},
+        {"id": "languages", "name": "Idiomas", "required": true},
+        {"id": "certifications", "name": "Certificacoes", "required": false}
+      ],
+      "format_rules": [
+        {"rule": "Maximo 4 paginas"},
+        {"rule": "Destacar experiencia em paises africanos"},
+        {"rule": "Indicar familiaridade com politicas e procedimentos do BAD"},
+        {"rule": "Incluir experiencia em contextos pos-conflito ou frageis se aplicavel"}
+      ],
+      "max_length_pages": 4,
+      "file_template": "",
+      "example_url": "",
+      "is_active": true
+    }
+  },
+  {
+    "model": "curriculum.cvtemplate",
+    "pk": 6,
+    "fields": {
+      "name": "USAID Bio Data Form 1420",
+      "organization": "usaid",
+      "organization_name": "USAID",
+      "description": "Formulario Bio Data 1420 obrigatorio para todas as posicoes de consultores financiados pela USAID. Inclui declaracoes de conformidade e restricoes.",
+      "required_sections": [
+        {"id": "personal", "name": "Dados Pessoais e Contacto", "required": true},
+        {"id": "education", "name": "Educacao (do mais recente)", "required": true},
+        {"id": "experience", "name": "Experiencia de Trabalho", "required": true},
+        {"id": "languages", "name": "Idiomas", "required": true},
+        {"id": "references", "name": "Referencias (3 profissionais)", "required": true},
+        {"id": "certifications", "name": "Formacoes e Certificacoes", "required": false}
+      ],
+      "format_rules": [
+        {"rule": "Usar formulario 1420 oficial da USAID"},
+        {"rule": "Maximo 4 paginas"},
+        {"rule": "Assinar declaracao de conformidade FAR"},
+        {"rule": "Indicar cidadania e estatuto de residente"},
+        {"rule": "Nao usar abreviaturas nao explicadas"}
+      ],
+      "max_length_pages": 4,
+      "file_template": "",
+      "example_url": "",
+      "is_active": true
+    }
+  },
+  {
+    "model": "curriculum.cvtemplate",
+    "pk": 7,
+    "fields": {
+      "name": "GIZ Consultant Profile",
+      "organization": "giz",
+      "organization_name": "GIZ",
+      "description": "Perfil de consultor para projetos da GIZ (Deutsche Gesellschaft fuer Internationale Zusammenarbeit). Formato estruturado para cooperacao tecnica alema.",
+      "required_sections": [
+        {"id": "personal", "name": "Dados Pessoais", "required": true},
+        {"id": "expertise", "name": "Areas de Competencia", "required": true},
+        {"id": "education", "name": "Formacao", "required": true},
+        {"id": "experience", "name": "Experiencia Profissional", "required": true},
+        {"id": "giz_projects", "name": "Experiencia em Projetos GIZ/BMZ", "required": false},
+        {"id": "languages", "name": "Idiomas (incluindo Alemao)", "required": true},
+        {"id": "publications", "name": "Publicacoes Relevantes", "required": false}
+      ],
+      "format_rules": [
+        {"rule": "Maximo 4 paginas"},
+        {"rule": "Indicar nivel de alemao se aplicavel"},
+        {"rule": "Destacar experiencia em cooperacao tecnica"},
+        {"rule": "Incluir resultados mensuraveis por projeto"},
+        {"rule": "Listar financiadores de projetos anteriores"}
+      ],
+      "max_length_pages": 4,
+      "file_template": "",
+      "example_url": "",
+      "is_active": true
+    }
+  }
+]
