@@ -21,6 +21,7 @@ import {
   Trash2,
   RefreshCw,
   Palette,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,18 +31,52 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUserStore } from '@/stores';
 import { useCurriculumStore } from '@/stores/useCurriculumStore';
 import { useScrapingStore } from '@/stores/useScrapingStore';
 import { apiUpdateMe } from '@/lib/api';
 import { toast } from 'sonner';
+import type { CVTemplate } from '@/types';
+
+const ORG_OPTIONS = [
+  { value: 'world_bank', label: 'World Bank' },
+  { value: 'un', label: 'United Nations' },
+  { value: 'eu', label: 'European Union' },
+  { value: 'afdb', label: 'African Development Bank' },
+  { value: 'usaid', label: 'USAID' },
+  { value: 'giz', label: 'GIZ' },
+  { value: 'other', label: 'Other' },
+];
+
+interface TemplateFormState {
+  name: string;
+  organization: string;
+  organization_name: string;
+  description: string;
+  max_length_pages: string;
+}
+
+const BLANK_FORM: TemplateFormState = {
+  name: '', organization: 'world_bank', organization_name: 'World Bank',
+  description: '', max_length_pages: '',
+};
 
 export function Settings() {
   const navigate = useNavigate();
   const { user, setUser } = useUserStore();
-  const { templates, fetchTemplates } = useCurriculumStore();
+  const {
+    templates, isLoadingTemplates,
+    fetchTemplates, createTemplate, updateTemplate, deleteTemplate,
+  } = useCurriculumStore();
   const { sources, fetchSources } = useScrapingStore();
   const [isLoading, setIsLoading] = useState(false);
+
+  const [templateModal, setTemplateModal] = useState<{ open: boolean; editing: CVTemplate | null }>({ open: false, editing: null });
+  const [templateForm, setTemplateForm] = useState<TemplateFormState>(BLANK_FORM);
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateDeleting, setTemplateDeleting] = useState<string | null>(null);
 
   const [profile, setProfile] = useState({
     first_name: user?.name?.split(' ')[0] || '',
@@ -105,6 +140,68 @@ export function Settings() {
   const handleRegenerateApiKey = () => {
     setApiKey(`sk-${Math.random().toString(36).substring(2, 18)}`);
     toast.success('API Key regenerada com sucesso');
+  };
+
+  const openNewTemplate = () => {
+    setTemplateForm(BLANK_FORM);
+    setTemplateModal({ open: true, editing: null });
+  };
+
+  const openEditTemplate = (t: CVTemplate) => {
+    setTemplateForm({
+      name: t.name,
+      organization: t.organization,
+      organization_name: t.organizationName,
+      description: t.description || '',
+      max_length_pages: t.maxLengthPages ? String(t.maxLengthPages) : '',
+    });
+    setTemplateModal({ open: true, editing: t });
+  };
+
+  const handleTemplateSave = async () => {
+    if (!templateForm.name.trim()) { toast.error('Nome obrigatorio'); return; }
+    setTemplateSaving(true);
+    try {
+      const payload = {
+        name: templateForm.name.trim(),
+        organization: templateForm.organization,
+        organization_name: templateForm.organization_name || ORG_OPTIONS.find(o => o.value === templateForm.organization)?.label || templateForm.organization,
+        description: templateForm.description.trim(),
+        max_length_pages: templateForm.max_length_pages ? Number(templateForm.max_length_pages) : null,
+        required_sections: [],
+        format_rules: [],
+        is_active: true,
+      };
+      if (templateModal.editing) {
+        await updateTemplate(templateModal.editing.id, payload);
+        toast.success('Template atualizado');
+      } else {
+        await createTemplate(payload);
+        toast.success('Template criado');
+      }
+      setTemplateModal({ open: false, editing: null });
+    } catch {
+      toast.error('Erro ao guardar template');
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
+  const handleTemplateDelete = async (t: CVTemplate) => {
+    setTemplateDeleting(t.id);
+    try {
+      await deleteTemplate(t.id);
+      toast.success('Template removido');
+    } catch {
+      toast.error('Erro ao remover template');
+    } finally {
+      setTemplateDeleting(null);
+    }
+  };
+
+  const handleOrgChange = (value: string) => {
+    const label = ORG_OPTIONS.find(o => o.value === value)?.label || value;
+    setTemplateForm(f => ({ ...f, organization: value, organization_name: label }));
   };
 
   const isAdmin = user?.role === 'admin';
@@ -206,24 +303,48 @@ export function Settings() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Templates de CV</CardTitle>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" />Novo Template</Button>
+              <Button size="sm" onClick={openNewTemplate}><Plus className="h-4 w-4 mr-1" />Novo Template</Button>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {templates.length === 0 && <p className="text-muted-foreground">Carregando templates...</p>}
-                {templates.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">{t.name}</p>
-                      <p className="text-sm text-muted-foreground">{t.organizationName} • {t.requiredSections?.length || 0} secções</p>
+              {isLoadingTemplates ? (
+                <div className="flex items-center gap-2 py-4 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">A carregar templates...</span>
+                </div>
+              ) : templates.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Nenhum template configurado. Clique em <strong>Novo Template</strong> para adicionar.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {templates.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium">{t.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {t.organizationName}
+                          {t.maxLengthPages && <> • {t.maxLengthPages} pag.</>}
+                          {' '}• {t.requiredSections?.length || 0} secções
+                        </p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEditTemplate(t)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
+                          disabled={templateDeleting === t.id}
+                          onClick={() => handleTemplateDelete(t)}
+                        >
+                          {templateDeleting === t.id
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Trash2 className="h-4 w-4 text-destructive" />}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="icon"><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -300,6 +421,72 @@ export function Settings() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* CV Template Modal */}
+      <Dialog open={templateModal.open} onOpenChange={(v) => { if (!v) setTemplateModal({ open: false, editing: null }); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{templateModal.editing ? 'Editar Template' : 'Novo Template de CV'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Nome do Template *</Label>
+              <Input
+                value={templateForm.name}
+                onChange={(e) => setTemplateForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Ex: World Bank Standard CV"
+              />
+            </div>
+            <div>
+              <Label>Organizacao</Label>
+              <Select value={templateForm.organization} onValueChange={handleOrgChange}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORG_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Nome da Organizacao (exibicao)</Label>
+              <Input
+                value={templateForm.organization_name}
+                onChange={(e) => setTemplateForm(f => ({ ...f, organization_name: e.target.value }))}
+                placeholder="Ex: World Bank / Banco Mundial"
+              />
+            </div>
+            <div>
+              <Label>Descricao</Label>
+              <Textarea
+                value={templateForm.description}
+                onChange={(e) => setTemplateForm(f => ({ ...f, description: e.target.value }))}
+                rows={3}
+                placeholder="Descreva o formato e requisitos do template..."
+              />
+            </div>
+            <div>
+              <Label>Paginas Maximas</Label>
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={templateForm.max_length_pages}
+                onChange={(e) => setTemplateForm(f => ({ ...f, max_length_pages: e.target.value }))}
+                placeholder="Ex: 4"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateModal({ open: false, editing: null })}>Cancelar</Button>
+            <Button onClick={handleTemplateSave} disabled={templateSaving}>
+              {templateSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />A guardar...</> : <><Save className="h-4 w-4 mr-2" />Guardar</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -2,6 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.core.permissions import IsConsultantOrManager
 from .models import (
@@ -160,13 +161,24 @@ class CurriculumViewSet(viewsets.ModelViewSet):
         )
 
 
-class CVTemplateViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = CVTemplate.objects.filter(is_active=True)
+class CVTemplateViewSet(viewsets.ModelViewSet):
     serializer_class = CVTemplateSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['organization']
     search_fields = ['name', 'organization_name']
     ordering = ['organization', 'name']
+
+    def get_queryset(self):
+        return CVTemplate.objects.filter(is_active=True)
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAdminUser()]
+        return [IsAuthenticated()]
+
+    def perform_destroy(self, instance):
+        instance.is_active = False
+        instance.save()
 
     @action(detail=True, methods=['get'])
     def download(self, request, pk=None):

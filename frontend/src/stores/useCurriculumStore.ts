@@ -7,6 +7,9 @@ import {
   apiGetCVSuggestions,
   apiApplyCVSuggestion,
   apiGetCVTemplates,
+  apiCreateCVTemplate,
+  apiUpdateCVTemplate,
+  apiDeleteCVTemplate,
 } from '@/lib/api';
 import type { ApiCurriculum, ApiCVTemplate, ApiCVSuggestion } from '@/lib/api';
 
@@ -76,6 +79,9 @@ interface CurriculumState {
   uploadCV: (file: File) => Promise<Curriculum>;
   analyzeCV: (curriculumId: string) => Promise<void>;
   applySuggestion: (suggestionId: string) => Promise<void>;
+  createTemplate: (data: Partial<ApiCVTemplate>) => Promise<CVTemplate>;
+  updateTemplate: (id: string, data: Partial<ApiCVTemplate>) => Promise<CVTemplate>;
+  deleteTemplate: (id: string) => Promise<void>;
   addCurriculum: (cv: Curriculum) => void;
   clearError: () => void;
 }
@@ -185,6 +191,25 @@ export const useCurriculumStore = create<CurriculumState>((set, get) => ({
     } catch (err) {
       set({ error: (err as Error).message });
     }
+  },
+
+  createTemplate: async (data) => {
+    const raw = await apiCreateCVTemplate(data);
+    const tpl = mapTemplate(raw);
+    set((state) => ({ templates: [...state.templates, tpl] }));
+    return tpl;
+  },
+
+  updateTemplate: async (id, data) => {
+    const raw = await apiUpdateCVTemplate(Number(id), data);
+    const tpl = mapTemplate(raw);
+    set((state) => ({ templates: state.templates.map((t) => t.id === id ? tpl : t) }));
+    return tpl;
+  },
+
+  deleteTemplate: async (id) => {
+    await apiDeleteCVTemplate(Number(id));
+    set((state) => ({ templates: state.templates.filter((t) => t.id !== id) }));
   },
 
   addCurriculum: (cv) => set((state) => ({ curricula: [...state.curricula, cv] })),

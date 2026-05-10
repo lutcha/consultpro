@@ -826,6 +826,18 @@ export async function apiGetCVTemplates(): Promise<PaginatedResponse<ApiCVTempla
   return apiRequest<PaginatedResponse<ApiCVTemplate>>('/curriculum/templates/');
 }
 
+export async function apiCreateCVTemplate(data: Partial<ApiCVTemplate>): Promise<ApiCVTemplate> {
+  return apiRequest<ApiCVTemplate>('/curriculum/templates/', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function apiUpdateCVTemplate(id: number, data: Partial<ApiCVTemplate>): Promise<ApiCVTemplate> {
+  return apiRequest<ApiCVTemplate>(`/curriculum/templates/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function apiDeleteCVTemplate(id: number): Promise<void> {
+  return apiRequest<void>(`/curriculum/templates/${id}/`, { method: 'DELETE' });
+}
+
 export async function apiDownloadCVTemplate(id: number): Promise<Blob> {
   const response = await fetch(`${API_BASE}/curriculum/templates/${id}/download/`, {
     headers: { Authorization: `Bearer ${getToken() || ''}` },
