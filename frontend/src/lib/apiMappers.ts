@@ -38,7 +38,6 @@ import type {
   ApiPipelineItem,
   ApiAlert,
   ApiActivity,
-  ApiDeadlineItem,
   ApiFunnelResponse,
   MeResponse,
 } from './api';

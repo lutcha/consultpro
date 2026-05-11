@@ -286,6 +286,13 @@ export const mockDashboardStats: DashboardStats = {
   proposalsInProgress: 5,
   winRate: 68,
   upcomingDeadlines: 3,
+  opportunitiesByStatus: {},
+  projectsActive: 0,
+  projectsCompleted: 0,
+  projectsOnHold: 0,
+  scrapingNew: 0,
+  scrapingWithAI: 0,
+  deadlineItems: [],
 };
 
 // Mock Pipeline

@@ -2,7 +2,7 @@
 // ALERT BANNER COMPONENT
 // ============================================
 
-import { AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Info, CheckCircle2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Alert } from '@/types';
@@ -14,19 +14,21 @@ interface AlertBannerProps {
 }
 
 export function AlertBanner({ alert, onDismiss, onResolve }: AlertBannerProps) {
-  const icons = {
+  const icons: Record<string, React.ComponentType<{ className?: string }>> = {
     warning: AlertTriangle,
     error: AlertCircle,
     info: Info,
+    success: CheckCircle2,
   };
 
-  const styles = {
+  const styles: Record<string, string> = {
     warning: 'bg-warning/10 border-warning/20 text-warning-foreground',
     error: 'bg-error/10 border-error/20 text-error-foreground',
     info: 'bg-primary/10 border-primary/20 text-primary-foreground',
+    success: 'bg-success/10 border-success/20 text-success-foreground',
   };
 
-  const Icon = icons[alert.type];
+  const Icon = icons[alert.type] || icons.info;
 
   return (
     <div

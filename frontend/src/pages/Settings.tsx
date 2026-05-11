@@ -475,7 +475,7 @@ export function Settings() {
                             <Select
                               value={u.role}
                               onValueChange={(val) => handleRoleChange(u.id, val)}
-                              disabled={u.id === user?.id}
+                              disabled={String(u.id) === user?.id}
                             >
                               <SelectTrigger className="h-8 w-32 text-xs">
                                 <SelectValue />
