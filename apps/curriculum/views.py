@@ -30,6 +30,8 @@ class CurriculumViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'analysis_score']
     ordering = ['-created_at']
     parser_classes = (MultiPartParser, FormParser)
+    # Restrict pk to integers so /templates/ is not matched as a pk
+    lookup_value_regex = r'[0-9]+'
 
     def get_queryset(self):
         return Curriculum.objects.filter(user=self.request.user)
