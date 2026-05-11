@@ -134,6 +134,7 @@ class ProjectPhase(models.Model):
         EXECUTING = 'executing', 'Execução'
         MONITORING = 'monitoring', 'Monitoramento e Controlo'
         CLOSING = 'closing', 'Encerramento'
+        CUSTOM = 'custom', 'Personalizado'
 
     project = models.ForeignKey(
         Project,
@@ -143,6 +144,7 @@ class ProjectPhase(models.Model):
     name = models.CharField(
         max_length=20,
         choices=PhaseName.choices,
+        default=PhaseName.CUSTOM,
     )
     title = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
@@ -160,7 +162,6 @@ class ProjectPhase(models.Model):
 
     class Meta:
         ordering = ['order']
-        unique_together = ['project', 'name']
 
     def __str__(self):
         return f"{self.project.title} - {self.title or self.get_name_display()}"

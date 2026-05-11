@@ -905,6 +905,20 @@ export async function apiGetProjectPhases(projectId: string): Promise<ApiProject
   return apiRequest<ApiProjectPhase[]>(`/projects/phases/?project=${projectId}`);
 }
 
+export async function apiCreateProjectPhase(
+  projectId: string,
+  data: Partial<ApiProjectPhase>
+): Promise<ApiProjectPhase> {
+  return apiRequest<ApiProjectPhase>('/projects/phases/', {
+    method: 'POST',
+    body: JSON.stringify({ project: parseInt(projectId), name: 'custom', ...data }),
+  });
+}
+
+export async function apiDeleteProjectPhase(phaseId: number): Promise<void> {
+  return apiRequest<void>(`/projects/phases/${phaseId}/`, { method: 'DELETE' });
+}
+
 export async function apiUpdateProjectPhase(
   phaseId: number,
   data: Partial<ApiProjectPhase>

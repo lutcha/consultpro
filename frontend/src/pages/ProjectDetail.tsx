@@ -27,16 +27,18 @@ import {
 } from '@/components/ui/select';
 import {
   apiGetProject, apiUpdateProjectStatus, apiUpdateProjectPhase,
+  apiCreateProjectPhase, apiDeleteProjectPhase,
   apiCreateProjectMilestone, apiUpdateProjectMilestone, apiDeleteProjectMilestone,
   apiCreateProjectRisk, apiUpdateProjectRisk, apiDeleteProjectRisk,
   apiCreateProjectDeliverable, apiUpdateProjectDeliverable, apiDeleteProjectDeliverable,
   apiCreateProjectArtifact, apiUpdateProjectArtifact,
   apiAddProjectTeamMember, apiDeleteProjectTeamMember,
+  apiCreateProjectTask, apiUpdateProjectTask, apiDeleteProjectTask,
   apiGetConsultants,
 } from '@/lib/api';
 import type {
   ApiProjectDetail, ApiProjectMilestone, ApiProjectRisk,
-  ApiProjectDeliverable, ApiProjectArtifact, ApiProjectPhase,
+  ApiProjectDeliverable, ApiProjectArtifact, ApiProjectPhase, ApiProjectTask,
 } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -97,6 +99,29 @@ const MEMBER_ROLES = [
   'Junior Consultant', 'Analyst', 'Domain Expert', 'Advisor',
 ];
 
+const PHASE_NAMES = [
+  { value: 'initiating', label: 'Iniciação (PMI)' },
+  { value: 'planning', label: 'Planeamento (PMI)' },
+  { value: 'executing', label: 'Execução (PMI)' },
+  { value: 'monitoring', label: 'Monitoramento e Controlo (PMI)' },
+  { value: 'closing', label: 'Encerramento (PMI)' },
+  { value: 'custom', label: 'Personalizado (Agile / PRINCE2 / outro)' },
+];
+
+const TASK_STATUS = [
+  { value: 'todo', label: 'Por Fazer' },
+  { value: 'in_progress', label: 'Em Curso' },
+  { value: 'review', label: 'Revisão' },
+  { value: 'done', label: 'Concluído' },
+];
+
+const TASK_PRIORITY = [
+  { value: 'low', label: 'Baixa' },
+  { value: 'medium', label: 'Média' },
+  { value: 'high', label: 'Alta' },
+  { value: 'critical', label: 'Crítica' },
+];
+
 function artifactStatusColor(status: string) {
   switch (status) {
     case 'approved': case 'signed': return 'bg-success/10 text-success border-success/20';
@@ -151,6 +176,14 @@ export function ProjectDetail() {
   const [newMember, setNewMember] = useState({ userId: '', role: 'Consultant', allocation: '100' });
   const [consultants, setConsultants] = useState<{ id: number; name: string; email: string }[]>([]);
   const [teamSaving, setTeamSaving] = useState(false);
+
+  // task modal
+  const [taskModal, setTaskModal] = useState<{ open: boolean; item: Partial<ApiProjectTask> | null }>({ open: false, item: null });
+  const [taskSaving, setTaskSaving] = useState(false);
+
+  // phase modal (creation)
+  const [phaseModal, setPhaseModal] = useState<{ open: boolean; item: Partial<ApiProjectPhase> | null }>({ open: false, item: null });
+  const [phaseSaving, setPhaseSaving] = useState(false);
 
   const [modalError, setModalError] = useState('');
 
@@ -371,6 +404,70 @@ export function ProjectDetail() {
     } catch {}
   };
 
+  // ── task CRUD ────────────────────────────────────────────────────────────
+
+  const openTaskModal = (item: Partial<ApiProjectTask> | null = null) => {
+    setModalError('');
+    setTaskModal({ open: true, item: item ?? { title: '', description: '', status: 'todo', priority: 'medium', due_date: '' } });
+  };
+
+  const saveTask = async () => {
+    if (!id || !taskModal.item) return;
+    setTaskSaving(true);
+    setModalError('');
+    try {
+      if (taskModal.item.id) {
+        await apiUpdateProjectTask(taskModal.item.id, taskModal.item);
+      } else {
+        await apiCreateProjectTask(id, taskModal.item);
+      }
+      setTaskModal({ open: false, item: null });
+      reload();
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : 'Erro ao guardar tarefa');
+    } finally {
+      setTaskSaving(false);
+    }
+  };
+
+  const deleteTask = async (taskId: number) => {
+    if (!confirm('Eliminar esta tarefa?')) return;
+    try {
+      await apiDeleteProjectTask(taskId);
+      reload();
+    } catch {}
+  };
+
+  // ── phase creation / deletion ─────────────────────────────────────────────
+
+  const openPhaseModal = () => {
+    setModalError('');
+    setPhaseModal({ open: true, item: { name: 'custom', title: '', description: '', start_date: null, end_date: null } });
+  };
+
+  const savePhase = async () => {
+    if (!id || !phaseModal.item) return;
+    setPhaseSaving(true);
+    setModalError('');
+    try {
+      await apiCreateProjectPhase(id, phaseModal.item);
+      setPhaseModal({ open: false, item: null });
+      reload();
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : 'Erro ao criar fase');
+    } finally {
+      setPhaseSaving(false);
+    }
+  };
+
+  const handleDeletePhase = async (phaseId: number) => {
+    if (!confirm('Eliminar esta fase? Os entregáveis associados ficam sem fase.')) return;
+    try {
+      await apiDeleteProjectPhase(phaseId);
+      reload();
+    } catch {}
+  };
+
   // ── render guards ────────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -526,10 +623,15 @@ export function ProjectDetail() {
         <TabsContent value="phases">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Layers className="h-5 w-5" />
-                Fases do Projeto (PMI)
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="h-5 w-5" />
+                  Fases do Projeto
+                </CardTitle>
+                <Button size="sm" onClick={openPhaseModal}>
+                  <Plus className="h-4 w-4 mr-1" />Nova Fase
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {!project.phases?.length ? (
@@ -573,6 +675,9 @@ export function ProjectDetail() {
                                   )}
                                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0 opacity-50 hover:opacity-100" onClick={() => startEditPhase(phase)}>
                                     <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 opacity-50 hover:opacity-100 text-destructive hover:text-destructive" onClick={() => handleDeletePhase(phase.id)}>
+                                    <Trash2 className="h-3 w-3" />
                                   </Button>
                                 </div>
                               )}
@@ -769,7 +874,12 @@ export function ProjectDetail() {
         <TabsContent value="kanban">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><LayoutGrid className="h-5 w-5" />Quadro de Tarefas</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2"><LayoutGrid className="h-5 w-5" />Quadro de Tarefas</CardTitle>
+                <Button size="sm" onClick={() => openTaskModal()}>
+                  <Plus className="h-4 w-4 mr-1" />Nova Tarefa
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {(() => {
@@ -779,22 +889,39 @@ export function ProjectDetail() {
                   { id: 'review', title: 'Revisão' },
                   { id: 'done', title: 'Concluído' },
                 ];
-                const tasks: KanbanTask[] = [
-                  ...(project.milestones?.map(m => ({
-                    id: `milestone-${m.id}`, title: m.title, description: m.description,
-                    status: m.status === 'completed' ? 'done' : m.status === 'in_progress' ? 'in_progress' : 'todo',
-                    priority: 'medium' as const, dueDate: m.due_date ? new Date(m.due_date).toLocaleDateString('pt-PT') : undefined,
-                  })) || []),
-                  ...(project.deliverables?.map(d => ({
-                    id: `deliverable-${d.id}`, title: d.title, description: d.description,
-                    status: d.status === 'accepted' || d.status === 'approved' ? 'done' : d.status === 'under_review' || d.status === 'submitted' ? 'review' : d.status === 'in_progress' ? 'in_progress' : 'todo',
-                    priority: 'medium' as const, dueDate: d.due_date ? new Date(d.due_date).toLocaleDateString('pt-PT') : undefined,
-                  })) || []),
-                ];
+                const tasks: KanbanTask[] = (project.tasks || []).map(t => ({
+                  id: String(t.id),
+                  title: t.title,
+                  description: t.description,
+                  status: t.status,
+                  priority: t.priority as KanbanTask['priority'],
+                  dueDate: t.due_date ? new Date(t.due_date).toLocaleDateString('pt-PT') : undefined,
+                  assignee: t.assignee?.name,
+                }));
                 return tasks.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">Crie marcos e entregáveis para visualizar aqui.</p>
+                  <div className="text-center py-12 space-y-3">
+                    <LayoutGrid className="h-10 w-10 mx-auto text-muted-foreground/50" />
+                    <p className="text-muted-foreground">Sem tarefas. Crie a primeira tarefa do projeto.</p>
+                    <Button variant="outline" onClick={() => openTaskModal()}>
+                      <Plus className="h-4 w-4 mr-2" />Nova Tarefa
+                    </Button>
+                  </div>
                 ) : (
-                  <KanbanBoard columns={columns} tasks={tasks} onTaskMove={() => {}} onTaskClick={() => {}} />
+                  <KanbanBoard
+                    columns={columns}
+                    tasks={tasks}
+                    onTaskMove={async (taskId, newStatus) => {
+                      const numericId = parseInt(taskId);
+                      if (!isNaN(numericId)) {
+                        await apiUpdateProjectTask(numericId, { status: newStatus });
+                        reload();
+                      }
+                    }}
+                    onTaskClick={(task) => {
+                      const found = project.tasks?.find(t => String(t.id) === task.id);
+                      if (found) openTaskModal(found);
+                    }}
+                  />
                 );
               })()}
             </CardContent>
@@ -1157,6 +1284,124 @@ export function ProjectDetail() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setArtifactModal({ open: false, item: null })}>Cancelar</Button>
             <Button onClick={saveArtifact} disabled={artifactSaving}>{artifactSaving ? 'A guardar...' : 'Guardar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── TASK MODAL ── */}
+      <Dialog open={taskModal.open} onOpenChange={o => !o && setTaskModal({ open: false, item: null })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{taskModal.item?.id ? 'Editar Tarefa' : 'Nova Tarefa'}</DialogTitle>
+          </DialogHeader>
+          {taskModal.item && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Título *</label>
+                <Input value={taskModal.item.title || ''} onChange={e => setTaskModal(s => ({ ...s, item: { ...s.item!, title: e.target.value } }))} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Descrição</label>
+                <Textarea value={taskModal.item.description || ''} onChange={e => setTaskModal(s => ({ ...s, item: { ...s.item!, description: e.target.value } }))} rows={2} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Estado</label>
+                  <Select value={taskModal.item.status || 'todo'} onValueChange={v => setTaskModal(s => ({ ...s, item: { ...s.item!, status: v } }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{TASK_STATUS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Prioridade</label>
+                  <Select value={taskModal.item.priority || 'medium'} onValueChange={v => setTaskModal(s => ({ ...s, item: { ...s.item!, priority: v } }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{TASK_PRIORITY.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Data Limite</label>
+                <Input type="date" value={taskModal.item.due_date || ''} onChange={e => setTaskModal(s => ({ ...s, item: { ...s.item!, due_date: e.target.value } }))} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Responsável</label>
+                <Select
+                  value={taskModal.item.assignee ? String((taskModal.item.assignee as { id: number }).id) : 'none'}
+                  onValueChange={v => {
+                    const member = project?.team?.find(m => String(m.user.id) === v);
+                    setTaskModal(s => ({ ...s, item: { ...s.item!, assignee: member ? { id: member.user.id, name: member.user.name, email: member.user.email } : null } }));
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Sem responsável" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem responsável</SelectItem>
+                    {project?.team?.map(m => (
+                      <SelectItem key={m.user.id} value={String(m.user.id)}>{m.user.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {modalError && <p className="text-sm text-destructive">{modalError}</p>}
+            </div>
+          )}
+          <DialogFooter>
+            {taskModal.item?.id && (
+              <Button variant="ghost" className="text-destructive mr-auto" onClick={() => { setTaskModal({ open: false, item: null }); deleteTask(taskModal.item!.id!); }}>
+                Eliminar
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setTaskModal({ open: false, item: null })}>Cancelar</Button>
+            <Button onClick={saveTask} disabled={taskSaving}>{taskSaving ? 'A guardar...' : 'Guardar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PHASE MODAL ── */}
+      <Dialog open={phaseModal.open} onOpenChange={o => !o && setPhaseModal({ open: false, item: null })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova Fase</DialogTitle>
+          </DialogHeader>
+          {phaseModal.item && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Tipo de Fase</label>
+                <Select value={phaseModal.item.name || 'custom'} onValueChange={v => setPhaseModal(s => ({ ...s, item: { ...s.item!, name: v } }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{PHASE_NAMES.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Nome da Fase *</label>
+                <Input
+                  value={phaseModal.item.title || ''}
+                  onChange={e => setPhaseModal(s => ({ ...s, item: { ...s.item!, title: e.target.value } }))}
+                  placeholder="Ex: Sprint 1, Fase de Diagnóstico, Stage Gate 1..."
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Descrição</label>
+                <Textarea value={phaseModal.item.description || ''} onChange={e => setPhaseModal(s => ({ ...s, item: { ...s.item!, description: e.target.value } }))} rows={2} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Data Início</label>
+                  <Input type="date" value={phaseModal.item.start_date || ''} onChange={e => setPhaseModal(s => ({ ...s, item: { ...s.item!, start_date: e.target.value || null } }))} />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Data Fim</label>
+                  <Input type="date" value={phaseModal.item.end_date || ''} onChange={e => setPhaseModal(s => ({ ...s, item: { ...s.item!, end_date: e.target.value || null } }))} />
+                </div>
+              </div>
+              {modalError && <p className="text-sm text-destructive">{modalError}</p>}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPhaseModal({ open: false, item: null })}>Cancelar</Button>
+            <Button onClick={savePhase} disabled={phaseSaving || !phaseModal.item?.title}>
+              {phaseSaving ? 'A criar...' : 'Criar Fase'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
