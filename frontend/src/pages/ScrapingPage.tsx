@@ -346,86 +346,170 @@ interface OpportunitiesTabProps {
   onIgnore: (id: string) => void;
 }
 
+function dataQualityScore(opp: ScrapedOpportunity): number {
+  let score = 0;
+  if (opp.title && opp.title.length > 10 && opp.title.length < 300) score += 30;
+  if (opp.organization) score += 15;
+  if (opp.country) score += 15;
+  if (opp.sector) score += 15;
+  if (opp.deadline) score += 15;
+  if (opp.value) score += 10;
+  return score;
+}
+
+function DataQualityBadge({ score }: { score: number }) {
+  const cls = score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 45 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
+  const label = score >= 75 ? 'Alta' : score >= 45 ? 'Média' : 'Baixa';
+  return <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${cls}`}>{label} ({score}%)</span>;
+}
+
 function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnore }: OpportunitiesTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [sectorFilter, setSectorFilter] = useState<string>('');
+  const [countryFilter, setCountryFilter] = useState<string>('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [qualityMin, setQualityMin] = useState<number>(0);
+
+  const sectors = Array.from(new Set(opportunities.map((o) => o.sector).filter(Boolean))) as string[];
+  const countries = Array.from(new Set(opportunities.map((o) => o.country).filter(Boolean))) as string[];
 
   const filtered = opportunities.filter((o) => {
-    const matchesSearch = o.title.toLowerCase().includes(search.toLowerCase()) || o.organization.toLowerCase().includes(search.toLowerCase());
+    const title = o.title || '';
+    const matchesSearch = title.toLowerCase().includes(search.toLowerCase()) ||
+      (o.organization || '').toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !statusFilter || o.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesSector = !sectorFilter || o.sector === sectorFilter;
+    const matchesCountry = !countryFilter || o.country === countryFilter;
+    const matchesQuality = qualityMin === 0 || dataQualityScore(o) >= qualityMin;
+    // filter out navigation garbage (very short or very long titles that are not real opportunities)
+    const titleOk = title.length >= 8 && title.length <= 400;
+    return matchesSearch && matchesStatus && matchesSector && matchesCountry && matchesQuality && titleOk;
   });
+
+  const newCount = filtered.filter((o) => o.status === 'new').length;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Pesquisar oportunidades..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+      {/* filters row */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Pesquisar oportunidades..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">Todos Status</option>
+            <option value="new">Novas</option>
+            <option value="imported">Importadas</option>
+            <option value="ignored">Ignoradas</option>
+            <option value="expired">Expiradas</option>
+          </select>
+          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={sectorFilter} onChange={(e) => setSectorFilter(e.target.value)}>
+            <option value="">Todos Sectores</option>
+            {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+            <option value="">Todos Países</option>
+            {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={qualityMin} onChange={(e) => setQualityMin(Number(e.target.value))}>
+            <option value={0}>Toda Qualidade</option>
+            <option value={75}>Alta Qualidade</option>
+            <option value={45}>Média+</option>
+          </select>
         </div>
-        <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">Todos Status</option>
-          <option value="new">Novas</option>
-          <option value="imported">Importadas</option>
-          <option value="ignored">Ignoradas</option>
-          <option value="expired">Expiradas</option>
-        </select>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{filtered.length} oportunidades {newCount > 0 && <span className="text-blue-600 font-medium">· {newCount} novas</span>}</span>
+          {(statusFilter || sectorFilter || countryFilter || qualityMin > 0 || search) && (
+            <button className="text-primary hover:underline" onClick={() => { setStatusFilter(''); setSectorFilter(''); setCountryFilter(''); setQualityMin(0); setSearch(''); }}>
+              Limpar filtros
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {filtered.map((opp) => {
           const isExpanded = expanded === opp.id;
           const isBusy = busyOpportunityIds.has(opp.id);
+          const quality = dataQualityScore(opp);
+          const titleTruncated = opp.title.length > 120 ? opp.title.slice(0, 120) + '…' : opp.title;
           return (
-            <Card key={opp.id} className="hover:shadow-md transition-shadow">
+            <Card key={opp.id} className={`transition-shadow hover:shadow-md ${opp.status === 'imported' ? 'opacity-60' : ''}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-semibold text-sm">{opp.title}</h4>
-                      <OpportunityStatusBadge status={opp.status} />
+                    <div className="flex items-start gap-2 flex-wrap">
+                      <h4 className="font-semibold text-sm leading-snug flex-1">{titleTruncated}</h4>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <OpportunityStatusBadge status={opp.status} />
+                        <DataQualityBadge score={quality} />
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{opp.organization} - {opp.country || '-'}</p>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Prazo: {opp.deadline ? opp.deadline.toLocaleDateString('pt-PT') : '-'}</span>
-                      <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" />{opp.sector || '-'}</span>
-                      {opp.value && <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{opp.value.toLocaleString('pt-PT')} {opp.currency}</span>}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
+                      {opp.organization && <span className="font-medium text-foreground">{opp.organization}</span>}
+                      {opp.country && <span className="flex items-center gap-1">🌍 {opp.country}</span>}
+                      {opp.sector && <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" />{opp.sector}</span>}
+                      {opp.deadline && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Prazo: {opp.deadline.toLocaleDateString('pt-PT')}</span>}
+                      {opp.value && opp.value > 0 && <span className="flex items-center gap-1 text-emerald-700 font-medium"><DollarSign className="h-3 w-3" />{opp.value.toLocaleString('pt-PT')} {opp.currency}</span>}
                     </div>
                   </div>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="outline" className="h-7 text-xs"><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
-                      <a href={opp.externalUrl} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" /></a>
-                    </Button>
-                    {opp.status === 'new' && (
-                      <Button size="sm" className="h-7 text-xs" onClick={() => onImport(opp.id)} disabled={isBusy}>
-                        <ArrowRight className="h-3.5 w-3.5 mr-1" />Importar
+
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <div className="flex gap-1">
+                      {/* Eye → open source URL */}
+                      <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Ver fonte original" asChild>
+                        <a href={opp.externalUrl} target="_blank" rel="noreferrer"><Eye className="h-3.5 w-3.5" /></a>
                       </Button>
+                      {/* Download = external link */}
+                      <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Abrir URL externo" asChild>
+                        <a href={opp.externalUrl} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" /></a>
+                      </Button>
+                    </div>
+                    {opp.status === 'new' && (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs px-2 bg-primary"
+                          onClick={() => onImport(opp.id)}
+                          disabled={isBusy}
+                          title="Importar para Oportunidades e iniciar Go/No-Go"
+                        >
+                          {isBusy ? '…' : <><ArrowRight className="h-3 w-3 mr-1" />Importar</>}
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => onIgnore(opp.id)} disabled={isBusy}>
+                          Ignorar
+                        </Button>
+                      </div>
                     )}
-                    {opp.status === 'new' && (
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onIgnore(opp.id)} disabled={isBusy}>
-                        Ignorar
-                      </Button>
+                    {opp.status === 'imported' && (
+                      <span className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Importada</span>
                     )}
                   </div>
                 </div>
 
-                {isExpanded && opp.aiSummary && (
-                  <div className="mt-3 pt-3 border-t space-y-3">
-                    <div className="p-3 bg-blue-50/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Bot className="h-4 w-4 text-blue-600" />
-                        <span className="text-sm font-medium text-blue-900">Resumo AI</span>
+                {/* Expandable: description + AI summary */}
+                {isExpanded && (
+                  <div className="mt-3 pt-3 border-t space-y-2">
+                    {opp.description && opp.description.length > 30 && (
+                      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">{opp.description}</p>
+                    )}
+                    {opp.aiSummary && (
+                      <div className="p-3 bg-blue-50/50 rounded-lg">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Bot className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-900">Resumo AI</span>
+                        </div>
+                        <p className="text-sm text-blue-800">{opp.aiSummary}</p>
                       </div>
-                      <p className="text-sm text-blue-800">{opp.aiSummary}</p>
-                    </div>
+                    )}
                   </div>
                 )}
 
-                {opp.aiSummary && (
+                {(opp.aiSummary || (opp.description && opp.description.length > 30)) && (
                   <Button variant="ghost" size="sm" className="w-full mt-2 h-7 text-xs" onClick={() => setExpanded(isExpanded ? null : opp.id)}>
-                    {isExpanded ? <><ChevronUp className="h-3 w-3 mr-1" /> Recolher</> : <><ChevronDown className="h-3 w-3 mr-1" /> Ver Resumo AI</>}
+                    {isExpanded ? <><ChevronUp className="h-3 w-3 mr-1" />Recolher</> : <><ChevronDown className="h-3 w-3 mr-1" />Ver Detalhes</>}
                   </Button>
                 )}
               </CardContent>
@@ -433,7 +517,13 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnor
           );
         })}
       </div>
-      {filtered.length === 0 && <div className="text-center py-12 text-muted-foreground">Nenhuma oportunidade encontrada.</div>}
+      {filtered.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground space-y-2">
+          <Layers className="h-10 w-10 mx-auto opacity-30" />
+          <p className="font-medium">Nenhuma oportunidade encontrada</p>
+          <p className="text-xs">Ajusta os filtros ou executa um scraping.</p>
+        </div>
+      )}
     </div>
   );
 }

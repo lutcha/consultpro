@@ -907,9 +907,9 @@ export function ProposalEditor() {
                               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                                 <Calendar className="h-2.5 w-2.5 flex-shrink-0" />
                                 <span>{new Date(ev.occurred_at).toLocaleDateString('pt-PT')}</span>
-                                {ev.created_by && (
+                                {ev.created_by_detail && (
                                   <span className="ml-auto truncate max-w-[70px]">
-                                    {ev.created_by.firstName}
+                                    {ev.created_by_detail.first_name}
                                   </span>
                                 )}
                                 <div className="flex items-center gap-1 ml-auto">

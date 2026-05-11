@@ -107,8 +107,10 @@ export const useCurriculumStore = create<CurriculumState>((set, get) => ({
       set({ curricula, selectedCV: first, isLoading: false });
 
       if (first) {
-        const rawSugs = await apiGetCVSuggestions(Number(first.id));
-        set({ suggestions: rawSugs.map(mapSuggestion) });
+        // fetch suggestions independently — don't let this failure block the UI
+        apiGetCVSuggestions(Number(first.id))
+          .then((rawSugs) => set({ suggestions: rawSugs.map(mapSuggestion) }))
+          .catch(() => { /* suggestions are non-critical */ });
       }
     } catch (err) {
       set({ error: (err as Error).message, isLoading: false });
@@ -116,12 +118,13 @@ export const useCurriculumStore = create<CurriculumState>((set, get) => ({
   },
 
   fetchTemplates: async () => {
-    set({ isLoadingTemplates: true, error: null });
+    set({ isLoadingTemplates: true });
     try {
       const res = await apiGetCVTemplates();
       set({ templates: res.results.map(mapTemplate), isLoadingTemplates: false });
-    } catch (err) {
-      set({ error: (err as Error).message, isLoadingTemplates: false });
+    } catch {
+      // templates are non-critical — don't show a blocking error
+      set({ isLoadingTemplates: false });
     }
   },
 
