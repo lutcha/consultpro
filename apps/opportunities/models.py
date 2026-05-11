@@ -1,6 +1,7 @@
 from django.db import models
 
 from apps.users.models import User
+from .constants import SECTOR_CHOICES, REGION_CHOICES, COUNTRY_CHOICES
 
 
 class Opportunity(models.Model):
@@ -25,9 +26,13 @@ class Opportunity(models.Model):
     title = models.CharField(max_length=500)
     client = models.CharField(max_length=200)
     client_logo = models.ImageField(upload_to='client_logos/', null=True, blank=True)
-    sector = models.CharField(max_length=100)
-    country = models.CharField(max_length=100)
-    region = models.CharField(max_length=100, blank=True)
+    sector = models.CharField(max_length=100, choices=SECTOR_CHOICES)
+    country = models.CharField(max_length=100, choices=COUNTRY_CHOICES)
+    region = models.CharField(max_length=100, blank=True, choices=REGION_CHOICES)
+    eligible_countries = models.JSONField(
+        default=list, blank=True,
+        help_text='Lista de códigos de países elegíveis (ISO 2-letras)',
+    )
     value = models.DecimalField(max_digits=15, decimal_places=2)
     currency = models.CharField(max_length=3, default='USD')
     deadline = models.DateTimeField()
