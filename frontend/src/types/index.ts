@@ -15,6 +15,8 @@ export interface User {
 }
 
 // Opportunity Types
+export type ConsortiumType = 'solo' | 'lead' | 'partner' | 'open';
+
 export interface Opportunity {
   id: string;
   title: string;
@@ -22,6 +24,11 @@ export interface Opportunity {
   clientLogo?: string;
   sector: string;
   country: string;
+  region?: string;
+  eligibleCountries: string[];
+  consortiumType: ConsortiumType;
+  consortiumNotes?: string;
+  partnerProfiles: Record<string, unknown>[];
   value: number;
   currency: string;
   deadline: Date;

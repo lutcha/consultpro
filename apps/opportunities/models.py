@@ -22,6 +22,12 @@ class Opportunity(models.Model):
         ('lcs', 'LCS (Custo mais baixo)'),
         ('fbs', 'FBS (Baseado em Fixo)'),
     ]
+    CONSORTIUM_TYPE_CHOICES = [
+        ('solo', 'Solo'),
+        ('lead', 'Líder de Consórcio'),
+        ('partner', 'Parceiro de Consórcio'),
+        ('open', 'Aberto a Consórcio'),
+    ]
 
     title = models.CharField(max_length=500)
     client = models.CharField(max_length=200)
@@ -46,6 +52,11 @@ class Opportunity(models.Model):
     tor_document = models.FileField(upload_to='tor_documents/', null=True, blank=True)
     reference_number = models.CharField(max_length=100, blank=True)
     url_source = models.URLField(blank=True)
+    consortium_type = models.CharField(
+        max_length=20, choices=CONSORTIUM_TYPE_CHOICES, default='solo'
+    )
+    consortium_notes = models.TextField(blank=True)
+    partner_profiles = models.JSONField(default=list, blank=True)
     ai_summary = models.TextField(blank=True)
     ai_extraction = models.JSONField(default=dict, blank=True)
     ai_analysis_status = models.CharField(

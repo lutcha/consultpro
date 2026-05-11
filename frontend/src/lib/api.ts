@@ -184,6 +184,10 @@ export interface ApiOpportunity {
   sector: string;
   country: string;
   region: string;
+  eligible_countries: string[];
+  consortium_type: string;
+  consortium_notes: string;
+  partner_profiles: Record<string, unknown>[];
   value: string;
   currency: string;
   deadline: string | null;
