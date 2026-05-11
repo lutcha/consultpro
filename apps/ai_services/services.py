@@ -7,6 +7,19 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+_CV_SYSTEM_PROMPT = (
+    "You are an expert CV analyst for international development consultants. "
+    "Extract structured information from the CV text. "
+    "Return ONLY valid JSON (no markdown fences, no preamble) with exactly these keys: "
+    "name (string), email (string), phone (string), location (string), summary (string), "
+    "experience (array of {title, organization, dateRange, description}), "
+    "education (array of {title, organization, dateRange}), "
+    "skills (array of strings), languages (array of strings with proficiency level), "
+    "certifications (array of strings), publications (array of strings). "
+    "Use empty string or empty array for missing fields. Do not wrap in markdown."
+)
+
+
 class BaseAIService:
     """Abstract base class for AI service implementations."""
 
@@ -14,6 +27,10 @@ class BaseAIService:
 
     def analyze_document(self, text: str) -> dict:
         """Analyze a document and return summary, requirements, and risks."""
+        raise NotImplementedError
+
+    def analyze_cv(self, text: str) -> dict:
+        """Extract structured data from CV text. Returns dict with CV fields."""
         raise NotImplementedError
 
     def generate_suggestion(self, section_type: str, content: str, action: str) -> str:
@@ -34,6 +51,27 @@ class BaseAIService:
         if content.endswith('```'):
             content = content[:-3]
         return content.strip()
+
+    def _parse_cv_json(self, raw: str) -> dict:
+        """Parse CV JSON from LLM response — tolerates extra prose around the JSON object."""
+        import re
+        cleaned = self._clean_json_response(raw)
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+        # Try to find first { ... } block in case the model added preamble/postamble
+        match = re.search(r'\{[\s\S]*\}', cleaned)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+        logger.warning(
+            'CV JSON parsing failed. First 300 chars of raw response: %s',
+            raw[:300],
+        )
+        return {}
 
 
 class LLMService(BaseAIService):
@@ -193,6 +231,24 @@ class LLMService(BaseAIService):
             logger.exception('%s improve_text failed: %s', self.PROVIDER_NAME, exc)
             return ''
 
+    def analyze_cv(self, text: str) -> dict:
+        user_msg = f"Extract structured information from this CV:\n\n{text[:8000]}"
+        try:
+            raw = self._chat_completion(
+                messages=[
+                    {'role': 'system', 'content': _CV_SYSTEM_PROMPT},
+                    {'role': 'user', 'content': user_msg},
+                ],
+                temperature=0.1,
+                json_mode=True,
+            )
+            result = self._parse_cv_json(raw)
+            logger.info('%s analyze_cv succeeded: keys=%s', self.PROVIDER_NAME, list(result.keys()))
+            return result
+        except Exception as exc:
+            logger.warning('%s analyze_cv failed: %s', self.PROVIDER_NAME, exc)
+            return {}
+
 
 class AnthropicService(BaseAIService):
     """
@@ -325,6 +381,21 @@ class AnthropicService(BaseAIService):
             logger.exception('Anthropic improve_text failed: %s', exc)
             return ''
 
+    def analyze_cv(self, text: str) -> dict:
+        user_msg = f"Extract structured information from this CV:\n\n{text[:8000]}"
+        try:
+            raw = self._messages_create(
+                system_prompt=_CV_SYSTEM_PROMPT,
+                user_prompt=user_msg,
+                temperature=0.1,
+            )
+            result = self._parse_cv_json(raw)
+            logger.info('Anthropic analyze_cv succeeded: keys=%s', list(result.keys()))
+            return result
+        except Exception as exc:
+            logger.warning('Anthropic analyze_cv failed: %s', exc)
+            return {}
+
 
 # Backwards compatibility: OpenAIService is now an alias for LLMService with OpenAI defaults
 class OpenAIService(LLMService):
@@ -456,6 +527,48 @@ class MockAIService(BaseAIService):
             action,
             f'[MOCK — Text improved ({action})]\n\n{content}',
         )
+
+    def analyze_cv(self, text: str) -> dict:
+        logger.info('MockAIService.analyze_cv called (len=%s)', len(text))
+        return {
+            'name': '[MOCK] Consultant Name',
+            'email': 'consultant@example.com',
+            'phone': '+000 000 000 000',
+            'location': '[MOCK] City, Country',
+            'summary': (
+                '[MOCK] International development consultant with 10+ years of experience '
+                'in project management, monitoring & evaluation, and capacity building across '
+                'Sub-Saharan Africa. Proven track record with multilateral donors.'
+            ),
+            'experience': [
+                {
+                    'title': '[MOCK] Senior Consultant',
+                    'organization': '[MOCK] International NGO',
+                    'dateRange': '2018 – Present',
+                    'description': 'Led M&E frameworks for donor-funded projects.',
+                },
+                {
+                    'title': '[MOCK] Project Manager',
+                    'organization': '[MOCK] Development Agency',
+                    'dateRange': '2014 – 2018',
+                    'description': 'Managed multi-country agricultural programmes.',
+                },
+            ],
+            'education': [
+                {
+                    'title': '[MOCK] MSc International Development',
+                    'organization': '[MOCK] University',
+                    'dateRange': '2012 – 2014',
+                },
+            ],
+            'skills': [
+                '[MOCK] Project Management', '[MOCK] M&E', '[MOCK] Capacity Building',
+                '[MOCK] Stakeholder Engagement', '[MOCK] Report Writing',
+            ],
+            'languages': ['Portuguese (Native)', 'English (Fluent)', 'French (Intermediate)'],
+            'certifications': ['[MOCK] PMP Certification', '[MOCK] PRINCE2'],
+            'publications': [],
+        }
 
 
 class AIServiceFactory:

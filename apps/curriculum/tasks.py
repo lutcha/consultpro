@@ -1,4 +1,3 @@
-import json
 import logging
 
 from celery import shared_task
@@ -113,51 +112,10 @@ def _generate_suggestions(cv, data: dict):
 
 # ── AI extraction ─────────────────────────────────────────────────────────────
 
-_CV_SYSTEM_PROMPT = (
-    "You are an expert CV analyst for international development consultants. "
-    "Extract structured information from the CV text. "
-    "Return valid JSON (no markdown fences) with keys: "
-    "name (string), email (string), phone (string), location (string), summary (string), "
-    "experience (array of {title, organization, dateRange, description}), "
-    "education (array of {title, organization, dateRange}), "
-    "skills (array of strings), languages (array of strings with proficiency level), "
-    "certifications (array of strings), publications (array of strings). "
-    "Use empty string or empty array for missing fields."
-)
-
-
 def _ai_extract(text: str) -> dict:
     from apps.ai_services.services import AIServiceFactory
     service = AIServiceFactory.get_service()
-    user_msg = f"Extract structured information from this CV:\n\n{text[:8000]}"
-
-    try:
-        if hasattr(service, '_chat_completion'):
-            raw = service._chat_completion(
-                messages=[
-                    {'role': 'system', 'content': _CV_SYSTEM_PROMPT},
-                    {'role': 'user', 'content': user_msg},
-                ],
-                temperature=0.1,
-                json_mode=True,
-            )
-        elif hasattr(service, '_messages_create'):
-            raw = service._messages_create(
-                system_prompt=_CV_SYSTEM_PROMPT,
-                user_prompt=user_msg,
-                temperature=0.1,
-            )
-        else:
-            return {}
-
-        raw = service._clean_json_response(raw)
-        result = json.loads(raw)
-        logger.info('CV AI extraction succeeded: keys=%s', list(result.keys()))
-        return result
-
-    except Exception as exc:
-        logger.warning('CV AI extraction failed: %s', exc)
-        return {}
+    return service.analyze_cv(text)
 
 
 # ── Main task ─────────────────────────────────────────────────────────────────
@@ -174,7 +132,18 @@ def analyze_cv_with_ai(curriculum_id):
 
     try:
         text = _extract_text(cv)
-        extracted = _ai_extract(text) if text.strip() else {}
+
+        if not text.strip():
+            cv.status = 'error'
+            cv.save()
+            return {'status': 'error', 'message': 'Could not extract text from file'}
+
+        extracted = _ai_extract(text)
+
+        if not extracted:
+            cv.status = 'error'
+            cv.save()
+            return {'status': 'error', 'message': 'AI extraction returned no data'}
 
         for key in ('skills', 'experience', 'education', 'languages', 'certifications', 'publications'):
             extracted.setdefault(key, [])
