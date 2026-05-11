@@ -1017,7 +1017,7 @@ export async function apiGetProjectArtifacts(projectId: string): Promise<ApiProj
 
 export async function apiCreateProjectArtifact(
   projectId: string,
-  data: Partial<ApiProjectArtifact> & { file?: File }
+  data: Omit<Partial<ApiProjectArtifact>, 'file'> & { file?: File }
 ): Promise<ApiProjectArtifact> {
   const { file, ...rest } = data;
   if (file) {
@@ -1042,7 +1042,7 @@ export async function apiCreateProjectArtifact(
 
 export async function apiUpdateProjectArtifact(
   artifactId: number,
-  data: Partial<ApiProjectArtifact> & { file?: File }
+  data: Omit<Partial<ApiProjectArtifact>, 'file'> & { file?: File }
 ): Promise<ApiProjectArtifact> {
   const { file, ...rest } = data;
   if (file) {

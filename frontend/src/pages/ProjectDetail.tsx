@@ -327,12 +327,10 @@ export function ProjectDetail() {
     setArtifactSaving(true);
     setModalError('');
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { file: _fileStr, ...itemData } = artifactModal.item;
       if (artifactModal.item.id) {
-        await apiUpdateProjectArtifact(artifactModal.item.id, { ...itemData, file: artifactModal.file });
+        await apiUpdateProjectArtifact(artifactModal.item.id, { ...artifactModal.item, file: artifactModal.file });
       } else {
-        await apiCreateProjectArtifact(id, { ...itemData, file: artifactModal.file });
+        await apiCreateProjectArtifact(id, { ...artifactModal.item, file: artifactModal.file });
       }
       setArtifactModal({ open: false, item: null });
       reload();
