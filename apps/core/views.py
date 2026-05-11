@@ -1,12 +1,13 @@
 from django.utils import timezone
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Q, Sum, DecimalField
+from django.db.models.functions import Coalesce
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager
 from apps.opportunities.models import Opportunity
-from apps.proposals.models import Proposal
+from apps.proposals.models import Proposal, Budget, BudgetItem
 from apps.projects.models import Project
 from apps.notifications.models import Notification, ActivityLog
 from apps.scraping.models import ScrapedOpportunity
@@ -168,3 +169,103 @@ class DashboardViewSet(viewsets.ViewSet):
                 'metadata': log.metadata,
             })
         return Response(data)
+
+    @action(detail=False, methods=['get'], url_path='funnel')
+    def funnel(self, request):
+        """
+        Conversion funnel: Opportunities → Proposals → Projects
+        plus financial summary (pipeline value, proposals value,
+        portfolio in execution, personnel costs, estimated margin).
+        """
+        zero = Coalesce(Sum('value', output_field=DecimalField()), 0, output_field=DecimalField())
+
+        # ── Stage counts ──────────────────────────────────────────────────────
+        active_statuses = ['new', 'analyzing', 'go', 'proposal_draft', 'proposal_review']
+        opp_active = Opportunity.objects.filter(status__in=active_statuses)
+        opp_count = opp_active.count()
+
+        submitted_statuses = ['submitted', 'under_evaluation', 'shortlisted',
+                              'clarifications_requested', 'bafo', 'awarded',
+                              'contract_negotiation', 'contract_signed',
+                              'project_initiation', 'won', 'lost']
+        proposals_submitted = Proposal.objects.filter(status__in=submitted_statuses).count()
+        proposals_won       = Proposal.objects.filter(status__in=['won', 'awarded', 'contract_signed']).count()
+        proposals_total     = Proposal.objects.count()
+
+        projects_active    = Project.objects.filter(status=Project.Status.ACTIVE).count()
+        projects_planning  = Project.objects.filter(status=Project.Status.PLANNING).count()
+        projects_total     = Project.objects.count()
+
+        # ── Conversion rates ─────────────────────────────────────────────────
+        opp_to_proposal = round(proposals_submitted / opp_count * 100) if opp_count else 0
+        proposal_to_project = round(projects_total / proposals_total * 100) if proposals_total else 0
+
+        # ── Financial pipeline (opportunities selected / go stage) ───────────
+        pipeline_value = float(
+            opp_active.filter(status__in=['go', 'proposal_draft', 'proposal_review'])
+            .aggregate(total=zero)['total']
+        )
+
+        # ── Proposals value: sum of Budget.total for submitted proposals ──────
+        submitted_budget_qs = Budget.objects.filter(
+            proposal__status__in=submitted_statuses
+        ).aggregate(total=Coalesce(Sum('total', output_field=DecimalField()), 0, output_field=DecimalField()))
+        proposals_value = float(submitted_budget_qs['total'])
+
+        # ── Portfolio in execution: sum of Project.budget_total (active) ─────
+        portfolio_value = float(
+            Project.objects.filter(status=Project.Status.ACTIVE)
+            .aggregate(total=Coalesce(Sum('budget_total', output_field=DecimalField()), 0, output_field=DecimalField()))['total']
+        )
+
+        # ── Personnel costs: BudgetItem category=personnel for active projects ─
+        personnel_costs = float(
+            BudgetItem.objects.filter(
+                category='personnel',
+                budget__proposal__status__in=['won', 'awarded', 'contract_signed', 'project_initiation'],
+            ).aggregate(total=Coalesce(Sum('amount', output_field=DecimalField()), 0, output_field=DecimalField()))['total']
+        )
+
+        estimated_margin = portfolio_value - personnel_costs
+
+        return Response({
+            'funnel': {
+                'opportunities': {'count': opp_count,          'label': 'Oportunidades Ativas'},
+                'proposals':     {'count': proposals_submitted, 'label': 'Propostas Submetidas', 'won': proposals_won},
+                'projects':      {'count': projects_active + projects_planning, 'label': 'Projetos em Carteira', 'active': projects_active},
+            },
+            'conversion': {
+                'opp_to_proposal':   opp_to_proposal,
+                'proposal_to_project': proposal_to_project,
+            },
+            'financial': {
+                'pipeline_value':   pipeline_value,
+                'proposals_value':  proposals_value,
+                'portfolio_value':  portfolio_value,
+                'personnel_costs':  personnel_costs,
+                'estimated_margin': estimated_margin,
+                'currency':         'USD',
+            },
+        })
+
+    @action(detail=False, methods=['post'], url_path='seed')
+    def seed(self, request):
+        """
+        Seed initial data for testing.
+        Only available for superusers.
+        """
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'Apenas superusers podem executar esta ação.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            from django.core.management import call_command
+            call_command('loaddata', 'initial_data.json')
+            return Response({'status': 'ok', 'message': 'Seed data carregado com sucesso.'})
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
