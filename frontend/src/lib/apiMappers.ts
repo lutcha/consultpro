@@ -269,19 +269,26 @@ export function mapApiBudget(budget: ApiBudget | null): Budget | undefined {
 // ============================================
 
 export function mapApiProposal(proposal: ApiProposal): Proposal {
+  const sections = (proposal.sections || []).map(mapApiProposalSection);
+  const completedSections = sections.filter((s) => s.isComplete).length;
+  const computedProgress = sections.length > 0
+    ? Math.round((completedSections / sections.length) * 100)
+    : 0;
+
   return {
     id: String(proposal.id),
     opportunityId: String(proposal.opportunity_id || proposal.opportunity),
     title: proposal.title,
     version: proposal.version,
     status: proposal.status as Proposal['status'],
-    sections: (proposal.sections || []).map(mapApiProposalSection),
+    sections,
     team: (proposal.team || []).map(mapApiTeamMember),
     budget: mapApiBudget(proposal.budget) || { total: 0, currency: 'USD', breakdown: [] },
     qualityScore: proposal.quality_score || undefined,
     proponentLogoUrl: proposal.proponent_logo_url || undefined,
     clientLogoUrl: proposal.client_logo_url || undefined,
     consortiumMembers: proposal.consortium_members || [],
+    progress: computedProgress,
     createdAt: toDate(proposal.created_at),
     updatedAt: toDate(proposal.updated_at),
     submittedAt: proposal.submitted_at
@@ -303,6 +310,7 @@ export function mapApiProposalListItem(
     team: [],
     budget: { total: 0, currency: 'USD', breakdown: [] },
     consortiumMembers: [],
+    progress: proposal.progress ?? 0,
     createdAt: toDate(proposal.created_at),
     updatedAt: toDate(proposal.updated_at),
   };

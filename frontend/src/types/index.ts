@@ -84,6 +84,7 @@ export interface Proposal {
   proponentLogoUrl?: string;
   clientLogoUrl?: string;
   consortiumMembers: string[];
+  progress?: number;
   createdAt: Date;
   updatedAt: Date;
   submittedAt?: Date;

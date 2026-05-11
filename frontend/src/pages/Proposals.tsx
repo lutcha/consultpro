@@ -46,7 +46,10 @@ export function Proposals() {
   }, [fetchProposals]);
 
   const calculateProgress = (proposal: (typeof proposals)[0]) => {
-    if (!proposal.sections || proposal.sections.length === 0) return 0;
+    // Use backend-computed progress when sections aren't loaded (list view)
+    if (!proposal.sections || proposal.sections.length === 0) {
+      return proposal.progress ?? 0;
+    }
     const completed = proposal.sections.filter((s) => s.isComplete).length;
     return Math.round((completed / proposal.sections.length) * 100);
   };
