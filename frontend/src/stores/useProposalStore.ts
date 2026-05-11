@@ -47,7 +47,9 @@ export const useProposalStore = create<ProposalState>((set, _get) => ({
   setProposals: (proposals) => set({ proposals }),
 
   selectProposal: async (id) => {
-    set({ isLoading: true, error: null });
+    // Always clear selectedProposal first so stale data from a previous proposal
+    // is never shown while the new one loads (prevents "always shows One Health" bug)
+    set({ isLoading: true, error: null, selectedProposal: null });
     try {
       const data = await apiGetProposal(id);
       const proposal = mapApiProposal(data);
@@ -126,6 +128,11 @@ export const useProposalStore = create<ProposalState>((set, _get) => ({
       proposals: state.proposals.map((prop) =>
         prop.id === id ? { ...prop, status, updatedAt: new Date() } : prop
       ),
+      // Also update selectedProposal so the editor reflects the new status immediately
+      selectedProposal:
+        state.selectedProposal?.id === id
+          ? { ...state.selectedProposal, status, updatedAt: new Date() }
+          : state.selectedProposal,
     }));
   },
 

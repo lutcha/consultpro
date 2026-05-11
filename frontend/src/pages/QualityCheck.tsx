@@ -2,7 +2,7 @@
 // QUALITY CHECK PAGE
 // ============================================
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -55,9 +55,11 @@ const statusLabels = {
 export function QualityCheck() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { qcState, isRunning, runQC, applySuggestion, ignoreSuggestion, canSubmit } =
+  const { qcState, isRunning, runQC, approveQC, applySuggestion, ignoreSuggestion, canSubmit } =
     useQCStore();
   const { selectedProposal, selectProposal } = useProposalStore();
+  const [isApproving, setIsApproving] = useState(false);
+  const [approveError, setApproveError] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -65,6 +67,22 @@ export function QualityCheck() {
       runQC(id);
     }
   }, [id, selectProposal, runQC]);
+
+  const handleApprove = async () => {
+    setIsApproving(true);
+    setApproveError('');
+    try {
+      const result = await approveQC('QC aprovado. Proposta pronta para submissão.');
+      if (result) {
+        // Navigate back to proposal editor to continue pipeline
+        navigate(`/proposals/${id}`);
+      }
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Erro ao aprovar QC.');
+    } finally {
+      setIsApproving(false);
+    }
+  };
 
   if (isRunning || !qcState) {
     return (
@@ -117,9 +135,9 @@ export function QualityCheck() {
             <Download className="h-4 w-4 mr-2" />
             Exportar Report
           </Button>
-          <Button disabled={!canSubmit()}>
+          <Button disabled={!canSubmit() || isApproving} onClick={handleApprove}>
             <CheckCircle className="h-4 w-4 mr-2" />
-            Aprovar
+            {isApproving ? 'A aprovar...' : 'Aprovar'}
           </Button>
         </div>
       </div>
@@ -320,9 +338,12 @@ export function QualityCheck() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Re-run QC
           </Button>
-          <Button disabled={!canSubmit()}>
+          {approveError && (
+            <span className="text-sm text-destructive">{approveError}</span>
+          )}
+          <Button disabled={!canSubmit() || isApproving} onClick={handleApprove}>
             <CheckCircle className="h-4 w-4 mr-2" />
-            Aprovar para Submissão
+            {isApproving ? 'A aprovar...' : 'Aprovar para Submissão'}
           </Button>
         </div>
       </div>

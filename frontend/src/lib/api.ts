@@ -451,6 +451,184 @@ export async function apiUploadProposalLogo(
   return response.json();
 }
 
+export async function apiAISuggest(
+  proposalId: string,
+  sectionId: string,
+  action: string,
+  currentContent?: string
+): Promise<{ id: number; section: number; action: string; description: string; generated_content: string; applied: boolean }> {
+  return apiRequest(`/proposals/${proposalId}/ai_suggest/`, {
+    method: 'POST',
+    body: JSON.stringify({
+      section_id: parseInt(sectionId),
+      action,
+      current_content: currentContent || '',
+    }),
+  });
+}
+
+export interface ApiTransitionResponse {
+  status: string;
+  proposal_id: number;
+  proposal_url: string;
+  project_id?: number;
+  project_url?: string;
+}
+
+export async function apiTransitionProposalStatus(
+  proposalId: string,
+  newStatus: string,
+  note?: string
+): Promise<ApiTransitionResponse> {
+  return apiRequest<ApiTransitionResponse>(`/proposals/${proposalId}/transition_status/`, {
+    method: 'POST',
+    body: JSON.stringify({ status: newStatus, note: note || '' }),
+  });
+}
+
+export async function apiSubmitProposal(
+  proposalId: string,
+  note?: string
+): Promise<{ status: string; submitted_at: string }> {
+  return apiRequest(`/proposals/${proposalId}/submit/`, {
+    method: 'POST',
+    body: JSON.stringify({ note: note || 'Proposta submetida.' }),
+  });
+}
+
+export async function apiApproveProposalForSubmission(
+  proposalId: string,
+  note?: string
+): Promise<ApiTransitionResponse> {
+  return apiRequest<ApiTransitionResponse>(`/proposals/${proposalId}/approve_for_submission/`, {
+    method: 'POST',
+    body: JSON.stringify({ note: note || 'QC aprovado.' }),
+  });
+}
+
+export interface ApiProposalEvent {
+  id: number;
+  proposal: number;
+  event_type: string;
+  event_type_display: string;
+  artifact_type: string;
+  title: string;
+  notes: string;
+  occurred_at: string;
+  external_url: string;
+  attachment: string | null;
+  attachment_url: string | null;
+  created_by: number | null;
+  created_by_detail: { id: number; email: string; first_name: string; last_name: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function apiGetProposalEvents(proposalId: string): Promise<ApiProposalEvent[]> {
+  return apiRequest<ApiProposalEvent[]>(`/proposals/${proposalId}/events/`);
+}
+
+export async function apiCreateProposalEvent(
+  proposalId: string,
+  data: {
+    event_type: string;
+    artifact_type?: string;
+    title: string;
+    notes?: string;
+    occurred_at?: string;
+    external_url?: string;
+    attachment?: File;
+  }
+): Promise<ApiProposalEvent> {
+  const token = localStorage.getItem('access_token');
+  const formData = new FormData();
+  formData.append('event_type', data.event_type);
+  if (data.artifact_type) formData.append('artifact_type', data.artifact_type);
+  formData.append('title', data.title);
+  if (data.notes) formData.append('notes', data.notes);
+  if (data.occurred_at) formData.append('occurred_at', data.occurred_at);
+  if (data.external_url) formData.append('external_url', data.external_url);
+  if (data.attachment) formData.append('attachment', data.attachment);
+
+  const response = await fetch(`/api/proposals/${proposalId}/events/`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail || 'Erro ao criar evento');
+  }
+  return response.json() as Promise<ApiProposalEvent>;
+}
+
+export interface ApiQualityCheck {
+  id: number;
+  proposal: number;
+  overall_score: number;
+  status: string;
+  can_submit: boolean;
+  executed_by: number | null;
+  executed_at: string | null;
+  created_at: string;
+  categories: Array<{
+    id: number;
+    category: string;
+    score: number;
+    status: string;
+    items: Array<{ id: number; description: string; status: string; section: string }>;
+  }>;
+  suggestions: Array<{
+    id: number;
+    text: string;
+    action: string;
+    target_section: string;
+    applied: boolean;
+    ignored: boolean;
+  }>;
+  checks: Record<string, {
+    score: number;
+    status: string;
+    items: Array<{ id: number; description: string; status: string; section: string }>;
+  }>;
+}
+
+export async function apiGetQualityChecks(proposalId: string): Promise<PaginatedResponse<ApiQualityCheck>> {
+  return apiRequest<PaginatedResponse<ApiQualityCheck>>(`/quality-checks/?proposal=${proposalId}`);
+}
+
+export async function apiCreateQualityCheck(proposalId: string): Promise<ApiQualityCheck> {
+  return apiRequest<ApiQualityCheck>('/quality-checks/', {
+    method: 'POST',
+    body: JSON.stringify({ proposal: parseInt(proposalId) }),
+  });
+}
+
+export async function apiRunQualityCheck(
+  qcId: number,
+  categories: Array<{
+    category: string;
+    score: number;
+    status: string;
+    items: Array<{ description: string; status: string; section?: string }>;
+  }>
+): Promise<ApiQualityCheck> {
+  return apiRequest<ApiQualityCheck>(`/quality-checks/${qcId}/run/`, {
+    method: 'POST',
+    body: JSON.stringify({ categories }),
+  });
+}
+
+export async function apiApproveQualityCheck(
+  qcId: number,
+  note?: string
+): Promise<ApiQualityCheck & { proposal_id: number }> {
+  return apiRequest<ApiQualityCheck & { proposal_id: number }>(`/quality-checks/${qcId}/approve/`, {
+    method: 'POST',
+    body: JSON.stringify({ note: note || 'QC aprovado. Proposta pronta para submissão.' }),
+  });
+}
+
 // ============================================
 // DASHBOARD
 // ============================================
@@ -586,6 +764,7 @@ export interface ApiProjectPhase {
   id: number;
   name: string;
   name_display: string;
+  title: string;
   description: string;
   start_date: string | null;
   end_date: string | null;
@@ -596,36 +775,92 @@ export interface ApiProjectPhase {
   updated_at: string;
 }
 
+export interface ApiProjectMilestone {
+  id: number;
+  project: number;
+  title: string;
+  description: string;
+  due_date: string;
+  completed_date: string | null;
+  status: string;
+  deliverables: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiProjectRisk {
+  id: number;
+  project: number;
+  title: string;
+  description: string;
+  severity: string;
+  status: string;
+  mitigation_plan: string;
+  owner: { id: number; name: string; email: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiProjectDeliverable {
+  id: number;
+  project: number;
+  phase: number | null;
+  phase_name: string | null;
+  title: string;
+  description: string;
+  due_date: string | null;
+  submitted_date: string | null;
+  status: string;
+  status_display: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiProjectArtifact {
+  id: number;
+  project: number;
+  phase: number | null;
+  artifact_type: string;
+  artifact_type_display: string;
+  title: string;
+  status: string;
+  status_display: string;
+  file: string | null;
+  file_url: string | null;
+  external_url: string;
+  notes: string;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiProjectTask {
+  id: number;
+  project: number;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  due_date: string | null;
+  assignee: { id: number; name: string; email: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiProjectDetail extends ApiProject {
   team: Array<{
     id: number;
     user: { id: number; email: string; first_name: string; last_name: string; name: string; role: string };
     role: string;
     allocation_percentage: number;
+    start_date: string | null;
+    end_date: string | null;
   }>;
-  milestones: Array<{
-    id: number;
-    title: string;
-    description: string;
-    due_date: string;
-    completed_date: string | null;
-    status: string;
-  }>;
-  risks: Array<{
-    id: number;
-    title: string;
-    description: string;
-    severity: string;
-    status: string;
-    mitigation_plan: string;
-  }>;
-  deliverables: Array<{
-    id: number;
-    title: string;
-    description: string;
-    due_date: string | null;
-    status: string;
-  }>;
+  milestones: ApiProjectMilestone[];
+  tasks: ApiProjectTask[];
+  risks: ApiProjectRisk[];
+  deliverables: ApiProjectDeliverable[];
+  artifacts: ApiProjectArtifact[];
   phases: ApiProjectPhase[];
 }
 
@@ -678,6 +913,179 @@ export async function apiUpdateProjectPhase(
     method: 'PATCH',
     body: JSON.stringify(data),
   });
+}
+
+export async function apiUpdateProject(
+  id: string,
+  data: Partial<ApiProject>
+): Promise<ApiProject> {
+  return apiRequest<ApiProject>(`/projects/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiAddProjectTeamMember(
+  projectId: string,
+  data: { user: number; role: string; allocation_percentage?: number; start_date?: string; end_date?: string }
+): Promise<{ id: number; user: { id: number; email: string; first_name: string; last_name: string; name: string; role: string }; role: string; allocation_percentage: number; start_date: string | null; end_date: string | null }> {
+  return apiRequest(`/projects/team-members/`, {
+    method: 'POST',
+    body: JSON.stringify({ project: parseInt(projectId), ...data }),
+  });
+}
+
+export async function apiDeleteProjectTeamMember(memberId: number): Promise<void> {
+  return apiRequest<void>(`/projects/team-members/${memberId}/`, { method: 'DELETE' });
+}
+
+export async function apiCreateProjectMilestone(
+  projectId: string,
+  data: Partial<ApiProjectMilestone>
+): Promise<ApiProjectMilestone> {
+  return apiRequest<ApiProjectMilestone>('/projects/milestones/', {
+    method: 'POST',
+    body: JSON.stringify({ project: parseInt(projectId), ...data }),
+  });
+}
+
+export async function apiUpdateProjectMilestone(
+  milestoneId: number,
+  data: Partial<ApiProjectMilestone>
+): Promise<ApiProjectMilestone> {
+  return apiRequest<ApiProjectMilestone>(`/projects/milestones/${milestoneId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiDeleteProjectMilestone(milestoneId: number): Promise<void> {
+  return apiRequest<void>(`/projects/milestones/${milestoneId}/`, { method: 'DELETE' });
+}
+
+export async function apiCreateProjectRisk(
+  projectId: string,
+  data: Partial<ApiProjectRisk>
+): Promise<ApiProjectRisk> {
+  return apiRequest<ApiProjectRisk>('/projects/risks/', {
+    method: 'POST',
+    body: JSON.stringify({ project: parseInt(projectId), ...data }),
+  });
+}
+
+export async function apiUpdateProjectRisk(
+  riskId: number,
+  data: Partial<ApiProjectRisk>
+): Promise<ApiProjectRisk> {
+  return apiRequest<ApiProjectRisk>(`/projects/risks/${riskId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiDeleteProjectRisk(riskId: number): Promise<void> {
+  return apiRequest<void>(`/projects/risks/${riskId}/`, { method: 'DELETE' });
+}
+
+export async function apiCreateProjectDeliverable(
+  projectId: string,
+  data: Partial<ApiProjectDeliverable>
+): Promise<ApiProjectDeliverable> {
+  return apiRequest<ApiProjectDeliverable>('/projects/deliverables/', {
+    method: 'POST',
+    body: JSON.stringify({ project: parseInt(projectId), ...data }),
+  });
+}
+
+export async function apiUpdateProjectDeliverable(
+  deliverableId: number,
+  data: Partial<ApiProjectDeliverable>
+): Promise<ApiProjectDeliverable> {
+  return apiRequest<ApiProjectDeliverable>(`/projects/deliverables/${deliverableId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiDeleteProjectDeliverable(deliverableId: number): Promise<void> {
+  return apiRequest<void>(`/projects/deliverables/${deliverableId}/`, { method: 'DELETE' });
+}
+
+export async function apiGetProjectArtifacts(projectId: string): Promise<ApiProjectArtifact[]> {
+  return apiRequest<ApiProjectArtifact[]>(`/projects/artifacts/?project=${projectId}`);
+}
+
+export async function apiCreateProjectArtifact(
+  projectId: string,
+  data: Partial<ApiProjectArtifact> & { file?: File }
+): Promise<ApiProjectArtifact> {
+  const { file, ...rest } = data;
+  if (file) {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    formData.append('project', projectId);
+    Object.entries(rest).forEach(([k, v]) => { if (v != null) formData.append(k, String(v)); });
+    formData.append('file', file);
+    const res = await fetch('/api/projects/artifacts/', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e as { detail?: string }).detail || 'Erro ao criar artefacto'); }
+    return res.json() as Promise<ApiProjectArtifact>;
+  }
+  return apiRequest<ApiProjectArtifact>('/projects/artifacts/', {
+    method: 'POST',
+    body: JSON.stringify({ project: parseInt(projectId), ...rest }),
+  });
+}
+
+export async function apiUpdateProjectArtifact(
+  artifactId: number,
+  data: Partial<ApiProjectArtifact> & { file?: File }
+): Promise<ApiProjectArtifact> {
+  const { file, ...rest } = data;
+  if (file) {
+    const token = localStorage.getItem('access_token');
+    const formData = new FormData();
+    Object.entries(rest).forEach(([k, v]) => { if (v != null) formData.append(k, String(v)); });
+    formData.append('file', file);
+    const res = await fetch(`/api/projects/artifacts/${artifactId}/`, {
+      method: 'PATCH',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e as { detail?: string }).detail || 'Erro ao atualizar artefacto'); }
+    return res.json() as Promise<ApiProjectArtifact>;
+  }
+  return apiRequest<ApiProjectArtifact>(`/projects/artifacts/${artifactId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(rest),
+  });
+}
+
+export async function apiCreateProjectTask(
+  projectId: string,
+  data: Partial<ApiProjectTask>
+): Promise<ApiProjectTask> {
+  return apiRequest<ApiProjectTask>('/projects/tasks/', {
+    method: 'POST',
+    body: JSON.stringify({ project: parseInt(projectId), ...data }),
+  });
+}
+
+export async function apiUpdateProjectTask(
+  taskId: number,
+  data: Partial<ApiProjectTask>
+): Promise<ApiProjectTask> {
+  return apiRequest<ApiProjectTask>(`/projects/tasks/${taskId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiDeleteProjectTask(taskId: number): Promise<void> {
+  return apiRequest<void>(`/projects/tasks/${taskId}/`, { method: 'DELETE' });
 }
 
 // ============================================

@@ -9,6 +9,7 @@ import type {
   Risk,
   Proposal,
   ProposalSection,
+  ProposalEvent,
   TeamMember,
   Budget,
   BudgetItem,
@@ -29,6 +30,7 @@ import type {
   ApiProposal,
   ApiProposalListItem,
   ApiProposalSection,
+  ApiProposalEvent,
   ApiTeamMember,
   ApiBudget,
   ApiBudgetItem,
@@ -198,6 +200,33 @@ export function mapApiProposalSection(
     isComplete: section.is_complete,
     comments: (section.comments || []).map(mapApiComment),
     aiSuggestions: (section.ai_suggestions || []).map(mapApiAISuggestion),
+  };
+}
+
+// ============================================
+// PROPOSAL EVENT
+// ============================================
+
+export function mapApiProposalEvent(event: ApiProposalEvent): ProposalEvent {
+  return {
+    id: String(event.id),
+    eventType: event.event_type,
+    eventTypeDisplay: event.event_type_display,
+    artifactType: event.artifact_type,
+    title: event.title,
+    notes: event.notes,
+    occurredAt: toDate(event.occurred_at),
+    externalUrl: event.external_url,
+    attachmentUrl: event.attachment_url || undefined,
+    createdBy: event.created_by_detail
+      ? {
+          id: String(event.created_by_detail.id),
+          email: event.created_by_detail.email,
+          firstName: event.created_by_detail.first_name,
+          lastName: event.created_by_detail.last_name,
+        }
+      : undefined,
+    createdAt: toDate(event.created_at),
   };
 }
 

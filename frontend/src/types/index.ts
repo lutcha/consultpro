@@ -89,13 +89,23 @@ export interface Proposal {
   submittedAt?: Date;
 }
 
-export type ProposalStatus = 
-  | 'draft' 
-  | 'in_review' 
-  | 'qc_check' 
-  | 'approved' 
-  | 'submitted' 
-  | 'won' 
+export type ProposalStatus =
+  | 'draft'
+  | 'in_review'
+  | 'qc_check'
+  | 'ready_for_submission'
+  | 'approved'
+  | 'submitted'
+  | 'under_evaluation'
+  | 'rejected'
+  | 'shortlisted'
+  | 'clarifications_requested'
+  | 'bafo'
+  | 'awarded'
+  | 'contract_negotiation'
+  | 'contract_signed'
+  | 'project_initiation'
+  | 'won'
   | 'lost';
 
 export interface ProposalSection {
@@ -109,14 +119,15 @@ export interface ProposalSection {
   aiSuggestions?: AISuggestion[];
 }
 
-export type SectionType = 
-  | 'cover' 
-  | 'executive_summary' 
-  | 'methodology' 
-  | 'team' 
-  | 'workplan' 
-  | 'budget' 
-  | 'annexes';
+export type SectionType =
+  | 'cover'
+  | 'executive_summary'
+  | 'methodology'
+  | 'team'
+  | 'workplan'
+  | 'budget'
+  | 'annexes'
+  | 'custom';
 
 export interface TeamMember {
   userId: string;
@@ -150,6 +161,26 @@ export interface AISuggestion {
   type: 'expand' | 'summarize' | 'tone' | 'translate';
   description: string;
   applied: boolean;
+}
+
+// Proposal Event Types
+export interface ProposalEvent {
+  id: string;
+  eventType: string;
+  eventTypeDisplay: string;
+  artifactType: string;
+  title: string;
+  notes: string;
+  occurredAt: Date;
+  externalUrl: string;
+  attachmentUrl?: string;
+  createdBy?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  };
+  createdAt: Date;
 }
 
 // Quality Check Types
