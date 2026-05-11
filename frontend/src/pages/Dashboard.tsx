@@ -26,6 +26,7 @@ import { KPICard } from '@/components/dashboard/KPICard';
 import { ProposalTable } from '@/components/dashboard/ProposalTable';
 import { AlertBanner } from '@/components/dashboard/AlertBanner';
 import { ActivityTimeline } from '@/components/dashboard/ActivityTimeline';
+import { ReportModal } from '@/components/dashboard/ReportModal';
 import { useUserStore, useOpportunityStore } from '@/stores';
 import {
   apiGetDashboardStats,
@@ -56,6 +57,7 @@ export function Dashboard() {
   const [funnel, setFunnel] = useState<FunnelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     fetchOpportunities();
@@ -177,6 +179,13 @@ export function Dashboard() {
           >
             <Calendar className="h-4 w-4 mr-2" />
             Ver Calendario
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setReportOpen(true)}
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Relatório
           </Button>
           <Button onClick={() => navigate('/opportunities')}>
             <Plus className="h-4 w-4 mr-2" />
@@ -507,6 +516,15 @@ export function Dashboard() {
           </Card>
         </div>
       </div>
+
+      <ReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        stats={stats}
+        pipeline={pipeline}
+        funnel={funnel}
+        user={user}
+      />
     </div>
   );
 }
