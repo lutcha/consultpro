@@ -194,6 +194,42 @@ export interface DashboardStats {
   proposalsInProgress: number;
   winRate: number;
   upcomingDeadlines: number;
+  opportunitiesByStatus: Record<string, number>;
+  projectsActive: number;
+  projectsCompleted: number;
+  projectsOnHold: number;
+  scrapingNew: number;
+  scrapingWithAI: number;
+  deadlineItems: DeadlineItem[];
+}
+
+export interface FunnelData {
+  funnel: {
+    opportunities: { count: number; label: string };
+    proposals: { count: number; label: string; won: number };
+    projects: { count: number; label: string; active: number };
+  };
+  conversion: {
+    oppToProposal: number;
+    proposalToProject: number;
+  };
+  financial: {
+    pipelineValue: number;
+    proposalsValue: number;
+    portfolioValue: number;
+    personnelCosts: number;
+    estimatedMargin: number;
+    currency: string;
+  };
+}
+
+export interface DeadlineItem {
+  id: number;
+  title: string;
+  client: string;
+  deadline: Date;
+  status: string;
+  daysLeft: number;
 }
 
 export interface PipelineItem {
@@ -201,20 +237,22 @@ export interface PipelineItem {
   title: string;
   client: string;
   deadline: Date;
-  status: ProposalStatus;
+  status: string;
   value: number;
   progress: number;
 }
 
 export interface Alert {
   id: string;
-  type: 'warning' | 'error' | 'info';
+  type: 'warning' | 'error' | 'info' | 'success';
   message: string;
   action?: {
     label: string;
     href: string;
   };
 }
+
+export type AlertType = Alert['type'];
 
 // Activity Types
 export interface Activity {

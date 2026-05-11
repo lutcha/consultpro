@@ -460,10 +460,26 @@ export interface ApiDashboardStats {
   proposals_in_progress: number;
   win_rate: number;
   upcoming_deadlines: number;
+  opportunities_by_status: Record<string, number>;
+  projects_active: number;
+  projects_completed: number;
+  projects_on_hold: number;
+  scraping_new: number;
+  scraping_with_ai: number;
+  deadline_items: ApiDeadlineItem[];
+}
+
+export interface ApiDeadlineItem {
+  id: number;
+  title: string;
+  client: string;
+  deadline: string;
+  status: string;
+  days_left: number;
 }
 
 export interface ApiPipelineItem {
-  id: number;
+  id: string;
   title: string;
   client: string;
   deadline: string | null;
@@ -505,6 +521,30 @@ export async function apiGetDashboardAlerts(): Promise<ApiAlert[]> {
 
 export async function apiGetDashboardActivity(): Promise<ApiActivity[]> {
   return apiRequest<ApiActivity[]>('/dashboard/activity/');
+}
+
+export interface ApiFunnelResponse {
+  funnel: {
+    opportunities: { count: number; label: string };
+    proposals: { count: number; label: string; won: number };
+    projects: { count: number; label: string; active: number };
+  };
+  conversion: {
+    opp_to_proposal: number;
+    proposal_to_project: number;
+  };
+  financial: {
+    pipeline_value: number;
+    proposals_value: number;
+    portfolio_value: number;
+    personnel_costs: number;
+    estimated_margin: number;
+    currency: string;
+  };
+}
+
+export async function apiGetDashboardFunnel(): Promise<ApiFunnelResponse> {
+  return apiRequest<ApiFunnelResponse>('/dashboard/funnel/');
 }
 
 // ============================================

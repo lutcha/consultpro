@@ -18,6 +18,7 @@ import type {
   PipelineItem,
   Alert,
   Activity,
+  FunnelData,
 } from '@/types';
 import type {
   ApiUser,
@@ -37,6 +38,8 @@ import type {
   ApiPipelineItem,
   ApiAlert,
   ApiActivity,
+  ApiDeadlineItem,
+  ApiFunnelResponse,
   MeResponse,
 } from './api';
 
@@ -287,6 +290,20 @@ export function mapApiDashboardStats(stats: ApiDashboardStats): DashboardStats {
     proposalsInProgress: stats.proposals_in_progress,
     winRate: stats.win_rate,
     upcomingDeadlines: stats.upcoming_deadlines,
+    opportunitiesByStatus: stats.opportunities_by_status || {},
+    projectsActive: stats.projects_active,
+    projectsCompleted: stats.projects_completed,
+    projectsOnHold: stats.projects_on_hold,
+    scrapingNew: stats.scraping_new,
+    scrapingWithAI: stats.scraping_with_ai,
+    deadlineItems: (stats.deadline_items || []).map((item) => ({
+      id: item.id,
+      title: item.title,
+      client: item.client,
+      deadline: toDate(item.deadline),
+      status: item.status,
+      daysLeft: item.days_left,
+    })),
   };
 }
 
@@ -296,7 +313,7 @@ export function mapApiPipelineItem(item: ApiPipelineItem): PipelineItem {
     title: item.title,
     client: item.client,
     deadline: toDate(item.deadline),
-    status: item.status as PipelineItem['status'],
+    status: item.status,
     value: item.value,
     progress: item.progress,
   };
@@ -308,6 +325,28 @@ export function mapApiAlert(alert: ApiAlert): Alert {
     type: alert.type as Alert['type'],
     message: alert.message,
     action: alert.action,
+  };
+}
+
+export function mapApiFunnel(data: ApiFunnelResponse): FunnelData {
+  return {
+    funnel: {
+      opportunities: data.funnel.opportunities,
+      proposals: data.funnel.proposals,
+      projects: data.funnel.projects,
+    },
+    conversion: {
+      oppToProposal: data.conversion.opp_to_proposal,
+      proposalToProject: data.conversion.proposal_to_project,
+    },
+    financial: {
+      pipelineValue: data.financial.pipeline_value,
+      proposalsValue: data.financial.proposals_value,
+      portfolioValue: data.financial.portfolio_value,
+      personnelCosts: data.financial.personnel_costs,
+      estimatedMargin: data.financial.estimated_margin,
+      currency: data.financial.currency,
+    },
   };
 }
 

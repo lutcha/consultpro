@@ -16,6 +16,8 @@ import {
   Target,
   DollarSign,
   AlertTriangle,
+  ChevronRight,
+  TrendingDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,15 +32,17 @@ import {
   apiGetDashboardPipeline,
   apiGetDashboardAlerts,
   apiGetDashboardActivity,
+  apiGetDashboardFunnel,
 } from '@/lib/api';
 import {
   mapApiDashboardStats,
   mapApiPipelineItem,
   mapApiAlert,
   mapApiActivity,
+  mapApiFunnel,
 } from '@/lib/apiMappers';
 import { formatCurrency } from '@/lib/utils';
-import type { DashboardStats, PipelineItem, Alert, Activity } from '@/types';
+import type { DashboardStats, PipelineItem, Alert, Activity, FunnelData } from '@/types';
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -49,6 +53,7 @@ export function Dashboard() {
   const [pipeline, setPipeline] = useState<PipelineItem[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [funnel, setFunnel] = useState<FunnelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,17 +64,19 @@ export function Dashboard() {
       setIsLoading(true);
       setError(null);
       try {
-        const [statsData, pipelineData, alertsData, activityData] =
+        const [statsData, pipelineData, alertsData, activityData, funnelData] =
           await Promise.all([
             apiGetDashboardStats(),
             apiGetDashboardPipeline(),
             apiGetDashboardAlerts(),
             apiGetDashboardActivity(),
+            apiGetDashboardFunnel(),
           ]);
         setStats(mapApiDashboardStats(statsData));
         setPipeline(pipelineData.map(mapApiPipelineItem));
         setAlerts(alertsData.map(mapApiAlert));
         setActivities(activityData.map(mapApiActivity));
+        setFunnel(mapApiFunnel(funnelData));
       } catch (error) {
         console.error('Failed to load dashboard:', error);
         setError('Não foi possível carregar o dashboard. Tente novamente.');
@@ -332,6 +339,113 @@ export function Dashboard() {
             </CardContent>
           </Card>
         )}
+
+      {/* Conversion Funnel + Financial */}
+      {funnel && (
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Funnel stages */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Funil de Conversão</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                {/* Stage 1 */}
+                <div className="flex-1 text-center p-3 rounded-lg bg-primary/10">
+                  <p className="text-2xl font-bold text-primary">
+                    {funnel.funnel.opportunities.count}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Oportunidades Ativas
+                  </p>
+                </div>
+                {/* Arrow + rate */}
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {funnel.conversion.oppToProposal}%
+                  </span>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </div>
+                {/* Stage 2 */}
+                <div className="flex-1 text-center p-3 rounded-lg bg-warning/10">
+                  <p className="text-2xl font-bold text-warning">
+                    {funnel.funnel.proposals.count}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Propostas Submetidas
+                  </p>
+                  {funnel.funnel.proposals.won > 0 && (
+                    <p className="text-xs text-success mt-0.5">
+                      {funnel.funnel.proposals.won} ganhas
+                    </p>
+                  )}
+                </div>
+                {/* Arrow + rate */}
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {funnel.conversion.proposalToProject}%
+                  </span>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </div>
+                {/* Stage 3 */}
+                <div className="flex-1 text-center p-3 rounded-lg bg-success/10">
+                  <p className="text-2xl font-bold text-success">
+                    {funnel.funnel.projects.count}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Projetos em Carteira
+                  </p>
+                  {funnel.funnel.projects.active > 0 && (
+                    <p className="text-xs text-success mt-0.5">
+                      {funnel.funnel.projects.active} ativos
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Financial summary */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Resumo Financeiro</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-muted/50">
+                  <p className="text-xs text-muted-foreground">Pipeline</p>
+                  <p className="text-lg font-bold mt-0.5">
+                    {formatCurrency(funnel.financial.pipelineValue, funnel.financial.currency)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/50">
+                  <p className="text-xs text-muted-foreground">Propostas Enviadas</p>
+                  <p className="text-lg font-bold mt-0.5">
+                    {formatCurrency(funnel.financial.proposalsValue, funnel.financial.currency)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/50">
+                  <p className="text-xs text-muted-foreground">Carteira em Execução</p>
+                  <p className="text-lg font-bold mt-0.5">
+                    {formatCurrency(funnel.financial.portfolioValue, funnel.financial.currency)}
+                  </p>
+                </div>
+                <div className={`p-3 rounded-lg ${funnel.financial.estimatedMargin >= 0 ? 'bg-success/10' : 'bg-error/10'}`}>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    Margem Estimada
+                    {funnel.financial.estimatedMargin < 0 && (
+                      <TrendingDown className="h-3 w-3 text-error" />
+                    )}
+                  </p>
+                  <p className={`text-lg font-bold mt-0.5 ${funnel.financial.estimatedMargin >= 0 ? 'text-success' : 'text-error'}`}>
+                    {formatCurrency(funnel.financial.estimatedMargin, funnel.financial.currency)}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Main Content Grid */}
       <div className="grid lg:grid-cols-3 gap-6">
