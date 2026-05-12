@@ -14,6 +14,7 @@ import logging
 import uuid
 from datetime import timedelta
 
+import requests.exceptions
 from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
@@ -87,9 +88,10 @@ def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
         stats['total_received'] = len(raw_items)
         logger.info(f"Source '{source.name}': fetched {len(raw_items)} raw items")
 
+        verify_ssl = getattr(source, 'verify_ssl', True)
         for idx, raw_item in enumerate(raw_items):
             try:
-                outcome = _process_single_item(raw_item, source, batch_id, stats)
+                outcome = _process_single_item(raw_item, source, batch_id, stats, verify_ssl)
                 stats['processed'] += 1
                 if outcome == 'rejected':
                     stats['rejected'] += 1
@@ -142,8 +144,13 @@ def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
         source.success_rate = 0
         source.save()
 
-        # Retry on transient errors
-        if isinstance(e, (TimeoutError, ConnectionError)) and self.request.retries < self.max_retries:
+        # Retry on transient network errors (not SSL — those need config)
+        _transient = (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+        )
+        if isinstance(e, _transient) and self.request.retries < self.max_retries:
             raise self.retry(exc=e)
 
         return {'status': 'failed', 'job_id': job.id, 'error': error_message}
@@ -187,7 +194,7 @@ def check_expired_scraped_opportunities():
     return {'expired_count': expired}
 
 
-def _process_single_item(raw_item, source, batch_id, stats):
+def _process_single_item(raw_item, source, batch_id, stats, verify_ssl: bool = True):
     """
     Process a single scraped item through the full validation pipeline.
     """
@@ -209,7 +216,7 @@ def _process_single_item(raw_item, source, batch_id, stats):
         return
 
     # === Phase 1b: Deep detail/TdR extraction ===
-    deep_content = _extract_item_deep_content(raw_item, source, external_url, stats)
+    deep_content = _extract_item_deep_content(raw_item, source, external_url, stats, verify_ssl)
     deep_text = deep_content.get('text', '')
     analysis_description = _combined_description(description, deep_text)
 
@@ -425,7 +432,7 @@ def enrich_scraped_opportunity_with_ai(self, scraped_opportunity_id: int):
         return {'status': 'failed', 'error': str(exc)}
 
 
-def _extract_item_deep_content(raw_item, source, external_url, stats) -> dict:
+def _extract_item_deep_content(raw_item, source, external_url, stats, verify_ssl: bool = True) -> dict:
     config = source.scraper_config or {}
     if config.get('deep_extraction_enabled') is False:
         return {'status': 'skipped', 'text': '', 'url': external_url, 'length': 0}
@@ -433,7 +440,7 @@ def _extract_item_deep_content(raw_item, source, external_url, stats) -> dict:
     try:
         from .services.deep_extraction import extract_deep_content
 
-        result = extract_deep_content(external_url, base_url=source.url)
+        result = extract_deep_content(external_url, base_url=source.url, verify_ssl=verify_ssl)
         if result.get('status') == 'completed':
             stats['deep_extracted'] += 1
         elif result.get('status') == 'failed':

@@ -39,6 +39,10 @@ class ScrapingSource(models.Model):
     # Scraping logic
     scraper_class = models.CharField(max_length=100, default='BaseScraper')
     scraper_config = models.JSONField(default=dict, blank=True)  # {selector: "...", parser: "..."}
+
+    # Network / compliance settings
+    verify_ssl = models.BooleanField(default=True, help_text='Verify SSL certificates when fetching')
+    respect_robots_txt = models.BooleanField(default=True, help_text='Honour robots.txt directives')
     
     # Statistics
     new_opportunities_count = models.PositiveIntegerField(default=0)

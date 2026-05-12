@@ -8,9 +8,10 @@ import hashlib
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from urllib.robotparser import RobotFileParser
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
+import urllib3
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
 from django.utils import timezone
@@ -27,6 +28,12 @@ DEFAULT_HEADERS = {
     'Accept-Language': 'pt-PT,pt;q=0.9,en;q=0.8',
 }
 
+_TRANSIENT_EXCEPTIONS = (
+    requests.exceptions.Timeout,
+    requests.exceptions.ConnectionError,
+    requests.exceptions.ChunkedEncodingError,
+)
+
 
 class BaseScraper:
     """Base class for all web scrapers."""
@@ -34,8 +41,15 @@ class BaseScraper:
     def __init__(self, source):
         self.source = source
         self.config = source.scraper_config or {}
+        self.verify_ssl = getattr(source, 'verify_ssl', True)
+        self.respect_robots = getattr(source, 'respect_robots_txt', True)
+
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
+        self.session.verify = self.verify_ssl
+
+        if not self.verify_ssl:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def fetch(self, url: Optional[str] = None, **kwargs) -> str:
         """Fetch the raw data (HTML, JSON, etc.) from the source."""
@@ -46,57 +60,106 @@ class BaseScraper:
         raise NotImplementedError("Subclasses must implement parse()")
 
     def execute(self) -> Dict[str, Any]:
-        """Execute the full scraping pipeline: fetch -> parse -> return data."""
+        """Execute the full scraping pipeline: robots check → fetch → parse."""
         try:
-            logger.info(f"Starting scrape for {self.source.name}")
+            logger.info("Starting scrape for %s", self.source.name)
+
+            if self.respect_robots and not self._check_robots_txt(self.source.url):
+                logger.warning("robots.txt blocks %s — skipping", self.source.url)
+                return {
+                    'status': 'robots_blocked',
+                    'items': [],
+                    'error': f'robots.txt disallows {self.source.url}',
+                }
+
             raw_data = self.fetch()
             items = self.parse(raw_data)
-            logger.info(f"Successfully scraped {len(items)} items from {self.source.name}")
-            return {
-                'status': 'success',
-                'items': items,
-                'error': None,
-            }
+            logger.info("Successfully scraped %d items from %s", len(items), self.source.name)
+            return {'status': 'success', 'items': items, 'error': None}
+
         except Exception as e:
-            logger.error(f"Error scraping {self.source.name}: {str(e)}", exc_info=True)
-            return {
-                'status': 'error',
-                'items': [],
-                'error': str(e),
-            }
+            logger.error("Error scraping %s: %s", self.source.name, e, exc_info=True)
+            return {'status': 'error', 'items': [], 'error': str(e)}
 
-    # === Utility methods ===
+    # ── HTTP helpers ──────────────────────────────────────────────────────────
 
-    def _http_get(self, url: str, retries: int = 2, backoff: float = 1.5, **kwargs) -> requests.Response:
-        """HTTP GET with retry logic and rate limiting."""
+    def _http_get(self, url: str, retries: int = None, backoff: float = 1.0, **kwargs) -> requests.Response:
+        """HTTP GET with exponential backoff retry.
+
+        SSL errors are never retried — they require source-level config (verify_ssl=False).
+        Transient network errors (timeout, connection reset) are retried up to `retries` times.
+        """
+        if retries is None:
+            retries = int(self.config.get('max_retries', 2))
+        timeout = int(self.config.get('request_timeout', 30))
+
         for attempt in range(retries + 1):
             try:
-                resp = self.session.get(url, timeout=30, **kwargs)
+                resp = self.session.get(url, timeout=timeout, **kwargs)
                 resp.raise_for_status()
                 return resp
-            except requests.RequestException as exc:
+            except requests.exceptions.SSLError as exc:
+                # Not transient — raise immediately so the source can be flagged
+                logger.error("SSL error fetching %s: %s", url, exc)
+                raise
+            except _TRANSIENT_EXCEPTIONS as exc:
                 if attempt == retries:
-                    raise exc
-                sleep_time = backoff * (attempt + 1)
-                logger.warning(f"Request failed (attempt {attempt + 1}), retrying in {sleep_time}s: {exc}")
+                    raise
+                sleep_time = backoff * (2 ** attempt)   # 1s, 2s, 4s …
+                logger.warning(
+                    "Transient error (attempt %d/%d) for %s — retry in %.1fs: %s",
+                    attempt + 1, retries + 1, url, sleep_time, exc,
+                )
                 time.sleep(sleep_time)
+            except requests.exceptions.HTTPError as exc:
+                # 4xx/5xx — only retry on 429 / 5xx
+                status_code = exc.response.status_code if exc.response is not None else 0
+                if status_code in (429, 500, 502, 503, 504) and attempt < retries:
+                    sleep_time = backoff * (2 ** attempt)
+                    logger.warning(
+                        "HTTP %d for %s — retry in %.1fs", status_code, url, sleep_time
+                    )
+                    time.sleep(sleep_time)
+                else:
+                    raise
+
+    # ── robots.txt ────────────────────────────────────────────────────────────
 
     def _check_robots_txt(self, url: str) -> bool:
-        """Check if scraping is allowed by robots.txt."""
+        """Return True if the URL is allowed by robots.txt.
+
+        Fetches robots.txt via our session (respects verify_ssl).
+        Returns True (allowed) on any fetch/parse error — conservative default.
+        """
         try:
-            from urllib.parse import urlparse
             parsed = urlparse(url)
             robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+
+            try:
+                resp = self.session.get(robots_url, timeout=10)
+            except requests.exceptions.SSLError:
+                logger.warning("SSL error fetching robots.txt for %s — assuming allowed", url)
+                return True
+            except requests.exceptions.RequestException as exc:
+                logger.warning("Could not fetch robots.txt for %s: %s — assuming allowed", url, exc)
+                return True
+
+            if resp.status_code == 404:
+                return True  # No robots.txt → no restriction
+
             rp = RobotFileParser()
             rp.set_url(robots_url)
-            rp.read()
-            can_fetch = rp.can_fetch("*", url)
+            rp.parse(resp.text.splitlines())
+            can_fetch = rp.can_fetch(DEFAULT_HEADERS['User-Agent'], url)
             if not can_fetch:
-                logger.warning(f"robots.txt disallows fetching {url}")
+                logger.warning("robots.txt disallows fetching %s", url)
             return can_fetch
-        except Exception as e:
-            logger.warning(f"Could not parse robots.txt for {url}: {e}")
-            return True  # Conservative: assume allowed if we can't parse
+
+        except Exception as exc:
+            logger.warning("robots.txt check failed for %s: %s — assuming allowed", url, exc)
+            return True
+
+    # ── Data helpers ──────────────────────────────────────────────────────────
 
     @staticmethod
     def _parse_date(date_str: str, fallback: Optional[datetime] = None) -> Optional[datetime]:
@@ -108,24 +171,21 @@ class BaseScraper:
             if parsed.tzinfo is None:
                 parsed = timezone.make_aware(parsed, timezone.get_default_timezone())
             return parsed
-        except Exception as e:
-            logger.warning(f"Date parsing failed for '{date_str}': {e}")
+        except Exception as exc:
+            logger.warning("Date parsing failed for '%s': %s", date_str, exc)
             return fallback
 
     @staticmethod
     def _clean_text(text: Optional[str]) -> str:
-        """Clean and normalize text content."""
         if not text:
             return ""
-        text = re.sub(r'\s+', ' ', text)
-        return text.strip()
+        return re.sub(r'\s+', ' ', text).strip()
 
     @staticmethod
     def _extract_value(text: str) -> tuple:
         """Extract numeric value and currency from text."""
         if not text:
             return None, 'USD'
-        # Match patterns like $50,000, 100.000 EUR, USD 1.2M, etc.
         patterns = [
             r'([\$€£])\s*([\d\.,]+)\s*([kKmMbB]?)',
             r'([\d\.,]+)\s*([kKmMbB]?)\s*(USD|EUR|GBP|€|\$|£)',
@@ -135,7 +195,6 @@ class BaseScraper:
             m = re.search(pat, text, re.I)
             if m:
                 groups = m.groups()
-                # Simplistic extraction
                 try:
                     val_str = [g for g in groups if g.replace('.', '').replace(',', '').isdigit()][0]
                     val = float(val_str.replace(',', ''))
@@ -149,12 +208,10 @@ class BaseScraper:
 
     @staticmethod
     def _make_external_id(source_name: str, raw_id: str) -> str:
-        """Create a stable, fixed-length external ID by hashing source + identifier."""
         return hashlib.md5(f"{source_name}:{raw_id}".encode()).hexdigest()
 
     @staticmethod
     def _standardize_item(data: Dict[str, Any], source) -> Dict[str, Any]:
-        """Normalize a raw scraped item into the standard dictionary format."""
         return {
             'external_id': data.get('external_id', ''),
             'external_url': data.get('external_url', source.url),
