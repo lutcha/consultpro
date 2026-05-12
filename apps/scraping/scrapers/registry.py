@@ -9,6 +9,8 @@ from .afdb_scraper import AfDBScraper
 from .undp_scraper import UNDPScraper
 from .luxdev_scraper import LuxDevScraper
 from .generic_portal_scraper import GenericPortalScraper
+from .fcdo_scraper import FCDOScraper
+from .usaid_scraper import USAIDScraper
 
 SCRAPER_REGISTRY = {
     'BaseScraper': BaseScraper,
@@ -19,6 +21,8 @@ SCRAPER_REGISTRY = {
     'UNDPScraper': UNDPScraper,
     'LuxDevScraper': LuxDevScraper,
     'GenericPortalScraper': GenericPortalScraper,
+    'FCDOScraper': FCDOScraper,
+    'USAIDScraper': USAIDScraper,
 }
 
 
