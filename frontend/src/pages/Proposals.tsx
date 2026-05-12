@@ -115,7 +115,41 @@ export function Proposals() {
               onAction={() => navigate('/opportunities')}
             />
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              {/* Mobile card list */}
+              <div className="sm:hidden space-y-3">
+                {proposals.map((proposal) => {
+                  const progress = calculateProgress(proposal);
+                  return (
+                    <div
+                      key={proposal.id}
+                      className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors"
+                      onClick={() => navigate(`/proposals/${proposal.id}`)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium leading-snug line-clamp-2 flex-1 min-w-0">
+                          {proposal.title}
+                        </p>
+                        <StatusBadge status={proposal.status} size="sm" />
+                      </div>
+                      <div className="mt-2">
+                        <Progress value={progress} className="h-1.5" />
+                        <p className="text-xs text-muted-foreground mt-1">{progress}% completo</p>
+                      </div>
+                      <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                        <span>v{proposal.version}</span>
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatDate(proposal.updatedAt)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -214,6 +248,7 @@ export function Proposals() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

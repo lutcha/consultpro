@@ -195,6 +195,10 @@ export function ProposalEditor() {
   const [uploadType, setUploadType] = useState<'proponent' | 'client'>('proponent');
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Mobile panel toggles
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobilePipelineOpen, setMobilePipelineOpen] = useState(false);
+
   // Right panel tab state (own state to avoid Radix Tabs flex issues)
   const [rightTab, setRightTab] = useState<'pipeline' | 'events'>('pipeline');
 
@@ -428,7 +432,7 @@ export function ProposalEditor() {
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col">
+    <div className="flex flex-col md:h-[calc(100vh-8rem)]">
       {/* Hidden file input */}
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
 
@@ -486,10 +490,22 @@ export function ProposalEditor() {
         </div>
       </div>
 
+      {/* Mobile toolbar — sections + pipeline quick access */}
+      <div className="flex md:hidden gap-2 flex-shrink-0 py-2 border-b border-border">
+        <Button variant="outline" size="sm" className="flex-1" onClick={() => setMobileSidebarOpen(true)}>
+          <FileText className="h-4 w-4 mr-2" />
+          Secções
+        </Button>
+        <Button variant="outline" size="sm" className="flex-1" onClick={() => setMobilePipelineOpen(true)}>
+          <Flag className="h-4 w-4 mr-2" />
+          Pipeline
+        </Button>
+      </div>
+
       {/* Main Editor Area */}
-      <div className="flex-1 flex overflow-hidden mt-4">
-        {/* Left Sidebar */}
-        <div className="w-56 flex-shrink-0 flex flex-col border-r border-border overflow-auto">
+      <div className="flex-1 flex overflow-hidden mt-4 min-h-0">
+        {/* Left Sidebar — hidden on mobile, permanent on md+ */}
+        <div className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-border overflow-auto">
           {/* Logos */}
           <div className="p-3 border-b border-border">
             <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
@@ -628,8 +644,8 @@ export function ProposalEditor() {
           </div>
         </div>
 
-        {/* ── Right Panel — Pipeline + Events ── */}
-        <div className="w-72 flex-shrink-0 flex flex-col border-l border-border overflow-hidden bg-background">
+        {/* ── Right Panel — Pipeline + Events — hidden on mobile, permanent on lg+ ── */}
+        <div className="hidden lg:flex w-72 flex-shrink-0 flex-col border-l border-border overflow-hidden bg-background">
 
           {/* Tab headers — custom, no Radix Tabs */}
           <div className="flex flex-shrink-0 border-b border-border">
@@ -1111,6 +1127,116 @@ export function ProposalEditor() {
               {eventSaving ? 'A registar...' : 'Registar Evento'}
             </Button>
           </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Mobile Sections Sheet ── */}
+      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <SheetContent side="left" className="w-72 flex flex-col p-0">
+          <SheetHeader className="px-4 py-3 border-b border-border">
+            <SheetTitle className="text-sm truncate">{selectedProposal?.title}</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-auto p-3 space-y-1">
+            {selectedProposal?.sections.map((section) => (
+              <button
+                key={section.id}
+                onClick={() => { handleSectionChange(section.id); setMobileSidebarOpen(false); }}
+                className={cn(
+                  'w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all',
+                  activeSectionId === section.id
+                    ? 'bg-primary/10 text-primary font-semibold'
+                    : 'hover:bg-muted text-muted-foreground'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  {section.isComplete ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                  ) : (
+                    <div className="h-4 w-4 rounded-full border border-muted-foreground/40 flex-shrink-0" />
+                  )}
+                  <span className="truncate">{section.title}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Mobile Pipeline Sheet ── */}
+      <Sheet open={mobilePipelineOpen} onOpenChange={setMobilePipelineOpen}>
+        <SheetContent side="right" className="w-80 flex flex-col p-0">
+          <SheetHeader className="px-4 py-3 border-b border-border">
+            <SheetTitle className="text-sm">Pipeline COS</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-auto">
+            {/* Current status */}
+            <div className={cn(
+              'p-4 border-b border-border',
+              isTerminal && currentStatus === 'won' ? 'bg-gradient-to-br from-emerald-50 to-transparent dark:from-emerald-950/30' :
+              isTerminal ? 'bg-gradient-to-br from-red-50 to-transparent dark:from-red-950/30' :
+              'bg-gradient-to-br from-primary/5 to-transparent'
+            )}>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Estado Atual</p>
+              <div className="flex items-center gap-2.5">
+                <StatusBadge status={currentStatus} />
+                <span className="text-sm font-semibold">{STATUS_LABELS[currentStatus] || currentStatus}</span>
+              </div>
+              {stageContext && (
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{stageContext.hint}</p>
+              )}
+            </div>
+
+            {/* Transitions */}
+            {availableTransitions.length > 0 && (
+              <div className="p-4 border-b border-border space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Próxima Ação</p>
+                {availableTransitions.map((t, i) => (
+                  <button
+                    key={t.status}
+                    onClick={() => { openTransitionModal(t.status, t.label); setMobilePipelineOpen(false); }}
+                    className={cn(
+                      'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-all',
+                      i === 0
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
+                        : 'border border-border hover:border-primary/40 hover:bg-muted text-foreground'
+                    )}
+                  >
+                    <span>{t.label}</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Pipeline stepper (compact) */}
+            <div className="p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Estágios</p>
+              <div className="space-y-1">
+                {PIPELINE_STAGES.map((stage) => {
+                  const isCurrent = stage.status === currentStatus;
+                  const isPast = !isTerminal && currentStageIndex > (STATUS_ORDER[stage.status] ?? 999);
+                  return (
+                    <div key={stage.status} className="flex items-center gap-2.5 py-0.5">
+                      <div className={cn(
+                        'h-3 w-3 rounded-full flex-shrink-0',
+                        isCurrent ? 'bg-primary ring-2 ring-primary/30' :
+                        isPast ? 'bg-emerald-500' :
+                        'bg-muted-foreground/20'
+                      )} />
+                      <span className={cn(
+                        'text-xs',
+                        isCurrent ? 'text-primary font-semibold' :
+                        isPast ? 'text-muted-foreground/60' :
+                        'text-muted-foreground/40'
+                      )}>
+                        {stage.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </SheetContent>
       </Sheet>
     </div>

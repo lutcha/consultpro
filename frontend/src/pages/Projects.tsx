@@ -185,7 +185,52 @@ export function Projects() {
               onAction={() => navigate('/projects/new')}
             />
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              {/* Mobile card list */}
+              <div className="sm:hidden space-y-3">
+                {projects.map((project) => (
+                  <div
+                    key={project.id}
+                    className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors"
+                    onClick={() => navigate(`/projects/${project.id}`)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium leading-snug line-clamp-2">{project.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {project.sector} · {project.country}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {getStatusIcon(project.status)}
+                        <StatusBadge status={project.status} size="sm" />
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <Progress value={project.progress} className="h-1.5" />
+                      <p className="text-xs text-muted-foreground mt-1">{project.progress}%</p>
+                    </div>
+                    <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                      <span>{project.client}</span>
+                      {project.end_date && (
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {formatDate(new Date(project.end_date))}
+                        </div>
+                      )}
+                    </div>
+                    {project.is_overdue && (
+                      <Badge variant="destructive" className="text-xs mt-2">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Atrasado
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -207,9 +252,9 @@ export function Projects() {
                     >
                       <TableCell>
                         <div>
-                          <p className="font-medium">{project.title}</p>
+                          <p className="font-medium truncate max-w-xs">{project.title}</p>
                           <p className="text-sm text-muted-foreground">
-                            {project.sector} • {project.country}
+                            {project.sector} · {project.country}
                           </p>
                         </div>
                       </TableCell>
@@ -284,6 +329,7 @@ export function Projects() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -34,7 +34,11 @@ import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useOpportunityStore } from '@/stores';
-import { formatDate, formatCurrency, getDaysUntil } from '@/lib/utils';
+import { formatDate, formatCurrency, getDaysUntil, cn } from '@/lib/utils';
+
+function humanizeSector(code: string): string {
+  return code.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export function Opportunities() {
   const navigate = useNavigate();
@@ -115,7 +119,39 @@ export function Opportunities() {
               onAction={() => navigate('/opportunities/new')}
             />
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              {/* Mobile card list */}
+              <div className="sm:hidden space-y-3">
+                {opportunities.map((opp) => (
+                  <div
+                    key={opp.id}
+                    className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors"
+                    onClick={() => navigate(`/opportunities/${opp.id}`)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium leading-snug line-clamp-2">{opp.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {humanizeSector(opp.sector)} · {opp.country.toUpperCase()}
+                        </p>
+                      </div>
+                      <StatusBadge status={opp.status} size="sm" />
+                    </div>
+                    <div className="flex items-center justify-between mt-3">
+                      <Badge variant="outline" className="text-xs">{opp.client}</Badge>
+                      <span className={cn('text-xs', getDeadlineColor(opp.deadline))}>
+                        {getDaysUntil(opp.deadline)}d · {formatDate(opp.deadline)}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold mt-2">
+                      {formatCurrency(opp.value, opp.currency)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop table */}
+            <div className="hidden sm:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -142,7 +178,7 @@ export function Opportunities() {
                             {opportunity.title}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {opportunity.sector} • {opportunity.country}
+                            {humanizeSector(opportunity.sector)} · {opportunity.country.toUpperCase()}
                           </p>
                         </div>
                       </TableCell>
@@ -222,6 +258,7 @@ export function Opportunities() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>
