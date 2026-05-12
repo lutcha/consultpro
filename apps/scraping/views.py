@@ -152,6 +152,9 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
                 'created': False,
             })
 
+        from .services.enrichment import enrich_for_import
+        enriched = enrich_for_import(scraped_opp)
+
         ai_extraction = {
             'schema': 'scraped_opportunity_import_v1',
             'source': 'scraping',
@@ -165,14 +168,18 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
             'deep_content_extracted_at': scraped_opp.deep_content_extracted_at.isoformat() if scraped_opp.deep_content_extracted_at else '',
             'requirements': scraped_opp.ai_extracted_requirements or [],
             'transformation_flags': scraped_opp.transformation_flags or {},
+            'c3_enrichment': enriched,
             'imported_at': timezone.now().isoformat(),
         }
-        
+
         opportunity = Opportunity.objects.create(
             title=scraped_opp.title,
             client=scraped_opp.client or scraped_opp.organization,
-            sector=scraped_opp.sector or 'Consultoria',
-            country=scraped_opp.country or 'Cabo Verde',
+            sector=enriched['sector'],
+            country=enriched['country'],
+            region=enriched['region'],
+            eligible_countries=enriched['eligible_countries'],
+            consortium_type=enriched['consortium_type'],
             value=scraped_opp.value or 0,
             currency=scraped_opp.currency,
             deadline=scraped_opp.deadline or timezone.now(),
