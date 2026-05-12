@@ -69,26 +69,88 @@ JAZZMIN_SETTINGS = {
     'login_logo': None,
     'welcome_sign': 'Bem-vindo ao ConsultPro',
     'copyright': 'ConsultPro © 2026',
-    'search_model': ['users.User', 'opportunities.Opportunity', 'proposals.Proposal'],
+    'search_model': [
+        'users.User',
+        'opportunities.Opportunity',
+        'proposals.Proposal',
+        'scraping.ScrapingSource',
+        'scraping.ScrapedOpportunity',
+    ],
     'topmenu_links': [
         {'name': 'Site', 'url': '/', 'new_window': True},
+        {'name': 'API Docs', 'url': '/api/docs/', 'new_window': True},
+        {'name': 'Sources', 'url': '/admin/scraping/scrapingsource/', 'new_window': False},
+    ],
+    'usermenu_links': [
         {'name': 'API Docs', 'url': '/api/docs/', 'new_window': True},
     ],
     'show_sidebar': True,
     'navigation_expanded': True,
+    'hide_apps': [],
+    'hide_models': [],
+    'order_with_respect_to': [
+        'auth',
+        'users',
+        'opportunities',
+        'proposals',
+        'projects',
+        'teams',
+        'curriculum',
+        'scraping',
+        'notifications',
+        'quality_checks',
+        'ai_services',
+    ],
+    'custom_links': {
+        'scraping': [
+            {
+                'name': 'Run All Sources',
+                'url': 'run_all_scraping_sources',
+                'icon': 'fas fa-play-circle',
+                'permissions': ['scraping.change_scrapingsource'],
+            },
+        ],
+    },
     'icons': {
+        # Auth
         'auth': 'fas fa-users-cog',
         'auth.user': 'fas fa-user',
         'auth.Group': 'fas fa-users',
+        # Users
         'users.User': 'fas fa-user-tie',
+        'users.Certification': 'fas fa-certificate',
+        # Opportunities
         'opportunities.Opportunity': 'fas fa-briefcase',
+        'opportunities.Requirement': 'fas fa-list-check',
+        'opportunities.Risk': 'fas fa-exclamation-triangle',
+        # Proposals
         'proposals.Proposal': 'fas fa-file-alt',
+        'proposals.ProposalSection': 'fas fa-paragraph',
+        'proposals.Budget': 'fas fa-coins',
+        'proposals.Comment': 'fas fa-comments',
+        # Projects
         'projects.Project': 'fas fa-project-diagram',
+        'projects.ProjectTask': 'fas fa-tasks',
+        'projects.ProjectMilestone': 'fas fa-flag',
+        'projects.ProjectRisk': 'fas fa-shield-alt',
+        # Teams
         'teams.Team': 'fas fa-users',
+        # Curriculum
         'curriculum.Curriculum': 'fas fa-id-card',
+        'curriculum.CVTemplate': 'fas fa-file-code',
+        # Scraping
         'scraping.ScrapingSource': 'fas fa-spider',
+        'scraping.ScrapedOpportunity': 'fas fa-search-dollar',
+        'scraping.ScrapingJob': 'fas fa-clock',
+        'scraping.ScrapingAlert': 'fas fa-exclamation-circle',
+        # Notifications
         'notifications.Notification': 'fas fa-bell',
+        'notifications.ActivityLog': 'fas fa-history',
+        # Quality
         'quality_checks.QualityCheck': 'fas fa-check-circle',
+        'quality_checks.QCCheckCategory': 'fas fa-layer-group',
+        # AI
+        'ai_services.AIConfiguration': 'fas fa-robot',
     },
     'default_icon_parents': 'fas fa-folder',
     'default_icon_children': 'fas fa-circle',
@@ -98,6 +160,10 @@ JAZZMIN_SETTINGS = {
     'use_google_fonts_cdn': True,
     'show_ui_builder': False,
     'changeform_format': 'horizontal_tabs',
+    'changeform_format_overrides': {
+        'scraping.scrapingsource': 'collapsible',
+        'scraping.scrapedopportunity': 'collapsible',
+    },
     'language_chooser': False,
 }
 
