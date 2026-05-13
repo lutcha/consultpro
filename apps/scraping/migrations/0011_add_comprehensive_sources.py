@@ -1,0 +1,976 @@
+"""
+Comprehensive source expansion based on the definitive procurement/grants list
+for Africa. Sources are organized by category and priority.
+
+New sources added (~40):
+  Section 1 — New Multilaterals: IsDB, Global Fund, WFP, Gavi, UNODC, UNICEF Innovation
+  Section 2 — New Bilateral: GIZ AU, Expertise France, Irish Aid, AICS Italy
+  Section 3 — Aggregators: TenderSoko, FundsforNGOs, TerraViva, AfricanNGOs, Africagateway
+  Section 4 — National e-procurement portals: CV, ZA, KE, NG, GH, TZ, UG, MA, EG
+  Section 5 — Climate/Environment: GCF, GEF, African Water Facility, NDC Partnership
+  Section 6 — Foundations: Mastercard, Ford, Gates, AULP
+"""
+from django.db import migrations
+
+NEW_SOURCES = [
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 1 — NEW MULTILATERALS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    {
+        'name': 'IsDB - Procurement Notices',
+        'organization': 'Islamic Development Bank (IsDB)',
+        'url': 'https://www.isdb.org/procurement',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.isdb.org/procurement',
+            'item_selectors': ['article', 'div.procurement-item', 'table tbody tr', 'li.node', 'div.card'],
+            'title_selector': 'h2, h3, h4, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.field-body',
+            'deadline_selector': '.deadline, .closing-date, time, td:last-child',
+            'organization': 'Islamic Development Bank',
+            'client': 'IsDB',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa', 'West Africa'],
+            'keywords': ['consultant', 'consultancy', 'advisory', 'technical assistance', 'expert', 'procurement'],
+            'sectors': ['infrastructure', 'agriculture', 'education', 'health', 'governance'],
+        },
+    },
+    {
+        'name': 'IsDB - Grants & Technical Assistance',
+        'organization': 'Islamic Development Bank (IsDB)',
+        'url': 'https://www.isdb.org/grants',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.isdb.org/grants',
+            'item_selectors': ['article', 'div.grant-item', 'li.node', 'div.card'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.field-body',
+            'organization': 'Islamic Development Bank',
+            'client': 'IsDB',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'technical assistance', 'capacity building', 'advisory'],
+        },
+    },
+    {
+        'name': 'Global Fund - Procurement Notices',
+        'organization': 'The Global Fund',
+        'url': 'https://www.theglobalfund.org/en/procurement/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.theglobalfund.org/en/procurement/',
+            'item_selectors': ['article', 'div.procurement-notice', 'li', 'tr', 'div.card'],
+            'title_selector': 'h2, h3, h4, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'deadline_selector': '.deadline, time, td:last-child',
+            'organization': 'The Global Fund',
+            'client': 'Global Fund to Fight AIDS, Tuberculosis and Malaria',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['consultant', 'consultancy', 'procurement', 'technical assistance', 'advisory', 'evaluation'],
+            'sectors': ['health', 'HIV/AIDS', 'tuberculosis', 'malaria', 'global health'],
+        },
+    },
+    {
+        'name': 'WFP - Procurement Notices',
+        'organization': 'World Food Programme (WFP)',
+        'url': 'https://www.wfp.org/procurement',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.wfp.org/procurement',
+            'item_selectors': ['article', 'div.procurement-item', 'li', 'tr', 'div.card'],
+            'title_selector': 'h2, h3, h4, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'deadline_selector': '.deadline, time, td:last-child',
+            'organization': 'WFP',
+            'client': 'World Food Programme',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa', 'West Africa'],
+            'keywords': ['consultant', 'consultancy', 'procurement', 'technical assistance', 'food security'],
+            'sectors': ['food security', 'nutrition', 'logistics', 'agriculture', 'emergency'],
+        },
+    },
+    {
+        'name': 'Gavi - Funding & Calls',
+        'organization': 'Gavi, the Vaccine Alliance',
+        'url': 'https://www.gavi.org/funding',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.gavi.org/funding',
+            'item_selectors': ['article', 'div.funding-item', 'li', 'div.card'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'organization': 'Gavi',
+            'client': 'Gavi, the Vaccine Alliance',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'funding', 'consultant', 'health system', 'immunization'],
+            'sectors': ['health', 'immunization', 'civil society'],
+        },
+    },
+    {
+        'name': 'UNODC - Africa Grants for CSOs',
+        'organization': 'United Nations Office on Drugs and Crime (UNODC)',
+        'url': 'https://www.unodc.org/unodc/en/ngos/call-for-proposals_-africa-grants-scheme-for-csos-to-work-with-the-private-sector-on-uncac.html',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.unodc.org/unodc/en/ngos/',
+            'item_selectors': ['div.content-item', 'article', 'li', 'div.node'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'organization': 'UNODC',
+            'client': 'UN Office on Drugs and Crime',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'NGO', 'civil society', 'anti-corruption', 'governance', 'UNCAC'],
+        },
+    },
+    {
+        'name': 'UNICEF Innovation Fund',
+        'organization': 'UNICEF',
+        'url': 'https://www.unicef.org/innovation/funding',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.unicef.org/innovation/funding',
+            'item_selectors': ['article', 'div.funding-item', 'div.card', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'organization': 'UNICEF Innovation',
+            'client': 'UNICEF',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['innovation', 'grant', 'technology', 'startup', 'youth', 'digital'],
+            'sectors': ['innovation', 'technology', 'education', 'health'],
+        },
+    },
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 2 — NEW BILATERAL AGENCIES
+    # ══════════════════════════════════════════════════════════════════════════
+
+    {
+        'name': 'GIZ - AU e-Tendering Portal',
+        'organization': 'GIZ / African Union',
+        'url': 'https://au.giz.de/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://au.giz.de/',
+            'item_selectors': ['article', 'div.tender', 'tr', 'li.tender-item', 'div.card'],
+            'title_selector': 'h2, h3, h4, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description, div.teaser-text',
+            'deadline_selector': '.deadline, time, td:last-child',
+            'organization': 'GIZ / African Union',
+            'client': 'GIZ AU Program',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa', 'West Africa'],
+            'keywords': ['consultant', 'consultancy', 'tender', 'expert', 'advisory', 'technical assistance'],
+        },
+    },
+    {
+        'name': 'Expertise France - Procurement & Tenders',
+        'organization': 'Expertise France',
+        'url': 'https://www.expertisefrance.fr/en/public-procurement-and-tenders',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.expertisefrance.fr/en/public-procurement-and-tenders',
+            'item_selectors': ['article', 'div.tender-item', 'li.appel-offre', 'div.card', 'tr'],
+            'title_selector': 'h2, h3, h4, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.field-body, div.description',
+            'deadline_selector': '.deadline, .date, time',
+            'organization': 'Expertise France',
+            'client': 'Expertise France / AFD Group',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa', 'PALOP', 'West Africa'],
+            'keywords': ['consultant', 'expert', 'advisory', 'technical assistance', 'evaluation', 'mission'],
+        },
+    },
+    {
+        'name': 'Expertise France - Calls for Projects',
+        'organization': 'Expertise France',
+        'url': 'https://www.expertisefrance.fr/en/calls-for-projects',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.expertisefrance.fr/en/calls-for-projects',
+            'item_selectors': ['article', 'div.call-item', 'div.card', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'deadline_selector': '.deadline, .date, time',
+            'organization': 'Expertise France',
+            'client': 'Expertise France',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['call for projects', 'grant', 'NGO', 'civil society', 'capacity building'],
+        },
+    },
+    {
+        'name': 'Irish Aid - Procurement Opportunities',
+        'organization': 'Irish Aid (Ireland)',
+        'url': 'https://www.ireland.ie/en/irish-aid/about-us/procurement-opportunities/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.ireland.ie/en/irish-aid/about-us/procurement-opportunities/',
+            'item_selectors': ['article', 'div.tender-item', 'div.card', 'li', 'tr'],
+            'title_selector': 'h2, h3, h4, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'deadline_selector': '.deadline, time, td:last-child',
+            'organization': 'Irish Aid',
+            'client': 'Department of Foreign Affairs – Irish Aid',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa', 'West Africa'],
+            'keywords': ['consultant', 'consultancy', 'technical assistance', 'advisory', 'evaluation'],
+        },
+    },
+    {
+        'name': 'Irish Aid - Civil Society Fund',
+        'organization': 'Irish Aid (Ireland)',
+        'url': 'https://www.gov.ie/en/publication/irish-aid-civil-society-fund/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.gov.ie/en/publication/irish-aid-civil-society-fund/',
+            'item_selectors': ['article', 'div.content', 'div.card', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'organization': 'Irish Aid',
+            'client': 'Irish Aid',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'civil society', 'NGO', 'community', 'development'],
+        },
+    },
+    {
+        'name': 'AICS Italy - Global Tenders',
+        'organization': 'Agenzia Italiana per la Cooperazione allo Sviluppo (AICS)',
+        'url': 'https://www.aics.gov.it/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.aics.gov.it/',
+            'item_selectors': ['article', 'div.tender-item', 'div.bando', 'li.bando', 'div.card'],
+            'title_selector': 'h2, h3, h4, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.field-body',
+            'deadline_selector': '.deadline, .scadenza, time',
+            'organization': 'AICS Italy',
+            'client': 'Agenzia Italiana per la Cooperazione allo Sviluppo',
+            'country': 'Africa',
+            'language': 'it',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa', 'PALOP'],
+            'keywords': ['consulente', 'consulenza', 'bando', 'gara', 'assistenza tecnica', 'consultant', 'tender'],
+        },
+    },
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 3 — AGGREGATORS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    {
+        'name': 'TenderSoko - East Africa Tenders',
+        'organization': 'TenderSoko',
+        'url': 'https://www.tendersoko.com/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.tendersoko.com/',
+            'item_selectors': ['article', 'div.tender-item', 'div.card', 'li.tender', 'tr'],
+            'title_selector': 'h2, h3, h4, a.tender-title, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description, div.excerpt',
+            'deadline_selector': '.deadline, .closing-date, time, span.date',
+            'organization': 'TenderSoko',
+            'client': 'Various',
+            'country': 'East Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['KEN', 'TZA', 'UGA', 'ETH', 'RWA', 'Africa'],
+            'keywords': ['consultant', 'consultancy', 'advisory', 'technical assistance', 'evaluation'],
+        },
+    },
+    {
+        'name': 'FundsforNGOs - Grants Database',
+        'organization': 'FundsforNGOs',
+        'url': 'https://www2.fundsforngos.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www2.fundsforngos.org/',
+            'item_selectors': ['article', 'div.post', 'div.entry', 'li.post'],
+            'title_selector': 'h2, h3, a.entry-title, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.entry-summary, div.excerpt',
+            'deadline_selector': '.deadline, time, .date',
+            'organization': 'FundsforNGOs',
+            'client': 'Various Donors',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'funding', 'NGO', 'civil society', 'Africa', 'development'],
+        },
+    },
+    {
+        'name': 'TerraViva Grants - Environment & Development',
+        'organization': 'TerraViva Grants',
+        'url': 'https://www.terravivagrants.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.terravivagrants.org/',
+            'item_selectors': ['article', 'div.post', 'div.grant-item', 'li.post'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.excerpt, div.entry-summary',
+            'deadline_selector': '.deadline, time, .date',
+            'organization': 'TerraViva Grants',
+            'client': 'Various Environmental Donors',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'environment', 'climate', 'agriculture', 'development', 'biodiversity'],
+            'sectors': ['environment', 'climate change', 'agriculture', 'water', 'biodiversity'],
+        },
+    },
+    {
+        'name': 'AfricanNGOs - Funding Opportunities',
+        'organization': 'AfricanNGOs.org',
+        'url': 'https://africanngos.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://africanngos.org/',
+            'item_selectors': ['article', 'div.post', 'div.opportunity', 'li.post'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.excerpt',
+            'organization': 'AfricanNGOs',
+            'client': 'Various',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'NGO', 'funding', 'Africa', 'civil society'],
+        },
+    },
+    {
+        'name': 'Africagateway - Consulting Tenders',
+        'organization': 'Africagateway',
+        'url': 'https://www.africagateway.info/sector/Tenders-Consultancy',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.africagateway.info/sector/Tenders-Consultancy',
+            'item_selectors': ['article', 'div.tender-item', 'div.card', 'li', 'tr'],
+            'title_selector': 'h2, h3, a.title, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'deadline_selector': '.deadline, time, .date',
+            'organization': 'Africagateway',
+            'client': 'Various',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa', 'West Africa'],
+            'keywords': ['consultant', 'consultancy', 'advisory', 'tender', 'technical assistance'],
+        },
+    },
+    {
+        'name': 'TendersOnTime - Africa',
+        'organization': 'TendersOnTime',
+        'url': 'https://www.tendersontime.com/africa-tenders/',
+        'source_type': 'portal',
+        'status': 'paused',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.tendersontime.com/africa-tenders/',
+            'item_selectors': ['article', 'div.tender-item', 'div.card', 'tr'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p',
+            'organization': 'TendersOnTime',
+            'client': 'Various',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['consultant', 'consultancy', 'advisory', 'tender'],
+        },
+    },
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 4 — NATIONAL E-PROCUREMENT PORTALS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # ── Cabo Verde (CRITICAL) ─────────────────────────────────────────────────
+    {
+        'name': 'Cabo Verde - Contratação Pública',
+        'organization': 'Governo de Cabo Verde',
+        'url': 'https://contratacao.publico.cv/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'CaboVerdeProcurementScraper',
+        'scraper_config': {
+            'base_url': 'https://contratacao.publico.cv',
+            'max_items': 200,
+            'language': 'pt',
+        },
+        'filters': {
+            'countries': ['CPV'],
+            'keywords': [
+                'consultoria', 'consultor', 'serviços', 'concurso', 'ajuste direto',
+                'concurso público', 'contratação simplificada', 'empreitada',
+            ],
+        },
+        'verify_ssl': True,
+        'respect_robots_txt': True,
+    },
+
+    # ── South Africa ──────────────────────────────────────────────────────────
+    {
+        'name': 'South Africa - eTenders Portal',
+        'organization': 'National Treasury South Africa',
+        'url': 'https://etenders.treasury.gov.za/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://etenders.treasury.gov.za/',
+            'item_selectors': ['table tbody tr', 'div.tender-item', 'article', 'li.tender'],
+            'title_selector': 'td:nth-child(2) a, td:nth-child(2), h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'td, p',
+            'deadline_selector': 'td:last-child, .closing-date, .deadline',
+            'organization': 'South African Government',
+            'client': 'National / Provincial Departments',
+            'country': 'South Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['ZAF', 'South Africa'],
+            'keywords': ['consultant', 'consultancy', 'advisory', 'evaluation', 'technical assistance'],
+        },
+    },
+
+    # ── Kenya ─────────────────────────────────────────────────────────────────
+    {
+        'name': 'Kenya - PPIP Tenders',
+        'organization': 'Public Procurement Information Portal (Kenya)',
+        'url': 'https://ppip.go.ke/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://ppip.go.ke/',
+            'item_selectors': ['table tbody tr', 'div.tender-item', 'article', 'li'],
+            'title_selector': 'td:nth-child(2) a, h3, h4, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'td, p',
+            'deadline_selector': 'td:last-child, .closing-date',
+            'organization': 'Kenya Government',
+            'client': 'Kenyan Public Entities',
+            'country': 'Kenya',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['KEN', 'Kenya'],
+            'keywords': ['consultant', 'consultancy', 'advisory', 'evaluation'],
+        },
+    },
+
+    # ── Nigeria ───────────────────────────────────────────────────────────────
+    {
+        'name': 'Nigeria - NOCOPO Federal Tenders',
+        'organization': 'National Council on Public Procurement (Nigeria)',
+        'url': 'https://nocopo.gov.ng/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://nocopo.gov.ng/',
+            'item_selectors': ['table tbody tr', 'div.tender', 'article', 'li.tender'],
+            'title_selector': 'td:nth-child(2) a, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'td, p',
+            'deadline_selector': 'td:last-child, .deadline',
+            'organization': 'Nigerian Government',
+            'client': 'Federal Ministries & Agencies',
+            'country': 'Nigeria',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['NGA', 'Nigeria'],
+            'keywords': ['consultant', 'consultancy', 'advisory', 'services'],
+        },
+    },
+
+    # ── Ghana ─────────────────────────────────────────────────────────────────
+    {
+        'name': 'Ghana - GPPRA Tenders',
+        'organization': 'Public Procurement Authority Ghana',
+        'url': 'https://ghanappra.gov.gh/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'daily',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://ghanappra.gov.gh/',
+            'item_selectors': ['table tbody tr', 'div.tender-item', 'article', 'li'],
+            'title_selector': 'td:nth-child(2) a, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'td, p',
+            'deadline_selector': 'td:last-child, .deadline',
+            'organization': 'Ghana Government',
+            'client': 'Ghanaian Public Entities',
+            'country': 'Ghana',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['GHA', 'Ghana'],
+            'keywords': ['consultant', 'consultancy', 'advisory'],
+        },
+    },
+
+    # ── Tanzania ──────────────────────────────────────────────────────────────
+    {
+        'name': 'Tanzania - TANePS e-Procurement',
+        'organization': 'Tanzania Procurement Portal (TANePS)',
+        'url': 'https://taneps.go.tz/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://taneps.go.tz/',
+            'item_selectors': ['table tbody tr', 'div.tender', 'article', 'li'],
+            'title_selector': 'td:nth-child(2) a, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'td, p',
+            'deadline_selector': 'td:last-child, .deadline',
+            'organization': 'Tanzania Government',
+            'client': 'Tanzanian Public Entities',
+            'country': 'Tanzania',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['TZA', 'Tanzania'],
+            'keywords': ['consultant', 'consultancy', 'advisory'],
+        },
+    },
+
+    # ── Uganda ────────────────────────────────────────────────────────────────
+    {
+        'name': 'Uganda - PPDA Tenders',
+        'organization': 'Public Procurement and Disposal of Public Assets Authority (Uganda)',
+        'url': 'https://ppda.go.ug/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://ppda.go.ug/',
+            'item_selectors': ['table tbody tr', 'div.tender-item', 'article', 'li'],
+            'title_selector': 'td:nth-child(2) a, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'td, p',
+            'deadline_selector': 'td:last-child, .deadline',
+            'organization': 'Uganda Government',
+            'client': 'Ugandan Public Entities',
+            'country': 'Uganda',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['UGA', 'Uganda'],
+            'keywords': ['consultant', 'consultancy', 'advisory'],
+        },
+    },
+
+    # ── Morocco ───────────────────────────────────────────────────────────────
+    {
+        'name': 'Morocco - Marchés Publics',
+        'organization': 'Trésorerie Générale du Royaume (Morocco)',
+        'url': 'http://www.marchespublics.gov.ma/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'http://www.marchespublics.gov.ma/',
+            'item_selectors': ['table tbody tr', 'div.marche-item', 'article', 'li'],
+            'title_selector': 'td:nth-child(2) a, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'td, p',
+            'deadline_selector': 'td:last-child, .deadline, .date-limite',
+            'organization': 'Gouvernement du Maroc',
+            'client': 'Entités Publiques Marocaines',
+            'country': 'Morocco',
+            'language': 'fr',
+        },
+        'filters': {
+            'countries': ['MAR', 'Morocco'],
+            'keywords': ['consultant', 'consultance', 'expertise', 'marché'],
+        },
+        'verify_ssl': False,
+    },
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 5 — CLIMATE & ENVIRONMENT FUNDS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    {
+        'name': 'Green Climate Fund - Calls & Procurement',
+        'organization': 'Green Climate Fund (GCF)',
+        'url': 'https://www.greenclimate.fund/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.greenclimate.fund/calls',
+            'item_selectors': ['article', 'div.call-item', 'div.card', 'li', 'tr'],
+            'title_selector': 'h2, h3, h4, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'deadline_selector': '.deadline, time, .date',
+            'organization': 'Green Climate Fund',
+            'client': 'GCF',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'climate', 'adaptation', 'mitigation', 'call for proposals', 'funding'],
+            'sectors': ['climate change', 'renewable energy', 'adaptation', 'resilience'],
+        },
+    },
+    {
+        'name': 'Global Environment Facility - Calls',
+        'organization': 'Global Environment Facility (GEF)',
+        'url': 'https://www.thegef.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.thegef.org/grants',
+            'item_selectors': ['article', 'div.grant-item', 'div.card', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'deadline_selector': '.deadline, time',
+            'organization': 'Global Environment Facility',
+            'client': 'GEF',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'environment', 'biodiversity', 'climate', 'land degradation', 'ocean'],
+            'sectors': ['environment', 'biodiversity', 'climate', 'oceans', 'land use'],
+        },
+    },
+    {
+        'name': 'African Water Facility - Grants',
+        'organization': 'African Water Facility (AWF / AfDB)',
+        'url': 'https://www.africanwaterfacility.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.africanwaterfacility.org/',
+            'item_selectors': ['article', 'div.call-item', 'div.card', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'deadline_selector': '.deadline, time',
+            'organization': 'African Water Facility',
+            'client': 'AWF / AfDB',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'water', 'sanitation', 'WASH', 'hydrology', 'water security'],
+            'sectors': ['water', 'WASH', 'environment', 'infrastructure'],
+        },
+    },
+    {
+        'name': 'NDC Partnership - Climate Grants',
+        'organization': 'NDC Partnership',
+        'url': 'https://ndcpartnership.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://ndcpartnership.org/',
+            'item_selectors': ['article', 'div.opportunity', 'div.card', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'organization': 'NDC Partnership',
+            'client': 'NDC Partnership / Climate Funds',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'climate', 'NDC', 'adaptation', 'mitigation', 'resilience'],
+            'sectors': ['climate', 'resilience', 'energy', 'agriculture', 'blue economy'],
+        },
+    },
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 6 — FOUNDATIONS
+    # ══════════════════════════════════════════════════════════════════════════
+
+    {
+        'name': 'Mastercard Foundation - Grants',
+        'organization': 'Mastercard Foundation',
+        'url': 'https://mastercardfdn.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://mastercardfdn.org/all-initiatives/',
+            'item_selectors': ['article', 'div.initiative-item', 'div.card', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.excerpt',
+            'deadline_selector': '.deadline, time',
+            'organization': 'Mastercard Foundation',
+            'client': 'Mastercard Foundation',
+            'country': 'Africa',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa', 'West Africa'],
+            'keywords': ['grant', 'youth', 'education', 'economic inclusion', 'employment', 'Africa'],
+            'sectors': ['education', 'youth', 'employment', 'finance', 'agriculture'],
+        },
+    },
+    {
+        'name': 'Ford Foundation - Grants',
+        'organization': 'Ford Foundation',
+        'url': 'https://www.fordfoundation.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.fordfoundation.org/work/our-grants/',
+            'item_selectors': ['article', 'div.grant-item', 'div.card', 'li'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.excerpt',
+            'organization': 'Ford Foundation',
+            'client': 'Ford Foundation',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'social justice', 'inequality', 'democracy', 'civil society', 'Africa'],
+            'sectors': ['civil society', 'human rights', 'justice', 'democracy', 'arts & culture'],
+        },
+    },
+    {
+        'name': 'Bill & Melinda Gates Foundation - Grants',
+        'organization': 'Bill & Melinda Gates Foundation',
+        'url': 'https://www.gatesfoundation.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://www.gatesfoundation.org/about/how-we-work/quick-links/grants-lookup',
+            'item_selectors': ['article', 'div.grant-item', 'div.card', 'li', 'tr'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.description',
+            'deadline_selector': '.deadline, time',
+            'organization': 'Gates Foundation',
+            'client': 'Bill & Melinda Gates Foundation',
+            'country': 'Africa / International',
+            'language': 'en',
+        },
+        'filters': {
+            'countries': ['CPV', 'Africa'],
+            'keywords': ['grant', 'health', 'agriculture', 'development', 'poverty', 'Africa'],
+            'sectors': ['health', 'agriculture', 'nutrition', 'financial services', 'global development'],
+        },
+    },
+    {
+        'name': 'AULP - Universidades Portuguesas',
+        'organization': 'Associação das Universidades de Língua Portuguesa (AULP)',
+        'url': 'https://aulp.org/',
+        'source_type': 'portal',
+        'status': 'active',
+        'scrape_frequency': 'weekly',
+        'scraper_class': 'GenericPortalScraper',
+        'scraper_config': {
+            'url': 'https://aulp.org/',
+            'item_selectors': ['article', 'div.post', 'div.news-item', 'li.post'],
+            'title_selector': 'h2, h3, a',
+            'link_selector': 'a[href]',
+            'description_selector': 'p, div.excerpt',
+            'organization': 'AULP',
+            'client': 'Universidades de Língua Portuguesa',
+            'country': 'PALOP / Portugal',
+            'language': 'pt',
+        },
+        'filters': {
+            'countries': ['CPV', 'PT', 'AO', 'MZ', 'GW'],
+            'keywords': ['bolsa', 'financiamento', 'mobilidade', 'formação', 'capacitação', 'edital'],
+            'sectors': ['educação', 'ciência', 'investigação', 'capacitação'],
+        },
+    },
+]
+
+
+def apply_migration(apps, schema_editor):
+    ScrapingSource = apps.get_model('scraping', 'ScrapingSource')
+    for src in NEW_SOURCES:
+        defaults = {
+            'organization': src['organization'],
+            'url': src['url'],
+            'source_type': src['source_type'],
+            'status': src['status'],
+            'scrape_frequency': src['scrape_frequency'],
+            'scraper_class': src['scraper_class'],
+            'scraper_config': src['scraper_config'],
+            'filters': src['filters'],
+        }
+        if 'verify_ssl' in src:
+            defaults['verify_ssl'] = src['verify_ssl']
+        if 'respect_robots_txt' in src:
+            defaults['respect_robots_txt'] = src['respect_robots_txt']
+        ScrapingSource.objects.update_or_create(name=src['name'], defaults=defaults)
+
+
+def revert_migration(apps, schema_editor):
+    ScrapingSource = apps.get_model('scraping', 'ScrapingSource')
+    names = [s['name'] for s in NEW_SOURCES]
+    ScrapingSource.objects.filter(name__in=names).delete()
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('scraping', '0010_add_ugpe_en_worldbank_step'),
+    ]
+
+    operations = [
+        migrations.RunPython(apply_migration, revert_migration),
+    ]
