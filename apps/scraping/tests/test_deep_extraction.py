@@ -53,4 +53,4 @@ class DeepExtractionTests(SimpleTestCase):
         self.assertEqual(result['status'], 'completed')
         self.assertIn('Resumo curto', result['text'])
         self.assertIn('Conteudo completo do TdR em PDF', result['text'])
-        mock_fetch_pdf_text.assert_called_once_with('https://example.org/files/tor.pdf')
+        mock_fetch_pdf_text.assert_called_once_with('https://example.org/files/tor.pdf', verify_ssl=True)

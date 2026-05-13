@@ -214,7 +214,7 @@ class DeepExtractionRetryTests(SimpleTestCase):
     def test_retries_on_timeout(self):
         call_count = 0
 
-        def flaky(url, verify_ssl=True, timeout=25):
+        def flaky(url, **kwargs):
             nonlocal call_count
             call_count += 1
             if call_count < 3:
