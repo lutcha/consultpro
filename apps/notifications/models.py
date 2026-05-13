@@ -26,6 +26,26 @@ class Notification(models.Model):
         return f"{self.title} ({self.user.email})"
 
 
+class NotificationPreference(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notification_preferences',
+    )
+    email_on_new_opportunity = models.BooleanField(default=True)
+    email_on_proposal_status = models.BooleanField(default=True)
+    email_on_scrape_complete = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Notification Preference'
+        verbose_name_plural = 'Notification Preferences'
+
+    def __str__(self):
+        return f'Notification preferences ({self.user.email})'
+
+
 class ActivityLog(models.Model):
     ACTIVITY_TYPES = [
         ('proposal_created', 'Proposta Criada'),
@@ -48,4 +68,3 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.get_type_display()} - {self.user.email if self.user else 'Unknown'}"
-

@@ -1,8 +1,12 @@
 from django.test import TestCase
 from django.utils import timezone
 
-from ..models import ActivityLog, Notification
-from .factories import ActivityLogFactory, NotificationFactory, UserFactory
+from .factories import (
+    ActivityLogFactory,
+    NotificationFactory,
+    NotificationPreferenceFactory,
+    UserFactory,
+)
 
 
 class NotificationModelTests(TestCase):
@@ -70,3 +74,18 @@ class ActivityLogModelTests(TestCase):
     def test_metadata_default(self):
         activity = ActivityLogFactory()
         self.assertEqual(activity.metadata, {})
+
+
+class NotificationPreferenceModelTests(TestCase):
+    def test_str_representation(self):
+        preference = NotificationPreferenceFactory()
+        self.assertEqual(
+            str(preference),
+            f'Notification preferences ({preference.user.email})',
+        )
+
+    def test_email_preferences_default_enabled(self):
+        preference = NotificationPreferenceFactory()
+        self.assertTrue(preference.email_on_new_opportunity)
+        self.assertTrue(preference.email_on_proposal_status)
+        self.assertTrue(preference.email_on_scrape_complete)

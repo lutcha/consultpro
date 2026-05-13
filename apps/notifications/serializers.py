@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.users.models import User
 
-from .models import ActivityLog, Notification
+from .models import ActivityLog, Notification, NotificationPreference
 
 
 class ActivityLogUserSerializer(serializers.ModelSerializer):
@@ -25,6 +25,19 @@ class NotificationSerializer(serializers.ModelSerializer):
             'read',
             'created_at',
         ]
+
+
+class NotificationPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationPreference
+        fields = [
+            'email_on_new_opportunity',
+            'email_on_proposal_status',
+            'email_on_scrape_complete',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at']
 
 
 class ActivityLogSerializer(serializers.ModelSerializer):

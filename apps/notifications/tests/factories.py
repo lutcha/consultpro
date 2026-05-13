@@ -2,7 +2,7 @@ import factory
 
 from apps.users.models import User
 
-from ..models import ActivityLog, Notification
+from ..models import ActivityLog, Notification, NotificationPreference
 
 
 class UserFactory(factory.django.DjangoModelFactory):
@@ -24,6 +24,16 @@ class NotificationFactory(factory.django.DjangoModelFactory):
     action_label = ''
     action_url = ''
     read = False
+
+
+class NotificationPreferenceFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = NotificationPreference
+
+    user = factory.SubFactory(UserFactory)
+    email_on_new_opportunity = True
+    email_on_proposal_status = True
+    email_on_scrape_complete = True
 
 
 class ActivityLogFactory(factory.django.DjangoModelFactory):

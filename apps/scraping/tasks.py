@@ -138,6 +138,7 @@ def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
         job.error_log = error_message
         job.batch_stats = stats
         job.save()
+        log_failed_scrape(source.name, source.id, str(e), job_id=job.id if job else None)
 
         source.status = 'error'
         source.error_message = error_message[:500]
@@ -550,6 +551,7 @@ def notify_new_cv_eligible_opportunities(batch_id: str = None, hours_window: int
                     message=notif_message,
                     action_label='Ver Oportunidade',
                     action_url=f'/scraping/opportunities/{opp.id}/',
+                    email_category='new_opportunity',
                 )
                 notifications_created += 1
             except Exception as notify_exc:
@@ -633,3 +635,63 @@ def _compute_quality_score(raw_item, deadline_validation, eligibility) -> float:
         score -= 0.05
 
     return round(max(0.0, min(1.0, score)), 2)
+
+
+@shared_task
+def import_scraped_opportunity_to_module(scraped_opportunity_id: int, user_id: int = None):
+    """
+    Import one scraped opportunity into the Opportunities module.
+    """
+    from apps.users.models import User
+    from apps.scraping.services.opportunity_importer import import_scraped_opportunity
+
+    try:
+        scraped_opp = ScrapedOpportunity.objects.select_related('source').get(pk=scraped_opportunity_id)
+    except ScrapedOpportunity.DoesNotExist:
+        logger.warning("ScrapedOpportunity %s not found for import", scraped_opportunity_id)
+        return {'status': 'not_found', 'scraped_opportunity_id': scraped_opportunity_id}
+
+    user = None
+    if user_id:
+        user = User.objects.filter(pk=user_id).first()
+
+    return import_scraped_opportunity(scraped_opp, user)
+
+
+@shared_task
+def import_cv_eligible_scraped_opportunities(limit: int = 50, user_id: int = None):
+    """
+    Import new CV-eligible scraped opportunities into the Opportunities module.
+    """
+    queryset = (
+        ScrapedOpportunity.objects
+        .select_related('source')
+        .filter(status='new', cv_eligible=True, imported_opportunity__isnull=True)
+        .order_by('deadline', '-data_quality_score', '-scraped_at')
+    )
+    if limit:
+        queryset = queryset[:limit]
+
+    from apps.users.models import User
+    from apps.scraping.services.opportunity_importer import import_scraped_opportunity
+
+    user = User.objects.filter(pk=user_id).first() if user_id else None
+    imported = []
+    skipped = []
+    for scraped_opp in queryset:
+        if scraped_opp.deadline and scraped_opp.deadline < timezone.now():
+            skipped.append({'id': scraped_opp.id, 'reason': 'expired_deadline'})
+            continue
+        try:
+            imported.append(import_scraped_opportunity(scraped_opp, user))
+        except Exception as exc:
+            logger.exception("Failed to import scraped opportunity %s: %s", scraped_opp.id, exc)
+            skipped.append({'id': scraped_opp.id, 'reason': str(exc)[:300]})
+
+    return {
+        'status': 'completed',
+        'imported_count': len(imported),
+        'skipped_count': len(skipped),
+        'imported': imported,
+        'skipped': skipped,
+    }

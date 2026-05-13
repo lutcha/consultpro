@@ -42,6 +42,57 @@ class UserViewSetTest(APITestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.first_name, 'Updated')
 
+    def test_notification_preferences_get_creates_defaults(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(reverse('user-notification-preferences'))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['email_on_new_opportunity'])
+        self.assertTrue(response.data['email_on_proposal_status'])
+        self.assertTrue(response.data['email_on_scrape_complete'])
+
+    def test_notification_preferences_patch(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            reverse('user-notification-preferences'),
+            {'email_on_new_opportunity': False},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['email_on_new_opportunity'])
+        self.assertTrue(response.data['email_on_proposal_status'])
+
+    def test_change_password(self):
+        self.user.set_password('OldPassword123!')
+        self.user.save()
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            reverse('user-change-password'),
+            {
+                'current_password': 'OldPassword123!',
+                'new_password': 'NewPassword123!',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('NewPassword123!'))
+
+    def test_change_password_rejects_invalid_current_password(self):
+        self.user.set_password('OldPassword123!')
+        self.user.save()
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            reverse('user-change-password'),
+            {
+                'current_password': 'WrongPassword123!',
+                'new_password': 'NewPassword123!',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('OldPassword123!'))
+
     def test_skills_action(self):
         self.client.force_authenticate(user=self.user)
         self.user.skills = ['Python', 'Django']

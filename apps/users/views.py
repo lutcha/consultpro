@@ -1,3 +1,5 @@
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import viewsets, serializers, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -13,6 +15,8 @@ from apps.users.serializers import (
     MeSerializer,
     ConsultantProfileSerializer,
 )
+from apps.notifications.models import NotificationPreference
+from apps.notifications.serializers import NotificationPreferenceSerializer
 
 
 class MeAPIView(APIView):
@@ -46,7 +50,7 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'skills', 'availability']:
             permission_classes = [permissions.IsAuthenticated, IsConsultantOrManager]
-        elif self.action == 'me':
+        elif self.action in ['me', 'notification_preferences', 'change_password']:
             permission_classes = [permissions.IsAuthenticated]
         else:
             permission_classes = [permissions.IsAuthenticated, IsManager]
@@ -80,6 +84,49 @@ class UserViewSet(viewsets.ModelViewSet):
         consultants = User.objects.filter(role='consultant')
         serializer = UserListSerializer(consultants, many=True)
         return Response(serializer.data)
+
+    @action(
+        detail=False,
+        methods=['get', 'patch'],
+        url_path='me/notification-preferences',
+    )
+    def notification_preferences(self, request):
+        preferences, _ = NotificationPreference.objects.get_or_create(user=request.user)
+        if request.method == 'GET':
+            serializer = NotificationPreferenceSerializer(preferences)
+            return Response(serializer.data)
+        serializer = NotificationPreferenceSerializer(
+            preferences,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='me/change-password',
+    )
+    def change_password(self, request):
+        current_password = request.data.get('current_password', '')
+        new_password = request.data.get('new_password', '')
+        if not request.user.check_password(current_password):
+            return Response(
+                {'current_password': ['Password actual invalida.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_password(new_password, request.user)
+        except DjangoValidationError as exc:
+            return Response(
+                {'new_password': list(exc.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.set_password(new_password)
+        request.user.save(update_fields=['password'])
+        return Response({'status': 'password changed'})
 
     @action(detail=True, methods=['get', 'put', 'patch'])
     def consultant_profile(self, request, pk=None):
