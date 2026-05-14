@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.core.permissions import IsConsultantOrManager, IsManager
-from apps.scraping.services.readiness import filter_ready_to_import
+from apps.scraping.services.readiness import filter_ready_to_import, get_import_readiness
 
 
 class _LargePage(PageNumberPagination):
@@ -150,28 +150,65 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['post'])
     def import_ready(self, request):
-        """Import all CV-eligible opportunities that are ready for Opportunities."""
+        """Import ready scraped opportunities and explain any records skipped."""
         from .services.opportunity_importer import import_scraped_opportunity
 
+        ids = request.data.get('ids') or []
         limit = int(request.data.get('limit') or 50)
-        queryset = filter_ready_to_import(self.get_queryset()).order_by(
-            'deadline', '-data_quality_score', '-scraped_at'
-        )[:limit]
+        max_scan = int(request.data.get('max_scan') or 500)
+        queryset = self.get_queryset().filter(
+            status='new',
+            imported_opportunity__isnull=True,
+        )
+        if ids:
+            queryset = queryset.filter(pk__in=ids).order_by('deadline', '-data_quality_score', '-scraped_at')
+        else:
+            queryset = queryset.order_by('deadline', '-data_quality_score', '-scraped_at')[:max_scan]
 
         imported = []
         skipped = []
+        failed = []
         for scraped_opp in queryset:
+            readiness = get_import_readiness(scraped_opp)
+            if not readiness['ready']:
+                skipped.append({
+                    'id': scraped_opp.id,
+                    'title': scraped_opp.title,
+                    'reasons': readiness['reasons'],
+                })
+                continue
+
+            if len(imported) >= limit:
+                skipped.append({
+                    'id': scraped_opp.id,
+                    'title': scraped_opp.title,
+                    'reasons': ['import_limit_reached'],
+                })
+                continue
+
             try:
-                imported.append(import_scraped_opportunity(scraped_opp, request.user))
+                result = import_scraped_opportunity(scraped_opp, request.user)
+                imported.append({
+                    'id': scraped_opp.id,
+                    'title': scraped_opp.title,
+                    **result,
+                })
             except Exception as exc:
-                skipped.append({'id': scraped_opp.id, 'reason': str(exc)[:300]})
+                failed.append({
+                    'id': scraped_opp.id,
+                    'title': scraped_opp.title,
+                    'reason': str(exc)[:300],
+                })
 
         return Response({
             'status': 'completed',
             'imported_count': len(imported),
             'skipped_count': len(skipped),
+            'failed_count': len(failed),
+            'processed_count': len(imported) + len(skipped) + len(failed),
             'imported': imported,
             'skipped': skipped,
+            'failed': failed,
         })
 
     @action(detail=True, methods=['post'])

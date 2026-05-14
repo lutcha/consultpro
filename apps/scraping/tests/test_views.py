@@ -132,6 +132,12 @@ class ScrapedOpportunityImportTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['imported_count'], 1)
+        self.assertEqual(response.data['skipped_count'], 1)
+        self.assertEqual(response.data['failed_count'], 0)
+        self.assertEqual(response.data['processed_count'], 2)
+        self.assertEqual(response.data['imported'][0]['id'], ready.id)
+        self.assertEqual(response.data['skipped'][0]['id'], low_quality.id)
+        self.assertIn('low_data_quality', response.data['skipped'][0]['reasons'])
         ready.refresh_from_db()
         low_quality.refresh_from_db()
         self.assertEqual(ready.status, 'imported')

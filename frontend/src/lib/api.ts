@@ -1497,18 +1497,58 @@ export async function apiImportScrapedOpportunity(id: number): Promise<{ opportu
   });
 }
 
-export async function apiImportReadyScrapedOpportunities(limit = 50): Promise<{
+export async function apiImportReadyScrapedOpportunities(limit = 50, ids?: number[]): Promise<{
   status: string;
   imported_count: number;
   skipped_count: number;
+  failed_count: number;
+  processed_count: number;
+  imported: Array<{
+    id: number;
+    title: string;
+    opportunity_id: number;
+    opportunity_url: string;
+    status: string;
+    created: boolean;
+  }>;
+  skipped: Array<{
+    id: number;
+    title: string;
+    reasons: string[];
+  }>;
+  failed: Array<{
+    id: number;
+    title: string;
+    reason: string;
+  }>;
 }> {
   return apiRequest<{
     status: string;
     imported_count: number;
     skipped_count: number;
+    failed_count: number;
+    processed_count: number;
+    imported: Array<{
+      id: number;
+      title: string;
+      opportunity_id: number;
+      opportunity_url: string;
+      status: string;
+      created: boolean;
+    }>;
+    skipped: Array<{
+      id: number;
+      title: string;
+      reasons: string[];
+    }>;
+    failed: Array<{
+      id: number;
+      title: string;
+      reason: string;
+    }>;
   }>('/scraping/opportunities/import_ready/', {
     method: 'POST',
-    body: JSON.stringify({ limit }),
+    body: JSON.stringify({ limit, ids }),
   });
 }
 

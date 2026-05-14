@@ -46,6 +46,15 @@ type ScrapingStats = {
   ready_to_import?: number;
 };
 
+type ImportReadySummary = {
+  imported_count: number;
+  skipped_count: number;
+  failed_count: number;
+  processed_count: number;
+  skipped: Array<{ id: number; title: string; reasons: string[] }>;
+  failed: Array<{ id: number; title: string; reason: string }>;
+};
+
 function toDate(value: string | null | undefined): Date | undefined {
   return value ? new Date(value) : undefined;
 }
@@ -158,6 +167,7 @@ function readinessReasonLabel(reason: string): string {
     already_imported: 'Ja importada',
     deadline_expired: 'Prazo expirado',
     low_data_quality: 'Qualidade abaixo do minimo',
+    import_limit_reached: 'Limite de importacao atingido',
   };
   return labels[reason] || reason.replace(/_/g, ' ');
 }
@@ -462,6 +472,7 @@ interface OpportunitiesTabProps {
   opportunities: ScrapedOpportunity[];
   busyOpportunityIds: Set<string>;
   importingReady: boolean;
+  importReadySummary: ImportReadySummary | null;
   onImport: (id: string) => void;
   onImportReady: () => void;
   onIgnore: (id: string) => void;
@@ -487,7 +498,7 @@ function DataQualityBadge({ score }: { score: number }) {
   return <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${cls}`}>{label} ({score}%)</span>;
 }
 
-function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, onImport, onImportReady, onIgnore }: OpportunitiesTabProps) {
+function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, importReadySummary, onImport, onImportReady, onIgnore }: OpportunitiesTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [sectorFilter, setSectorFilter] = useState<string>('');
@@ -547,7 +558,7 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, o
           </select>
           <Button size="sm" className="h-9" onClick={onImportReady} disabled={importingReady || readyCount === 0}>
             <ArrowRight className="h-4 w-4 mr-1" />
-            {importingReady ? 'A importar...' : `Importar elegiveis (${readyCount})`}
+            {importingReady ? 'A importar...' : `Importar prontas (${readyCount})`}
           </Button>
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -559,6 +570,33 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, o
           )}
         </div>
       </div>
+
+      {importReadySummary && (
+        <div className="rounded-lg border bg-emerald-50/60 p-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span className="font-medium text-emerald-900">
+              Importacao concluida
+            </span>
+            <span>{importReadySummary.imported_count} importadas</span>
+            <span>{importReadySummary.skipped_count} ignoradas</span>
+            <span>{importReadySummary.failed_count} falhadas</span>
+          </div>
+          {(importReadySummary.skipped.length > 0 || importReadySummary.failed.length > 0) && (
+            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+              {importReadySummary.skipped.slice(0, 3).map((item) => (
+                <p key={`skipped-${item.id}`}>
+                  {item.title}: {item.reasons.map(readinessReasonLabel).join(' - ')}
+                </p>
+              ))}
+              {importReadySummary.failed.slice(0, 3).map((item) => (
+                <p key={`failed-${item.id}`}>
+                  {item.title}: {item.reason}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
         {filtered.map((opp) => {
@@ -752,6 +790,7 @@ export function ScrapingPage() {
   const [busyOpportunityIds, setBusyOpportunityIds] = useState<Set<string>>(new Set());
   const [savingSource, setSavingSource] = useState(false);
   const [importingReady, setImportingReady] = useState(false);
+  const [importReadySummary, setImportReadySummary] = useState<ImportReadySummary | null>(null);
 
   const refreshSources = useCallback(async () => {
     const response = await apiGetScrapingSources();
@@ -867,6 +906,7 @@ export function ScrapingPage() {
   const handleImportOpportunity = async (id: string) => {
     setBusyOpportunityIds((prev) => new Set(prev).add(id));
     setError(null);
+    setImportReadySummary(null);
     try {
       const response = await apiImportScrapedOpportunity(Number(id));
       setOpportunities((prev) =>
@@ -913,11 +953,28 @@ export function ScrapingPage() {
   };
 
   const handleImportReadyOpportunities = async () => {
+    const readyIds = opportunities.filter(isReadyToImport).map((opp) => Number(opp.id));
+    const readyCount = readyIds.length;
+    if (readyCount === 0) {
+      toast.info('Nao ha oportunidades prontas para importar');
+      return;
+    }
+    const importCount = Math.min(readyCount, 50);
+    const confirmed = window.confirm(`Importar ${importCount} oportunidades prontas para o modulo Oportunidades?`);
+    if (!confirmed) return;
+
     setImportingReady(true);
     setError(null);
+    setImportReadySummary(null);
     try {
-      const response = await apiImportReadyScrapedOpportunities(50);
-      toast.success(`${response.imported_count} oportunidades importadas`);
+      const response = await apiImportReadyScrapedOpportunities(importCount, readyIds.slice(0, importCount));
+      setImportReadySummary(response);
+      const parts = [
+        `${response.imported_count} importadas`,
+        `${response.skipped_count} ignoradas`,
+        `${response.failed_count} falhadas`,
+      ];
+      toast.success(parts.join(' - '));
       await refreshAll();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao importar oportunidades elegiveis';
@@ -974,6 +1031,7 @@ export function ScrapingPage() {
                 opportunities={opportunities}
                 busyOpportunityIds={busyOpportunityIds}
                 importingReady={importingReady}
+                importReadySummary={importReadySummary}
                 onImport={handleImportOpportunity}
                 onImportReady={handleImportReadyOpportunities}
                 onIgnore={handleIgnoreOpportunity}
