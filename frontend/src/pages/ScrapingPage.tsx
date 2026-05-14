@@ -7,7 +7,7 @@ import {
   Globe, Play, Pause, Settings, Plus, Search, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Download, ArrowRight,
   Activity, Zap, Bot, ChevronDown, ChevronUp,
-  BarChart3, Layers, Eye, DollarSign,
+  BarChart3, Layers, Eye, DollarSign, ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import {
   apiGetScrapingStats,
   apiIgnoreScrapedOpportunity,
   apiImportScrapedOpportunity,
+  apiImportReadyScrapedOpportunities,
   apiRunScrapingSource,
   apiToggleScrapingSource,
   apiUpdateScrapingSource,
@@ -42,6 +43,7 @@ type ScrapingStats = {
   cv_eligible_new: number;
   avg_quality_score: number;
   success_rate: number;
+  ready_to_import?: number;
 };
 
 function toDate(value: string | null | undefined): Date | undefined {
@@ -64,10 +66,14 @@ function mapSource(source: ApiScrapingSource): ScrapingSource {
     totalOpportunitiesCount: source.total_opportunities_count || 0,
     successRate: source.success_rate || 0,
     errorMessage: source.error_message || undefined,
+    sourceCategory: source.source_category || source.source_type,
+    scraperKind: source.scraper_kind as ScrapingSource['scraperKind'],
+    scraperClass: source.scraper_class,
   };
 }
 
 function mapOpportunity(opp: ApiScrapedOpportunity): ScrapedOpportunity {
+  const score = opp.data_quality_score ? Number(opp.data_quality_score) : undefined;
   return {
     id: String(opp.id),
     sourceId: String(opp.source),
@@ -86,6 +92,10 @@ function mapOpportunity(opp: ApiScrapedOpportunity): ScrapedOpportunity {
     publishedAt: toDate(opp.published_at),
     deadlineAlert: Boolean(opp.deadline_alert),
     aiSummary: opp.ai_summary || undefined,
+    importedOpportunityId: opp.imported_opportunity ? String(opp.imported_opportunity) : undefined,
+    cvEligible: Boolean(opp.cv_eligible),
+    dataQualityScore: score !== undefined && score <= 1 ? Math.round(score * 100) : score,
+    sourceName: opp.source_name,
   };
 }
 
@@ -102,6 +112,40 @@ function mapJob(job: ApiScrapingJob): ScrapingJob {
     errorLog: job.error_log || undefined,
     executedBy: job.executed_by || 'system',
   };
+}
+
+function formatSourceCategory(category: string): string {
+  const labels: Record<string, string> = {
+    multilateral: 'Multilaterais',
+    bilateral: 'Bilaterais',
+    grants: 'Grants',
+    aggregator: 'Agregadores',
+    national: 'Nacionais',
+    eu_grants: 'UE / Grants',
+    bilateral_procurement: 'Bilaterais / Procurement',
+    development_bank: 'Bancos de Desenvolvimento',
+    un_agency: 'Agencias ONU',
+    portal: 'Portais',
+    api: 'APIs',
+    rss: 'RSS',
+    other: 'Outras',
+  };
+  return labels[category] || category.replace(/_/g, ' ');
+}
+
+function formatScraperKind(kind: string): string {
+  const labels: Record<string, string> = {
+    dedicated: 'Scraper dedicado',
+    generic: 'Scraper generico',
+    api: 'API',
+    rss: 'RSS',
+    paused: 'Pausada',
+  };
+  return labels[kind] || kind;
+}
+
+function isReadyToImport(opp: ScrapedOpportunity): boolean {
+  return opp.status === 'new' && Boolean(opp.cvEligible) && !opp.importedOpportunityId && dataQualityScore(opp) >= 45;
 }
 
 // ============================================
@@ -129,6 +173,7 @@ function OpportunityStatusBadge({ status }: { status: string }) {
     imported: { label: 'Importada', class: 'bg-violet-100 text-violet-700 border-violet-200' },
     ignored: { label: 'Ignorada', class: 'bg-slate-100 text-slate-700 border-slate-200' },
     expired: { label: 'Expirada', class: 'bg-red-100 text-red-700 border-red-200' },
+    rejected: { label: 'Rejeitada', class: 'bg-red-100 text-red-700 border-red-200' },
   };
   const cfg = configs[status] || configs.new;
   return <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.class}`}>{cfg.label}</span>;
@@ -159,9 +204,10 @@ function StatsCards({ sources, stats }: StatsCardsProps) {
       : 0
   );
   const totalSources = stats?.total_sources ?? sources.length;
+  const readyToImport = stats?.ready_to_import ?? 0;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
       <Card>
         <CardContent className="p-4 flex items-center gap-3">
           <div className="p-2.5 rounded-lg bg-muted text-blue-600"><Globe className="h-5 w-5" /></div>
@@ -184,6 +230,12 @@ function StatsCards({ sources, stats }: StatsCardsProps) {
         <CardContent className="p-4 flex items-center gap-3">
           <div className="p-2.5 rounded-lg bg-muted text-amber-600"><Zap className="h-5 w-5" /></div>
           <div><p className="text-2xl font-bold">{avgSuccess}%</p><p className="text-xs text-muted-foreground">Taxa de Sucesso</p></div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-4 flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-muted text-emerald-600"><CheckCircle2 className="h-5 w-5" /></div>
+          <div><p className="text-2xl font-bold">{readyToImport}</p><p className="text-xs text-muted-foreground">Prontas a Importar</p></div>
         </CardContent>
       </Card>
     </div>
@@ -219,13 +271,29 @@ function SourcesTab({
   onSaveEdit,
 }: SourcesTabProps) {
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [kindFilter, setKindFilter] = useState('');
   const [editForm, setEditForm] = useState({
     name: '',
     url: '',
     scrape_frequency: 'daily',
     status: 'active',
   });
-  const filtered = sources.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
+  const categories = Array.from(new Set(sources.map((s) => s.sourceCategory || s.sourceType).filter(Boolean))).sort();
+  const kinds = Array.from(new Set(sources.map((s) => s.scraperKind || 'generic').filter(Boolean))).sort();
+  const filtered = sources.filter((s) => {
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.organization.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = !categoryFilter || (s.sourceCategory || s.sourceType) === categoryFilter;
+    const matchesKind = !kindFilter || (s.scraperKind || 'generic') === kindFilter;
+    return matchesSearch && matchesCategory && matchesKind;
+  });
+  const groupedSources = filtered.reduce<Record<string, ScrapingSource[]>>((acc, source) => {
+    const key = source.sourceCategory || source.sourceType || 'other';
+    acc[key] = acc[key] || [];
+    acc[key].push(source);
+    return acc;
+  }, {});
 
   useEffect(() => {
     if (editingSource) {
@@ -245,6 +313,14 @@ function SourcesTab({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Pesquisar fontes..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
+        <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+          <option value="">Todas categorias</option>
+          {categories.map((category) => <option key={category} value={category}>{formatSourceCategory(category)}</option>)}
+        </select>
+        <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
+          <option value="">Todos tipos</option>
+          {kinds.map((kind) => <option key={kind} value={kind}>{formatScraperKind(kind)}</option>)}
+        </select>
         <Button size="sm" onClick={onAdd}><Plus className="h-4 w-4 mr-1" />Nova Fonte</Button>
       </div>
 
@@ -276,15 +352,26 @@ function SourcesTab({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((source) => (
-          <Card key={source.id} className="hover:shadow-md transition-shadow">
+      <div className="space-y-5">
+        {Object.entries(groupedSources).map(([category, group]) => (
+          <div key={category} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">{formatSourceCategory(category)}</h3>
+              <span className="text-xs text-muted-foreground">{group.length} fontes</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {group.map((source) => (
+                <Card key={source.id} className="hover:shadow-md transition-shadow">
             <CardContent className="p-4 space-y-3">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="font-semibold text-sm">{source.name}</h4>
                     <SourceStatusBadge status={source.status} />
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-xs px-2 py-0.5 rounded border bg-muted">{formatScraperKind(source.scraperKind || 'generic')}</span>
+                    {source.scraperClass && <span className="text-xs text-muted-foreground">{source.scraperClass}</span>}
                   </div>
                   <a href={source.url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 flex items-center gap-0.5 mt-0.5 hover:underline">
                     <Globe className="h-3 w-3" />{source.url}
@@ -324,7 +411,10 @@ function SourcesTab({
                 <Button size="sm" variant="outline" className="h-8 text-xs px-2" onClick={() => onEdit(source)}><Settings className="h-3.5 w-3.5" /></Button>
               </div>
             </CardContent>
-          </Card>
+                </Card>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
       {filtered.length === 0 && (
@@ -342,11 +432,16 @@ function SourcesTab({
 interface OpportunitiesTabProps {
   opportunities: ScrapedOpportunity[];
   busyOpportunityIds: Set<string>;
+  importingReady: boolean;
   onImport: (id: string) => void;
+  onImportReady: () => void;
   onIgnore: (id: string) => void;
 }
 
 function dataQualityScore(opp: ScrapedOpportunity): number {
+  if (opp.dataQualityScore !== undefined) {
+    return Math.round(opp.dataQualityScore);
+  }
   let score = 0;
   if (opp.title && opp.title.length > 10 && opp.title.length < 300) score += 30;
   if (opp.organization) score += 15;
@@ -363,7 +458,7 @@ function DataQualityBadge({ score }: { score: number }) {
   return <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${cls}`}>{label} ({score}%)</span>;
 }
 
-function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnore }: OpportunitiesTabProps) {
+function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, onImport, onImportReady, onIgnore }: OpportunitiesTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [sectorFilter, setSectorFilter] = useState<string>('');
@@ -378,7 +473,7 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnor
     const title = o.title || '';
     const matchesSearch = title.toLowerCase().includes(search.toLowerCase()) ||
       (o.organization || '').toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !statusFilter || o.status === statusFilter;
+    const matchesStatus = !statusFilter || (statusFilter === 'ready' ? isReadyToImport(o) : o.status === statusFilter);
     const matchesSector = !sectorFilter || o.sector === sectorFilter;
     const matchesCountry = !countryFilter || o.country === countryFilter;
     const matchesQuality = qualityMin === 0 || dataQualityScore(o) >= qualityMin;
@@ -388,6 +483,7 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnor
   });
 
   const newCount = filtered.filter((o) => o.status === 'new').length;
+  const readyCount = opportunities.filter(isReadyToImport).length;
 
   return (
     <div className="space-y-4">
@@ -400,10 +496,12 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnor
           </div>
           <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">Todos Status</option>
+            <option value="ready">Prontas para importar</option>
             <option value="new">Novas</option>
             <option value="imported">Importadas</option>
             <option value="ignored">Ignoradas</option>
             <option value="expired">Expiradas</option>
+            <option value="rejected">Rejeitadas</option>
           </select>
           <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={sectorFilter} onChange={(e) => setSectorFilter(e.target.value)}>
             <option value="">Todos Sectores</option>
@@ -418,6 +516,10 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnor
             <option value={75}>Alta Qualidade</option>
             <option value={45}>Média+</option>
           </select>
+          <Button size="sm" className="h-9" onClick={onImportReady} disabled={importingReady || readyCount === 0}>
+            <ArrowRight className="h-4 w-4 mr-1" />
+            {importingReady ? 'A importar...' : `Importar elegiveis (${readyCount})`}
+          </Button>
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{filtered.length} oportunidades {newCount > 0 && <span className="text-blue-600 font-medium">· {newCount} novas</span>}</span>
@@ -445,10 +547,12 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnor
                       <div className="flex items-center gap-1.5 shrink-0">
                         <OpportunityStatusBadge status={opp.status} />
                         <DataQualityBadge score={quality} />
+                        {isReadyToImport(opp) && <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">Pronta</span>}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
                       {opp.organization && <span className="font-medium text-foreground">{opp.organization}</span>}
+                      {opp.sourceName && <span>{opp.sourceName}</span>}
                       {opp.country && <span className="flex items-center gap-1">🌍 {opp.country}</span>}
                       {opp.sector && <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" />{opp.sector}</span>}
                       {opp.deadline && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Prazo: {opp.deadline.toLocaleDateString('pt-PT')}</span>}
@@ -484,7 +588,16 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, onImport, onIgnor
                       </div>
                     )}
                     {opp.status === 'imported' && (
-                      <span className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Importada</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Importada</span>
+                        {opp.importedOpportunityId && (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs px-2" asChild>
+                            <a href={`/opportunities/${opp.importedOpportunityId}`}>
+                              <ExternalLink className="h-3 w-3 mr-1" />Ver oportunidade
+                            </a>
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -594,6 +707,7 @@ export function ScrapingPage() {
   const [runningSourceIds, setRunningSourceIds] = useState<Set<string>>(new Set());
   const [busyOpportunityIds, setBusyOpportunityIds] = useState<Set<string>>(new Set());
   const [savingSource, setSavingSource] = useState(false);
+  const [importingReady, setImportingReady] = useState(false);
 
   const refreshSources = useCallback(async () => {
     const response = await apiGetScrapingSources();
@@ -710,9 +824,13 @@ export function ScrapingPage() {
     setBusyOpportunityIds((prev) => new Set(prev).add(id));
     setError(null);
     try {
-      await apiImportScrapedOpportunity(Number(id));
+      const response = await apiImportScrapedOpportunity(Number(id));
       setOpportunities((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, status: 'imported' as const } : o))
+        prev.map((o) => (
+          o.id === id
+            ? { ...o, status: 'imported' as const, importedOpportunityId: String(response.opportunity_id) }
+            : o
+        ))
       );
       toast.success('Oportunidade importada');
     } catch (err) {
@@ -747,6 +865,22 @@ export function ScrapingPage() {
         next.delete(id);
         return next;
       });
+    }
+  };
+
+  const handleImportReadyOpportunities = async () => {
+    setImportingReady(true);
+    setError(null);
+    try {
+      const response = await apiImportReadyScrapedOpportunities(50);
+      toast.success(`${response.imported_count} oportunidades importadas`);
+      await refreshAll();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao importar oportunidades elegiveis';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setImportingReady(false);
     }
   };
 
@@ -795,7 +929,9 @@ export function ScrapingPage() {
               <OpportunitiesTab
                 opportunities={opportunities}
                 busyOpportunityIds={busyOpportunityIds}
+                importingReady={importingReady}
                 onImport={handleImportOpportunity}
+                onImportReady={handleImportReadyOpportunities}
                 onIgnore={handleIgnoreOpportunity}
               />
             </TabsContent>

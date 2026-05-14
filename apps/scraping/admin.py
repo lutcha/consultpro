@@ -4,6 +4,7 @@ from django.utils.html import format_html, mark_safe
 from django.utils.timezone import now
 from django.db.models import Count, Q
 
+from apps.scraping.services.source_catalog import get_scraper_kind, get_source_category
 from .models import ScrapingSource, ScrapedOpportunity, ScrapingJob, ScrapingAlert
 
 
@@ -35,6 +36,73 @@ def _status_badge(status, choices_map):
     )
 
 
+class SourceCategoryFilter(admin.SimpleListFilter):
+    title = 'category'
+    parameter_name = 'source_category'
+
+    def lookups(self, request, model_admin):
+        categories = set()
+        for source in ScrapingSource.objects.only('name', 'organization', 'url', 'source_type', 'status', 'scraper_class', 'scraper_config', 'filters'):
+            categories.add(get_source_category(source))
+        return [(category, category.replace('_', ' ').title()) for category in sorted(categories)]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            ids = [
+                source.pk
+                for source in queryset.only('name', 'organization', 'url', 'source_type', 'status', 'scraper_class', 'scraper_config', 'filters')
+                if get_source_category(source) == self.value()
+            ]
+            return queryset.filter(pk__in=ids)
+        return queryset
+
+
+class ScraperKindFilter(admin.SimpleListFilter):
+    title = 'scraper kind'
+    parameter_name = 'scraper_kind'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('dedicated', 'Dedicated'),
+            ('generic', 'Generic'),
+            ('api', 'API'),
+            ('rss', 'RSS'),
+            ('paused', 'Paused'),
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == 'dedicated':
+            return queryset.exclude(scraper_class='GenericPortalScraper').exclude(source_type__in=['api', 'rss'])
+        if value == 'generic':
+            return queryset.filter(scraper_class='GenericPortalScraper')
+        if value in ('api', 'rss'):
+            return queryset.filter(source_type=value)
+        if value == 'paused':
+            return queryset.filter(status='paused')
+        return queryset
+
+
+class ReadyToImportFilter(admin.SimpleListFilter):
+    title = 'ready to import'
+    parameter_name = 'ready_to_import'
+
+    def lookups(self, request, model_admin):
+        return (('yes', 'Ready'), ('no', 'Not ready'))
+
+    def queryset(self, request, queryset):
+        ready = queryset.filter(
+            status='new',
+            cv_eligible=True,
+            imported_opportunity__isnull=True,
+        ).filter(Q(deadline__isnull=True) | Q(deadline__gte=now()))
+        if self.value() == 'yes':
+            return ready
+        if self.value() == 'no':
+            return queryset.exclude(pk__in=ready.values('pk'))
+        return queryset
+
+
 # ── Inlines ───────────────────────────────────────────────────────────────────
 
 class RecentJobInline(admin.TabularInline):
@@ -55,10 +123,14 @@ class RecentJobInline(admin.TabularInline):
 @admin.register(ScrapingSource)
 class ScrapingSourceAdmin(admin.ModelAdmin):
     list_display = (
-        'name_link', 'organization', 'source_status_badge', 'scraper_class',
+        'name_link', 'organization', 'source_category_cell', 'scraper_kind_cell',
+        'source_status_badge', 'scraper_class',
         'scrape_frequency', 'last_scraped_at', 'stats_cell', 'ssl_robots_flags',
     )
-    list_filter = ('status', 'source_type', 'scrape_frequency', 'scraper_class', 'verify_ssl')
+    list_filter = (
+        SourceCategoryFilter, ScraperKindFilter,
+        'status', 'source_type', 'scrape_frequency', 'scraper_class', 'verify_ssl'
+    )
     search_fields = ('name', 'organization', 'url')
     readonly_fields = (
         'created_at', 'updated_at', 'last_scraped_at', 'next_scrape_at',
@@ -111,6 +183,14 @@ class ScrapingSourceAdmin(admin.ModelAdmin):
     @admin.display(description='Status')
     def source_status_badge(self, obj):
         return _status_badge(obj.status, dict(ScrapingSource.STATUS_CHOICES))
+
+    @admin.display(description='Category')
+    def source_category_cell(self, obj):
+        return get_source_category(obj).replace('_', ' ').title()
+
+    @admin.display(description='Kind')
+    def scraper_kind_cell(self, obj):
+        return get_scraper_kind(obj).replace('_', ' ').title()
 
     @admin.display(description='Stats')
     def stats_cell(self, obj):
@@ -182,9 +262,10 @@ class ScrapingSourceAdmin(admin.ModelAdmin):
 class ScrapedOpportunityAdmin(admin.ModelAdmin):
     list_display = (
         'title', 'source', 'opp_status_badge', 'country', 'cv_eligible_icon',
-        'deadline_cell', 'quality_cell', 'deep_content_status', 'scraped_at',
+        'deadline_cell', 'quality_cell', 'deep_content_status', 'imported_link', 'scraped_at',
     )
     list_filter = (
+        ReadyToImportFilter,
         'status', 'cv_eligible', 'source', 'language', 'deep_content_status',
         ('scraped_at', admin.DateFieldListFilter),
         ('deadline', admin.DateFieldListFilter),
@@ -199,13 +280,16 @@ class ScrapedOpportunityAdmin(admin.ModelAdmin):
     show_full_result_count = False
     list_per_page = 50
     save_on_top = True
-    actions = ['action_mark_ignored', 'action_mark_rejected', 'action_enrich_ai']
+    actions = [
+        'action_import_ready', 'action_mark_ignored',
+        'action_mark_rejected', 'action_enrich_ai',
+    ]
 
     fieldsets = (
         ('Core', {
             'fields': (
                 'source', 'title', 'organization', 'client',
-                'external_url', 'external_id', 'status',
+                'external_url', 'external_id', 'status', 'imported_opportunity',
             ),
         }),
         ('Classification', {
@@ -266,6 +350,16 @@ class ScrapedOpportunityAdmin(admin.ModelAdmin):
         color = '#28a745' if score >= 0.8 else ('#ffc107' if score >= 0.5 else '#dc3545')
         return format_html('<span style="color:{}">{:.0%}</span>', color, score)
 
+    @admin.display(description='Opportunity')
+    def imported_link(self, obj):
+        if not obj.imported_opportunity_id:
+            return '—'
+        return format_html(
+            '<a href="/admin/opportunities/opportunity/{}/change/">#{}</a>',
+            obj.imported_opportunity_id,
+            obj.imported_opportunity_id,
+        )
+
     @admin.display(description='Raw payload (read-only)')
     def raw_payload_display(self, obj):
         return _pretty_json(obj.raw_payload)
@@ -286,6 +380,29 @@ class ScrapedOpportunityAdmin(admin.ModelAdmin):
     def action_mark_ignored(self, request, queryset):
         n = queryset.update(status='ignored')
         self.message_user(request, f'{n} opportunity/ies marked ignored.', messages.SUCCESS)
+
+    @admin.action(description='Import ready selected opportunities')
+    def action_import_ready(self, request, queryset):
+        from apps.scraping.services.opportunity_importer import import_scraped_opportunity
+
+        ready = queryset.filter(
+            status='new',
+            cv_eligible=True,
+            imported_opportunity__isnull=True,
+        ).filter(Q(deadline__isnull=True) | Q(deadline__gte=now()))
+        imported = 0
+        skipped = 0
+        for opp in ready:
+            try:
+                import_scraped_opportunity(opp, request.user)
+                imported += 1
+            except Exception:
+                skipped += 1
+        self.message_user(
+            request,
+            f'{imported} opportunity/ies imported. {skipped} skipped.',
+            messages.SUCCESS if imported else messages.WARNING,
+        )
 
     @admin.action(description='Reject selected opportunities')
     def action_mark_rejected(self, request, queryset):

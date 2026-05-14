@@ -259,13 +259,14 @@ DEFAULT_SOURCES = [
     {
         'name': 'EU Funding & Tenders Portal',
         'organization': 'European Commission',
-        'url': 'https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-search',
-        'source_type': 'portal',
+        'url': 'https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/calls-for-proposals;type=1;status=31,8',
+        'source_type': 'api',
         'status': 'paused',  # React SPA — needs API integration (EU Open Data Portal)
         'scrape_frequency': 'weekly',
-        'scraper_class': 'GenericPortalScraper',
+        'scraper_class': 'EUFundingScraper',
         'scraper_config': {
-            'url': 'https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-search',
+            'url': 'https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/calls-for-proposals;type=1;status=31,8',
+            'reference_data_url': 'https://ec.europa.eu/info/funding-tenders/opportunities/data/referenceData/grantProgramme',
             'item_selectors': ['div.topic-item', 'tr', 'article', 'li'],
             'title_selector': 'h3, h4, a, strong',
             'link_selector': 'a[href]',
@@ -275,6 +276,7 @@ DEFAULT_SOURCES = [
             'client': 'EU',
             'country': 'Africa / International',
             'language': 'en',
+            'source_category': 'eu_grants',
         },
         'filters': {
             'countries': ['Africa', 'CPV'],
@@ -721,13 +723,14 @@ DEFAULT_SOURCES = [
     {
         'name': 'GIZ - International Tenders',
         'organization': 'Deutsche Gesellschaft für Internationale Zusammenarbeit (GIZ)',
-        'url': 'https://www.giz.de/en/jobs/tenders.html',
+        'url': 'https://www.giz.de/en/mediacenter/107225.html',
         'source_type': 'portal',
         'status': 'active',
         'scrape_frequency': 'daily',
-        'scraper_class': 'GenericPortalScraper',
+        'scraper_class': 'GIZScraper',
         'scraper_config': {
-            'url': 'https://www.giz.de/en/jobs/tenders.html',
+            'url': 'https://www.giz.de/en/mediacenter/107225.html',
+            'jobs_url': 'https://www.giz.de/en/jobs/jobs.html',
             'item_selectors': [
                 'div.teaserbox',
                 'article.tender',
@@ -743,6 +746,7 @@ DEFAULT_SOURCES = [
             'client': 'GIZ / BMZ Germany',
             'country': 'Africa / International',
             'language': 'en',
+            'source_category': 'bilateral_procurement',
         },
         'filters': {
             'countries': ['Africa', 'CPV', 'PALOP'],
@@ -1606,13 +1610,17 @@ class Command(BaseCommand):
         updated_count = 0
 
         for src_data in DEFAULT_SOURCES:
+            source_status = src_data['status']
+            if src_data['scraper_class'] in ('EUFundingScraper', 'GIZScraper'):
+                source_status = 'active'
+
             source, created = ScrapingSource.objects.update_or_create(
                 name=src_data['name'],
                 defaults={
                     'organization': src_data['organization'],
                     'url': src_data['url'],
                     'source_type': src_data['source_type'],
-                    'status': src_data['status'],
+                    'status': source_status,
                     'scrape_frequency': src_data['scrape_frequency'],
                     'scraper_class': src_data['scraper_class'],
                     'scraper_config': src_data.get('scraper_config', {}),

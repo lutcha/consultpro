@@ -131,6 +131,7 @@ def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
         return {'status': 'completed', 'job_id': job.id, 'stats': stats}
 
     except Exception as e:
+        from apps.scraping.services.failed_scrapes_logger import log_failed_scrape
         error_message = _format_scraping_error(e)
         logger.error(f"Scraping job failed for source {source_id}: {error_message}", exc_info=True)
         job.status = 'failed'

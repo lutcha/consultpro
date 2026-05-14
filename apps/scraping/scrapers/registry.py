@@ -12,6 +12,8 @@ from .generic_portal_scraper import GenericPortalScraper
 from .fcdo_scraper import FCDOScraper
 from .usaid_scraper import USAIDScraper
 from .cabo_verde_procurement_scraper import CaboVerdeProcurementScraper
+from .giz_scraper import GIZScraper
+from .eu_funding_scraper import EUFundingScraper
 
 SCRAPER_REGISTRY = {
     'BaseScraper': BaseScraper,
@@ -25,6 +27,8 @@ SCRAPER_REGISTRY = {
     'FCDOScraper': FCDOScraper,
     'USAIDScraper': USAIDScraper,
     'CaboVerdeProcurementScraper': CaboVerdeProcurementScraper,
+    'GIZScraper': GIZScraper,
+    'EUFundingScraper': EUFundingScraper,
 }
 
 

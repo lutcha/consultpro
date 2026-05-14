@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from apps.users.models import User
+from apps.scraping.services.source_catalog import get_scraper_kind, get_source_category
 from .models import (
     ScrapingSource,
     ScrapedOpportunity,
@@ -15,6 +16,9 @@ class UserMiniSerializer(serializers.ModelSerializer):
 
 
 class ScrapingSourceListSerializer(serializers.ModelSerializer):
+    source_category = serializers.SerializerMethodField()
+    scraper_kind = serializers.SerializerMethodField()
+
     class Meta:
         model = ScrapingSource
         fields = [
@@ -30,10 +34,21 @@ class ScrapingSourceListSerializer(serializers.ModelSerializer):
             'new_opportunities_count',
             'total_opportunities_count',
             'success_rate',
+            'source_category',
+            'scraper_kind',
         ]
+
+    def get_source_category(self, obj) -> str:
+        return get_source_category(obj)
+
+    def get_scraper_kind(self, obj) -> str:
+        return get_scraper_kind(obj)
 
 
 class ScrapingSourceDetailSerializer(serializers.ModelSerializer):
+    source_category = serializers.SerializerMethodField()
+    scraper_kind = serializers.SerializerMethodField()
+
     class Meta:
         model = ScrapingSource
         fields = [
@@ -54,9 +69,17 @@ class ScrapingSourceDetailSerializer(serializers.ModelSerializer):
             'total_opportunities_count',
             'success_rate',
             'error_message',
+            'source_category',
+            'scraper_kind',
             'created_at',
             'updated_at',
         ]
+
+    def get_source_category(self, obj) -> str:
+        return get_source_category(obj)
+
+    def get_scraper_kind(self, obj) -> str:
+        return get_scraper_kind(obj)
 
 
 class ScrapedOpportunityListSerializer(serializers.ModelSerializer):

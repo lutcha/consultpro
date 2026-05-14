@@ -1336,6 +1336,9 @@ export interface ApiScrapingSource {
   total_opportunities_count: number;
   success_rate: number;
   error_message: string;
+  source_category: string;
+  scraper_kind: string;
+  scraper_class?: string;
 }
 
 export interface ApiScrapedOpportunity {
@@ -1356,6 +1359,10 @@ export interface ApiScrapedOpportunity {
   published_at: string | null;
   deadline_alert: boolean;
   ai_summary: string;
+  cv_eligible: boolean;
+  data_quality_score: string;
+  imported_opportunity: number | null;
+  source_name?: string;
 }
 
 export interface ApiScrapingJob {
@@ -1414,6 +1421,21 @@ export async function apiImportScrapedOpportunity(id: number): Promise<{ opportu
   });
 }
 
+export async function apiImportReadyScrapedOpportunities(limit = 50): Promise<{
+  status: string;
+  imported_count: number;
+  skipped_count: number;
+}> {
+  return apiRequest<{
+    status: string;
+    imported_count: number;
+    skipped_count: number;
+  }>('/scraping/opportunities/import_ready/', {
+    method: 'POST',
+    body: JSON.stringify({ limit }),
+  });
+}
+
 export async function apiIgnoreScrapedOpportunity(id: number): Promise<{ status: string }> {
   return apiRequest<{ status: string }>(`/scraping/opportunities/${id}/ignore/`, {
     method: 'POST',
@@ -1440,6 +1462,7 @@ export async function apiGetScrapingStats(): Promise<{
   cv_eligible_new: number;
   avg_quality_score: number;
   success_rate: number;
+  ready_to_import?: number;
 }> {
   return apiRequest('/scraping/sources/stats/');
 }

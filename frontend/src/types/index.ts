@@ -386,6 +386,9 @@ export interface ScrapingSource {
   totalOpportunitiesCount: number;
   successRate: number;
   errorMessage?: string;
+  sourceCategory?: string;
+  scraperKind?: 'dedicated' | 'generic' | 'api' | 'rss';
+  scraperClass?: string;
 }
 
 export interface ScrapedOpportunity {
@@ -402,11 +405,14 @@ export interface ScrapedOpportunity {
   value?: number;
   currency: string;
   deadline?: Date;
-  status: 'new' | 'imported' | 'ignored' | 'expired';
+  status: 'new' | 'imported' | 'ignored' | 'expired' | 'rejected';
   publishedAt?: Date;
   deadlineAlert: boolean;
   aiSummary?: string;
   importedOpportunityId?: string;
+  cvEligible?: boolean;
+  dataQualityScore?: number;
+  sourceName?: string;
 }
 
 export interface ScrapingJob {
