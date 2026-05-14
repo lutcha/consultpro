@@ -565,6 +565,7 @@ def notify_new_cv_eligible_opportunities(batch_id: str = None, hours_window: int
                         'message': notif_message,
                         'action_label': 'Ver Oportunidade',
                         'action_url': f'/scraping/opportunities/{opp.id}/',
+                        'email_category': 'new_opportunity',
                     })
                     notifications_created += 1
                 except Exception:

@@ -3,7 +3,59 @@ import math
 from django.utils import timezone
 from rest_framework import serializers
 
+from .constants import COUNTRY_CHOICES, SECTOR_CHOICES
 from .models import Opportunity, Requirement, Risk
+
+
+_SECTOR_ALIASES = {
+    'ambiental': 'environment',
+    'ambiente': 'environment',
+    'tecnologia': 'ict',
+    'finanças': 'financial_services',
+    'financas': 'financial_services',
+    'infraestruturas': 'infrastructure',
+    'educação': 'education',
+    'educacao': 'education',
+    'saúde': 'health',
+    'saude': 'health',
+    'agricultura': 'agriculture',
+    'governação': 'governance',
+    'governacao': 'governance',
+}
+
+_COUNTRY_ALIASES = {
+    'cabo verde': 'cv',
+    'moçambique': 'mz',
+    'mocambique': 'mz',
+    'angola': 'ao',
+    'senegal': 'sn',
+    'guiné-bissau': 'gw',
+    'guine-bissau': 'gw',
+    'timor-leste': 'tl',
+    'são tomé e príncipe': 'st',
+    'sao tome e principe': 'st',
+    'outro': 'int',
+    'other': 'int',
+    'international': 'int',
+    'internacional': 'int',
+}
+
+
+class _FlexChoiceField(serializers.ChoiceField):
+    def __init__(self, choices, aliases=None, **kwargs):
+        super().__init__(choices, **kwargs)
+        self._label_map = {label.lower(): code for code, label in choices}
+        self._aliases = aliases or {}
+
+    def to_internal_value(self, data):
+        if data in self._choices:
+            return data
+        key = str(data).lower()
+        return (
+            self._label_map.get(key)
+            or self._aliases.get(key)
+            or self.fail('invalid_choice', input=data)
+        )
 
 
 class RequirementSerializer(serializers.ModelSerializer):
@@ -48,6 +100,9 @@ class OpportunityDetailSerializer(serializers.ModelSerializer):
     requirements = RequirementSerializer(many=True, read_only=True)
     risks = RiskSerializer(many=True, read_only=True)
     days_until_deadline = serializers.SerializerMethodField()
+    sector = _FlexChoiceField(choices=SECTOR_CHOICES, aliases=_SECTOR_ALIASES)
+    country = _FlexChoiceField(choices=COUNTRY_CHOICES, aliases=_COUNTRY_ALIASES)
+    description = serializers.CharField(required=False, allow_blank=True, default='')
 
     class Meta:
         model = Opportunity
