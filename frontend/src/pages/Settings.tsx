@@ -35,7 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUserStore } from '@/stores';
 import { useCurriculumStore } from '@/stores/useCurriculumStore';
-import { useScrapingStore } from '@/stores/useScrapingStore';
+import { AddScrapingSourceModal } from '@/components/modals';
 import {
   apiUpdateMe,
   apiGetUsers,
@@ -44,6 +44,9 @@ import {
   apiChangePassword,
   apiGetNotificationPreferences,
   apiUpdateNotificationPreferences,
+  apiCreateScrapingSource,
+  apiGetScrapingSources,
+  type ApiScrapingSource,
   type ApiNotificationPreference,
   type ApiUser,
 } from '@/lib/api';
@@ -85,8 +88,10 @@ export function Settings() {
     templates, isLoadingTemplates,
     fetchTemplates, createTemplate, updateTemplate, deleteTemplate,
   } = useCurriculumStore();
-  const { sources, fetchSources } = useScrapingStore();
   const [isLoading, setIsLoading] = useState(false);
+  const [sources, setSources] = useState<ApiScrapingSource[]>([]);
+  const [isLoadingSources, setIsLoadingSources] = useState(false);
+  const [sourceModalOpen, setSourceModalOpen] = useState(false);
 
   const [templateModal, setTemplateModal] = useState<{ open: boolean; editing: CVTemplate | null }>({ open: false, editing: null });
   const [templateForm, setTemplateForm] = useState<TemplateFormState>(BLANK_FORM);
@@ -125,8 +130,33 @@ export function Settings() {
 
   useEffect(() => {
     fetchTemplates();
-    fetchSources();
-  }, [fetchTemplates, fetchSources]);
+    loadSources();
+  }, [fetchTemplates]);
+
+  const loadSources = async () => {
+    setIsLoadingSources(true);
+    try {
+      const res = await apiGetScrapingSources();
+      setSources(res.results);
+    } catch {
+      toast.error('Erro ao carregar fontes de scraping');
+    } finally {
+      setIsLoadingSources(false);
+    }
+  };
+
+  const handleAddScrapingSource = async (data: any) => {
+    await apiCreateScrapingSource({
+      name: data.name,
+      organization: data.organization,
+      url: data.url,
+      source_type: data.source_type || 'portal',
+      scrape_frequency: data.scrape_frequency || 'daily',
+    });
+    toast.success('Fonte criada');
+    setSourceModalOpen(false);
+    await loadSources();
+  };
 
   const loadUsers = async () => {
     setIsLoadingUsers(true);
@@ -494,16 +524,31 @@ export function Settings() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Fontes de Scraping</CardTitle>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" />Nova Fonte</Button>
+              <Button size="sm" onClick={() => setSourceModalOpen(true)}><Plus className="h-4 w-4 mr-1" />Nova Fonte</Button>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {sources.length === 0 && <p className="text-muted-foreground">Carregando fontes...</p>}
-                {sources.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">{s.name}</p>
-                      <p className="text-sm text-muted-foreground">{s.organization} • {s.scrapeFrequency}</p>
+                {isLoadingSources && (
+                  <div className="flex items-center gap-2 py-4 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">A carregar fontes...</span>
+                  </div>
+                )}
+                {!isLoadingSources && sources.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    Nenhuma fonte configurada. Clique em <strong>Nova Fonte</strong> para adicionar.
+                  </p>
+                )}
+                {!isLoadingSources && sources.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-3 p-3 border rounded-lg">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{s.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {s.organization} - {s.scrape_frequency}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {s.total_opportunities_count || 0} oportunidades - {s.success_rate || 0}% sucesso
+                      </p>
                     </div>
                     <Badge variant={s.status === 'active' ? 'default' : 'secondary'}>{s.status}</Badge>
                   </div>
@@ -511,6 +556,11 @@ export function Settings() {
               </div>
             </CardContent>
           </Card>
+          <AddScrapingSourceModal
+            open={sourceModalOpen}
+            onClose={() => setSourceModalOpen(false)}
+            onAdd={handleAddScrapingSource}
+          />
         </TabsContent>
 
         {/* Users */}

@@ -412,6 +412,8 @@ export interface ScrapedOpportunity {
   importedOpportunityId?: string;
   cvEligible?: boolean;
   dataQualityScore?: number;
+  readyToImport?: boolean;
+  importReadinessReasons?: string[];
   sourceName?: string;
 }
 

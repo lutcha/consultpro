@@ -1435,6 +1435,8 @@ export interface ApiScrapedOpportunity {
   ai_summary: string;
   cv_eligible: boolean;
   data_quality_score: string;
+  ready_to_import?: boolean;
+  import_readiness_reasons?: string[];
   imported_opportunity: number | null;
   source_name?: string;
 }

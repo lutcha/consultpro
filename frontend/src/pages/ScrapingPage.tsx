@@ -95,6 +95,8 @@ function mapOpportunity(opp: ApiScrapedOpportunity): ScrapedOpportunity {
     importedOpportunityId: opp.imported_opportunity ? String(opp.imported_opportunity) : undefined,
     cvEligible: Boolean(opp.cv_eligible),
     dataQualityScore: score !== undefined && score <= 1 ? Math.round(score * 100) : score,
+    readyToImport: opp.ready_to_import === undefined ? undefined : Boolean(opp.ready_to_import),
+    importReadinessReasons: opp.import_readiness_reasons || [],
     sourceName: opp.source_name,
   };
 }
@@ -145,7 +147,34 @@ function formatScraperKind(kind: string): string {
 }
 
 function isReadyToImport(opp: ScrapedOpportunity): boolean {
+  if (opp.readyToImport !== undefined) return opp.readyToImport;
   return opp.status === 'new' && Boolean(opp.cvEligible) && !opp.importedOpportunityId && dataQualityScore(opp) >= 45;
+}
+
+function readinessReasonLabel(reason: string): string {
+  const labels: Record<string, string> = {
+    status_not_new: 'Estado nao e novo',
+    not_cv_eligible: 'Fora do foco Cabo Verde/Lusofono',
+    already_imported: 'Ja importada',
+    deadline_expired: 'Prazo expirado',
+    low_data_quality: 'Qualidade abaixo do minimo',
+  };
+  return labels[reason] || reason.replace(/_/g, ' ');
+}
+
+function ImportReadinessBadge({ opportunity }: { opportunity: ScrapedOpportunity }) {
+  const ready = isReadyToImport(opportunity);
+  if (ready) {
+    return <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">Pronta</span>;
+  }
+  if (opportunity.status !== 'new') return null;
+  const reasons = opportunity.importReadinessReasons || [];
+  const label = reasons.length > 0 ? reasons.map(readinessReasonLabel).join(' - ') : 'Nao pronta';
+  return (
+    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-slate-100 text-slate-700" title={label}>
+      Nao pronta
+    </span>
+  );
 }
 
 // ============================================
@@ -547,7 +576,7 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, o
                       <div className="flex items-center gap-1.5 shrink-0">
                         <OpportunityStatusBadge status={opp.status} />
                         <DataQualityBadge score={quality} />
-                        {isReadyToImport(opp) && <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">Pronta</span>}
+                        <ImportReadinessBadge opportunity={opp} />
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
@@ -607,6 +636,21 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, o
                   <div className="mt-3 pt-3 border-t space-y-2">
                     {opp.description && opp.description.length > 30 && (
                       <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">{opp.description}</p>
+                    )}
+                    {opp.importReadinessReasons && opp.importReadinessReasons.length > 0 && opp.status === 'new' && (
+                      <div className="p-3 bg-slate-50 rounded-lg border">
+                        <div className="flex items-center gap-2 mb-1">
+                          <AlertTriangle className="h-4 w-4 text-slate-600" />
+                          <span className="text-sm font-medium text-slate-900">Criterios de importacao</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {opp.importReadinessReasons.map((reason) => (
+                            <span key={reason} className="text-xs px-2 py-0.5 rounded-full bg-white border text-slate-700">
+                              {readinessReasonLabel(reason)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     )}
                     {opp.aiSummary && (
                       <div className="p-3 bg-blue-50/50 rounded-lg">

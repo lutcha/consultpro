@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus } from 'lucide-react';
-import { useScrapingStore } from '@/stores';
+import { apiCreateScrapingSource } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface Props {
   open?: boolean;
@@ -27,7 +28,7 @@ export function AddScrapingSourceModal({ open, onClose, onAdd }: Props) {
     source_type: 'portal',
     scrape_frequency: 'daily',
   });
-  const { addSource } = useScrapingStore();
+  const [isSaving, setIsSaving] = useState(false);
 
   const isControlled = open !== undefined;
   const isOpen = isControlled ? open : internalOpen;
@@ -39,14 +40,28 @@ export function AddScrapingSourceModal({ open, onClose, onAdd }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const data = { name: form.name, organization: form.organization, url: form.url, sourceType: form.source_type as any, scrapeFrequency: form.scrape_frequency as any };
-    if (onAdd) {
-      onAdd(data);
-    } else {
-      addSource(data);
+    const data = {
+      name: form.name,
+      organization: form.organization,
+      url: form.url,
+      source_type: form.source_type,
+      scrape_frequency: form.scrape_frequency,
+    };
+    setIsSaving(true);
+    try {
+      if (onAdd) {
+        await Promise.resolve(onAdd(data));
+      } else {
+        await apiCreateScrapingSource(data);
+        toast.success('Fonte criada');
+      }
+      handleOpenChange(false);
+      setForm({ name: '', organization: '', url: '', source_type: 'portal', scrape_frequency: 'daily' });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar fonte');
+    } finally {
+      setIsSaving(false);
     }
-    handleOpenChange(false);
-    setForm({ name: '', organization: '', url: '', source_type: 'portal', scrape_frequency: 'daily' });
   };
 
   const dialogContent = (
@@ -94,8 +109,8 @@ export function AddScrapingSourceModal({ open, onClose, onAdd }: Props) {
             </select>
           </div>
         </div>
-        <Button type="submit" className="w-full">
-          {'Adicionar Fonte'}
+        <Button type="submit" className="w-full" disabled={isSaving}>
+          {isSaving ? 'A adicionar...' : 'Adicionar Fonte'}
         </Button>
       </form>
     </DialogContent>
