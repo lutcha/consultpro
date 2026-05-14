@@ -36,7 +36,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUserStore } from '@/stores';
 import { useCurriculumStore } from '@/stores/useCurriculumStore';
 import { useScrapingStore } from '@/stores/useScrapingStore';
-import { apiUpdateMe, apiGetUsers, apiPatchUser, apiCreateUser, type ApiUser } from '@/lib/api';
+import {
+  apiUpdateMe,
+  apiGetUsers,
+  apiPatchUser,
+  apiCreateUser,
+  apiChangePassword,
+  apiGetNotificationPreferences,
+  apiUpdateNotificationPreferences,
+  type ApiNotificationPreference,
+  type ApiUser,
+} from '@/lib/api';
 import { toast } from 'sonner';
 import type { CVTemplate } from '@/types';
 
@@ -62,6 +72,11 @@ const BLANK_FORM: TemplateFormState = {
   name: '', organization: 'world_bank', organization_name: 'World Bank',
   description: '', max_length_pages: '',
 };
+
+type NotificationPreferenceKey =
+  | 'email_on_new_opportunity'
+  | 'email_on_proposal_status'
+  | 'email_on_scrape_complete';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -101,13 +116,9 @@ export function Settings() {
     confirm: '',
   });
 
-  const [notifications, setNotifications] = useState({
-    email_deadlines: true,
-    email_proposals: true,
-    push_opportunities: false,
-    push_qc: true,
-    weekly_digest: true,
-  });
+  const [notifications, setNotifications] = useState<ApiNotificationPreference | null>(null);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
 
   const [theme, setTheme] = useState('system');
   const [apiKey, setApiKey] = useState('sk-••••••••••••••••••••••••••••••');
@@ -133,6 +144,21 @@ export function Settings() {
     if (user?.role === 'admin' || user?.role === 'manager') loadUsers();
   }, [user?.role]);
 
+  useEffect(() => {
+    const loadNotificationPreferences = async () => {
+      setIsLoadingNotifications(true);
+      try {
+        const data = await apiGetNotificationPreferences();
+        setNotifications(data);
+      } catch {
+        toast.error('Erro ao carregar preferencias de alertas');
+      } finally {
+        setIsLoadingNotifications(false);
+      }
+    };
+    loadNotificationPreferences();
+  }, []);
+
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setProfile((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -151,16 +177,50 @@ export function Settings() {
 
   const handlePasswordChange = async () => {
     if (password.new !== password.confirm) {
-      toast.error('As palavras-passe não coincidem');
+      toast.error('As palavras-passe nao coincidem');
       return;
     }
-    toast.info('Alteração de password - funcionalidade em desenvolvimento');
+    if (!password.current || !password.new) {
+      toast.error('Preencha a password actual e a nova password');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await apiChangePassword({
+        current_password: password.current,
+        new_password: password.new,
+      });
+      setPassword({ current: '', new: '', confirm: '' });
+      toast.success('Password alterada com sucesso');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao alterar password');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  const handleNotificationToggle = (key: NotificationPreferenceKey) => {
+    setNotifications((prev) => (
+      prev ? { ...prev, [key]: !prev[key] } : prev
+    ));
   };
 
-  const handleNotificationToggle = (key: string) => {
-    setNotifications((prev) => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
+  const handleSaveNotifications = async () => {
+    if (!notifications) return;
+    setIsSavingNotifications(true);
+    try {
+      const updated = await apiUpdateNotificationPreferences({
+        email_on_new_opportunity: notifications.email_on_new_opportunity,
+        email_on_proposal_status: notifications.email_on_proposal_status,
+        email_on_scrape_complete: notifications.email_on_scrape_complete,
+      });
+      setNotifications(updated);
+      toast.success('Preferencias de alertas guardadas');
+    } catch {
+      toast.error('Erro ao guardar preferencias de alertas');
+    } finally {
+      setIsSavingNotifications(false);
+    }
   };
-
   const handleRegenerateApiKey = () => {
     setApiKey(`sk-${Math.random().toString(36).substring(2, 18)}`);
     toast.success('API Key regenerada com sucesso');
@@ -315,7 +375,10 @@ export function Settings() {
               <div><Label>Password Actual</Label><Input type="password" value={password.current} onChange={(e) => setPassword({ ...password, current: e.target.value })} /></div>
               <div><Label>Nova Password</Label><Input type="password" value={password.new} onChange={(e) => setPassword({ ...password, new: e.target.value })} /></div>
               <div><Label>Confirmar Nova Password</Label><Input type="password" value={password.confirm} onChange={(e) => setPassword({ ...password, confirm: e.target.value })} /></div>
-              <Button onClick={handlePasswordChange}><Lock className="h-4 w-4 mr-2" />Alterar Password</Button>
+              <Button onClick={handlePasswordChange} disabled={isLoading}>
+                {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Lock className="h-4 w-4 mr-2" />}
+                Alterar Password
+              </Button>
             </CardContent>
           </Card>
           <Card>
@@ -333,31 +396,48 @@ export function Settings() {
         {/* Notifications */}
         <TabsContent value="notifications" className="space-y-4">
           <Card>
-            <CardHeader><CardTitle>Configuração de Notificações</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Configuracao de Notificacoes</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              {[
-                { key: 'email_deadlines', label: 'Alertas de prazos por email', desc: 'Receba notificações quando os prazos das oportunidades se aproximarem' },
-                { key: 'email_proposals', label: 'Updates de propostas', desc: 'Notificações sobre alterações de estado nas propostas' },
-                { key: 'push_opportunities', label: 'Novas oportunidades (Push)', desc: 'Receba alertas push quando novas oportunidades forem capturadas' },
-                { key: 'push_qc', label: 'Resultados de Quality Check', desc: 'Notificações quando um QC for concluído' },
-                { key: 'weekly_digest', label: 'Resumo semanal', desc: 'Email semanal com estatísticas e oportunidades relevantes' },
+              {isLoadingNotifications || !notifications ? (
+                <div className="flex items-center gap-2 py-4 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">A carregar preferencias...</span>
+                </div>
+              ) : ([
+                {
+                  key: 'email_on_new_opportunity' as const,
+                  label: 'Novas oportunidades por email',
+                  desc: 'Receba emails quando forem detectadas oportunidades elegiveis para Cabo Verde.',
+                },
+                {
+                  key: 'email_on_proposal_status' as const,
+                  label: 'Estado de propostas por email',
+                  desc: 'Receba emails quando uma proposta mudar de fase ou estado.',
+                },
+                {
+                  key: 'email_on_scrape_complete' as const,
+                  label: 'Scraping concluido por email',
+                  desc: 'Receba emails quando uma execucao de scraping terminar.',
+                },
               ].map((item) => (
-                <div key={item.key} className="flex items-center justify-between py-2 border-b last:border-0">
+                <div key={item.key} className="flex items-center justify-between gap-4 py-2 border-b last:border-0">
                   <div>
                     <p className="font-medium">{item.label}</p>
                     <p className="text-sm text-muted-foreground">{item.desc}</p>
                   </div>
                   <Switch
-                    checked={notifications[item.key as keyof typeof notifications]}
+                    checked={notifications[item.key]}
                     onCheckedChange={() => handleNotificationToggle(item.key)}
                   />
                 </div>
-              ))}
-              <Button onClick={() => toast.success('Preferências de notificações guardadas')}><Save className="h-4 w-4 mr-2" />Guardar Preferências</Button>
+              )))}
+              <Button onClick={handleSaveNotifications} disabled={!notifications || isSavingNotifications}>
+                {isSavingNotifications ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Guardar Preferencias
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
-
         {/* Templates */}
         <TabsContent value="templates" className="space-y-4">
           <Card>

@@ -81,6 +81,9 @@ export interface MeResponse {
   availability: string;
   skills: string[];
   languages: string[];
+  phone?: string;
+  bio?: string;
+  location?: string;
 }
 
 export async function apiLogin(
@@ -153,6 +156,63 @@ export async function apiUpdateMe(data: Partial<MeResponse>): Promise<MeResponse
   return apiRequest<MeResponse>('/auth/me/', {
     method: 'PUT',
     body: JSON.stringify(data),
+  });
+}
+
+export async function apiChangePassword(data: {
+  current_password: string;
+  new_password: string;
+}): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>('/users/me/change-password/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface ApiNotificationPreference {
+  email_on_new_opportunity: boolean;
+  email_on_proposal_status: boolean;
+  email_on_scrape_complete: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function apiGetNotificationPreferences(): Promise<ApiNotificationPreference> {
+  return apiRequest<ApiNotificationPreference>('/users/me/notification-preferences/');
+}
+
+export async function apiUpdateNotificationPreferences(
+  data: Partial<ApiNotificationPreference>
+): Promise<ApiNotificationPreference> {
+  return apiRequest<ApiNotificationPreference>('/users/me/notification-preferences/', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface ApiNotification {
+  id: number;
+  user: number;
+  type: 'warning' | 'error' | 'info' | 'success';
+  title: string;
+  message: string;
+  action_label: string;
+  action_url: string;
+  read: boolean;
+  created_at: string;
+}
+
+export async function apiGetNotifications(): Promise<PaginatedResponse<ApiNotification>> {
+  return apiRequest<PaginatedResponse<ApiNotification>>('/notifications/');
+}
+
+export async function apiGetUnreadNotificationCount(): Promise<{ unread_count: number }> {
+  return apiRequest<{ unread_count: number }>('/notifications/unread_count/');
+}
+
+export async function apiMarkNotificationRead(id: number): Promise<{ status: string }> {
+  return apiRequest<{ status: string }>(`/notifications/${id}/read/`, {
+    method: 'POST',
   });
 }
 
