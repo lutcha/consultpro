@@ -201,7 +201,7 @@ export function mapApiProposalSection(
 ): ProposalSection {
   return {
     id: String(section.id),
-    type: section.type as ProposalSection['type'],
+    type: section.section_type as ProposalSection['type'],
     title: section.title,
     content: section.content,
     order: section.order,

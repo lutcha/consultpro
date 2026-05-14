@@ -7,9 +7,10 @@ import type { Proposal, ProposalStatus } from '@/types';
 import {
   apiGetProposals,
   apiGetProposal,
+  apiCreateProposalSection,
   apiUpdateProposalSection,
 } from '@/lib/api';
-import { mapApiProposal, mapApiProposalListItem } from '@/lib/apiMappers';
+import { mapApiProposal, mapApiProposalListItem, mapApiProposalSection } from '@/lib/apiMappers';
 
 interface ProposalState {
   proposals: Proposal[];
@@ -27,6 +28,7 @@ interface ProposalState {
     sectionId: string,
     content: string
   ) => Promise<void>;
+  addSection: (proposalId: string, title: string, content?: string) => Promise<string>;
   updateStatus: (id: string, status: ProposalStatus) => void;
   addProposal: (proposal: Proposal) => void;
   saveProposal: (proposal: Proposal) => Promise<void>;
@@ -120,6 +122,36 @@ export const useProposalStore = create<ProposalState>((set, _get) => ({
       }));
     } catch (error) {
       set({ autoSaveStatus: 'error' });
+    }
+  },
+
+  addSection: async (proposalId, title, content = '') => {
+    set({ autoSaveStatus: 'saving', error: null });
+    try {
+      const created = await apiCreateProposalSection(proposalId, {
+        title,
+        content,
+        section_type: 'custom',
+      });
+      const section = mapApiProposalSection(created);
+      set((state) => ({
+        selectedProposal:
+          state.selectedProposal?.id === proposalId
+            ? {
+                ...state.selectedProposal,
+                sections: [...state.selectedProposal.sections, section],
+                updatedAt: new Date(),
+              }
+            : state.selectedProposal,
+        autoSaveStatus: 'saved',
+      }));
+      return section.id;
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to add proposal section',
+        autoSaveStatus: 'error',
+      });
+      throw error;
     }
   },
 

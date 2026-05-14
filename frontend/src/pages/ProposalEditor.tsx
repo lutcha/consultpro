@@ -182,7 +182,7 @@ const EVENT_CONFIG: Record<string, EventIconConfig> = {
 export function ProposalEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { selectedProposal, isLoading: proposalLoading, selectProposal, updateSection, updateStatus, autoSaveStatus } =
+  const { selectedProposal, isLoading: proposalLoading, selectProposal, updateSection, addSection, updateStatus, autoSaveStatus } =
     useProposalStore();
   const [activeSectionId, setActiveSectionId] = useState<string>('');
   const [editorContent, setEditorContent] = useState('');
@@ -194,6 +194,10 @@ export function ProposalEditor() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadType, setUploadType] = useState<'proponent' | 'client'>('proponent');
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sectionDialogOpen, setSectionDialogOpen] = useState(false);
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [newSectionError, setNewSectionError] = useState('');
+  const [isAddingSection, setIsAddingSection] = useState(false);
 
   // Mobile panel toggles
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -283,6 +287,28 @@ export function ProposalEditor() {
   const handleSectionChange = (sectionId: string) => {
     if (activeSectionId && editorContent) saveSection(editorContent);
     setActiveSectionId(sectionId);
+  };
+
+  const handleAddSection = async () => {
+    if (!selectedProposal) return;
+    const title = newSectionTitle.trim();
+    if (!title) {
+      setNewSectionError('O titulo da seccao e obrigatorio.');
+      return;
+    }
+    setNewSectionError('');
+    setIsAddingSection(true);
+    try {
+      const sectionId = await addSection(selectedProposal.id, title);
+      setActiveSectionId(sectionId);
+      setEditorContent('');
+      setNewSectionTitle('');
+      setSectionDialogOpen(false);
+    } catch (err) {
+      setNewSectionError(err instanceof Error ? err.message : 'Erro ao criar seccao.');
+    } finally {
+      setIsAddingSection(false);
+    }
   };
 
   const handleAISuggestion = (generatedContent: string) => {
@@ -568,6 +594,18 @@ export function ProposalEditor() {
             <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
               Secções
             </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mb-2 h-7 w-full justify-start gap-1.5 text-xs"
+              onClick={() => {
+                setNewSectionError('');
+                setSectionDialogOpen(true);
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Adicionar seccao
+            </Button>
             <div className="space-y-0.5">
               {selectedProposal.sections.map((section) => (
                 <button
@@ -965,6 +1003,36 @@ export function ProposalEditor() {
       </Dialog>
 
       {/* ── Pipeline Transition Modal ── */}
+      <Dialog open={sectionDialogOpen} onOpenChange={setSectionDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adicionar Seccao</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={newSectionTitle}
+              onChange={(e) => setNewSectionTitle(e.target.value)}
+              placeholder="Ex: Plano de Mobilizacao"
+              onKeyDown={(e) => e.key === 'Enter' && handleAddSection()}
+            />
+            {newSectionError && (
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                {newSectionError}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSectionDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAddSection} disabled={isAddingSection}>
+              {isAddingSection ? 'A criar...' : 'Criar Seccao'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={transitionModal.open}
         onOpenChange={(open) => !open && setTransitionModal({ open: false, targetStatus: null, label: '' })}

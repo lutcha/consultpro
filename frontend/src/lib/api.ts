@@ -390,7 +390,7 @@ export interface ApiAISuggestion {
 export interface ApiProposalSection {
   id: number;
   proposal: number;
-  type: string;
+  section_type: string;
   title: string;
   content: string;
   order: number;
@@ -477,6 +477,20 @@ export async function apiUpdateProposalSection(
       body: JSON.stringify(data),
     }
   );
+}
+
+export async function apiCreateProposalSection(
+  proposalId: string,
+  data: { title: string; content?: string; section_type?: string }
+): Promise<ApiProposalSection> {
+  return apiRequest<ApiProposalSection>(`/proposals/${proposalId}/add_section/`, {
+    method: 'POST',
+    body: JSON.stringify({
+      title: data.title,
+      content: data.content || '',
+      section_type: data.section_type || 'custom',
+    }),
+  });
 }
 
 export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {
@@ -1323,7 +1337,7 @@ export async function apiUploadCV(file: File): Promise<ApiCurriculum> {
   formData.append('file', file);
   formData.append('file_name', file.name);
   const ext = file.name.split('.').pop()?.toLowerCase();
-  formData.append('file_type', ext === 'pdf' ? 'pdf' : 'docx');
+  formData.append('file_type', ext === 'doc' ? 'doc' : ext === 'pdf' ? 'pdf' : 'docx');
 
   return apiRequest<ApiCurriculum>('/curriculum/', {
     method: 'POST',

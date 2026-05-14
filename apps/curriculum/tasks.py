@@ -14,13 +14,16 @@ def _extract_text(curriculum) -> str:
         return ''
     try:
         if curriculum.file_type == 'pdf':
-            from pypdf import PdfReader
+            try:
+                from pypdf import PdfReader
+            except ImportError:
+                from PyPDF2 import PdfReader
             with curriculum.file.open('rb') as fh:
                 reader = PdfReader(fh)
                 text = '\n'.join(page.extract_text() or '' for page in reader.pages)
             logger.info('CV %s: extracted %d chars from PDF', curriculum.id, len(text))
             return text
-        if curriculum.file_type in ('docx', 'doc'):
+        if curriculum.file_type == 'docx':
             import io
             from docx import Document
             with curriculum.file.open('rb') as fh:
@@ -28,6 +31,8 @@ def _extract_text(curriculum) -> str:
             text = '\n'.join(p.text for p in doc.paragraphs)
             logger.info('CV %s: extracted %d chars from DOCX', curriculum.id, len(text))
             return text
+        if curriculum.file_type == 'doc':
+            logger.warning('CV %s: legacy .doc files are not supported for text extraction', curriculum.id)
     except Exception as exc:
         logger.warning('Text extraction failed for CV %s: %s', curriculum.id, exc)
     return ''
