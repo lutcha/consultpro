@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from django.db.models import Q
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from apps.core.permissions import IsManager
+from apps.core.permissions import IsConsultantOrManager, IsManager
 
 
 class _LargePage(PageNumberPagination):
@@ -39,7 +39,7 @@ from .serializers import (
 
 class ScrapingSourceViewSet(viewsets.ModelViewSet):
     queryset = ScrapingSource.objects.all()
-    permission_classes = [IsManager]
+    permission_classes = [IsConsultantOrManager]
     pagination_class = _LargePage
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'source_type']
@@ -124,6 +124,7 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
 
 class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ScrapedOpportunity.objects.all()
+    permission_classes = [IsConsultantOrManager]
     pagination_class = _MediumPage
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [

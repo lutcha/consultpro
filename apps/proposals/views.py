@@ -296,6 +296,12 @@ class ProposalViewSet(viewsets.ModelViewSet):
     queryset = Proposal.objects.all()
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.role in ('manager', 'admin') or user.is_staff:
+            return Proposal.objects.all()
+        return Proposal.objects.filter(created_by=user)
+
     def get_serializer_class(self):
         if self.action == 'list':
             return ProposalListSerializer
