@@ -77,3 +77,79 @@ class ScrapedOpportunityImportTests(APITestCase):
         self.assertFalse(second.data['created'])
         self.assertEqual(first.data['opportunity_id'], second.data['opportunity_id'])
         self.assertEqual(Opportunity.objects.filter(url_source=scraped.external_url).count(), 1)
+
+    def test_ready_to_import_filter_uses_eligibility_deadline_and_quality(self):
+        ready = self._create_scraped_opportunity(
+            external_id='ready-001',
+            external_url='https://example.org/tenders/ready-001',
+            cv_eligible=True,
+            data_quality_score='0.90',
+        )
+        self._create_scraped_opportunity(
+            external_id='low-quality',
+            external_url='https://example.org/tenders/low-quality',
+            cv_eligible=True,
+            data_quality_score='0.20',
+        )
+        self._create_scraped_opportunity(
+            external_id='not-eligible',
+            external_url='https://example.org/tenders/not-eligible',
+            cv_eligible=False,
+            data_quality_score='0.90',
+        )
+        self._create_scraped_opportunity(
+            external_id='expired',
+            external_url='https://example.org/tenders/expired',
+            cv_eligible=True,
+            data_quality_score='0.90',
+            deadline=timezone.now() - timezone.timedelta(days=1),
+        )
+
+        url = reverse('scraping:scraped-opportunity-list')
+        response = self.client.get(url, {'ready_to_import': 'true'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item['id'] for item in response.data['results']}
+        self.assertEqual(ids, {ready.id})
+        self.assertTrue(response.data['results'][0]['ready_to_import'])
+
+    def test_import_ready_imports_only_ready_records(self):
+        ready = self._create_scraped_opportunity(
+            external_id='ready-import',
+            external_url='https://example.org/tenders/ready-import',
+            cv_eligible=True,
+            data_quality_score='0.90',
+        )
+        low_quality = self._create_scraped_opportunity(
+            external_id='low-quality-import',
+            external_url='https://example.org/tenders/low-quality-import',
+            cv_eligible=True,
+            data_quality_score='0.20',
+        )
+
+        url = reverse('scraping:scraped-opportunity-import-ready')
+        response = self.client.post(url, {'limit': 10}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['imported_count'], 1)
+        ready.refresh_from_db()
+        low_quality.refresh_from_db()
+        self.assertEqual(ready.status, 'imported')
+        self.assertEqual(low_quality.status, 'new')
+
+    def test_list_serializer_explains_import_readiness_reasons(self):
+        scraped = self._create_scraped_opportunity(
+            external_id='reason-001',
+            external_url='https://example.org/tenders/reason-001',
+            cv_eligible=False,
+            data_quality_score='0.20',
+        )
+
+        url = reverse('scraping:scraped-opportunity-list')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item = next(row for row in response.data['results'] if row['id'] == scraped.id)
+        self.assertFalse(item['ready_to_import'])
+        self.assertIn('not_cv_eligible', item['import_readiness_reasons'])
+        self.assertIn('low_data_quality', item['import_readiness_reasons'])

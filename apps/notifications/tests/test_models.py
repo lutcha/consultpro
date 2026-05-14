@@ -1,6 +1,8 @@
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.notifications.models import ActivityLog, Notification
+
 from .factories import (
     ActivityLogFactory,
     NotificationFactory,

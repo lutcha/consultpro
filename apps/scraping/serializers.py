@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from apps.users.models import User
+from apps.scraping.services.readiness import get_import_readiness
 from apps.scraping.services.source_catalog import get_scraper_kind, get_source_category
 from .models import (
     ScrapingSource,
@@ -85,6 +86,8 @@ class ScrapingSourceDetailSerializer(serializers.ModelSerializer):
 class ScrapedOpportunityListSerializer(serializers.ModelSerializer):
     source_name = serializers.CharField(source='source.name', read_only=True)
     is_cv_eligible = serializers.BooleanField(source='cv_eligible', read_only=True)
+    ready_to_import = serializers.SerializerMethodField()
+    import_readiness_reasons = serializers.SerializerMethodField()
 
     class Meta:
         model = ScrapedOpportunity
@@ -112,9 +115,17 @@ class ScrapedOpportunityListSerializer(serializers.ModelSerializer):
             'cv_eligible',
             'is_cv_eligible',
             'data_quality_score',
+            'ready_to_import',
+            'import_readiness_reasons',
             'imported_opportunity',
             'scraped_at',
         ]
+
+    def get_ready_to_import(self, obj) -> bool:
+        return get_import_readiness(obj)['ready']
+
+    def get_import_readiness_reasons(self, obj) -> list:
+        return get_import_readiness(obj)['reasons']
 
 
 class ScrapedOpportunityDetailSerializer(serializers.ModelSerializer):
@@ -122,6 +133,7 @@ class ScrapedOpportunityDetailSerializer(serializers.ModelSerializer):
     eligibility = serializers.JSONField(source='eligibility_data', read_only=True)
     deadline_meta = serializers.JSONField(source='deadline_validation', read_only=True)
     flags = serializers.JSONField(source='transformation_flags', read_only=True)
+    import_readiness = serializers.SerializerMethodField()
 
     class Meta:
         model = ScrapedOpportunity
@@ -161,10 +173,14 @@ class ScrapedOpportunityDetailSerializer(serializers.ModelSerializer):
             'raw_content_hash',
             'ingestion_batch_id',
             'imported_opportunity',
+            'import_readiness',
             'imported_by',
             'imported_at',
             'scraped_at',
         ]
+
+    def get_import_readiness(self, obj) -> dict:
+        return get_import_readiness(obj)
 
 
 class ScrapingJobListSerializer(serializers.ModelSerializer):

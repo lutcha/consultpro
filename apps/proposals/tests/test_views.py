@@ -8,7 +8,8 @@ from rest_framework.test import APIClient
 
 from apps.projects.models import Project
 from apps.proposals.document_generator import generate_proposal_docx, generate_proposal_pdf
-from apps.proposals.models import Budget, Proposal
+from apps.proposals.models import Budget, Proposal, ProposalEvent
+from apps.quality_checks.models import QualityCheck
 from apps.proposals.tests.factories import (
     BudgetFactory,
     OpportunityFactory,
@@ -161,17 +162,43 @@ class TestProposalViewSet:
 
     def test_submit_action(self, authenticated_client):
         client, user = authenticated_client
-        proposal = ProposalFactory(created_by=user)
+        proposal = ProposalFactory(created_by=user, status='ready_for_submission')
+        QualityCheck.objects.create(
+            proposal=proposal,
+            status='completed',
+            overall_score=90,
+            can_submit=True,
+            executed_by=user,
+        )
         url = reverse('proposal-submit', kwargs={'pk': proposal.pk})
         response = client.post(url)
         assert response.status_code == status.HTTP_200_OK
         proposal.refresh_from_db()
-        assert proposal.status == 'qc_check'
+        assert proposal.status == 'submitted'
         assert proposal.submitted_at is not None
+        assert ProposalEvent.objects.filter(proposal=proposal, event_type='submission').exists()
+
+    def test_submit_action_requires_passing_qc(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='ready_for_submission')
+        url = reverse('proposal-submit', kwargs={'pk': proposal.pk})
+
+        response = client.post(url)
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        proposal.refresh_from_db()
+        assert proposal.status == 'ready_for_submission'
 
     def test_approve_for_submission_marks_ready_without_project(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user, status='qc_check')
+        QualityCheck.objects.create(
+            proposal=proposal,
+            status='completed',
+            overall_score=90,
+            can_submit=True,
+            executed_by=user,
+        )
 
         url = reverse('proposal-approve-for-submission', kwargs={'pk': proposal.pk})
         response = client.post(url)
@@ -185,19 +212,33 @@ class TestProposalViewSet:
     def test_approve_for_submission_is_idempotent_without_project(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user, status='qc_check')
+        QualityCheck.objects.create(
+            proposal=proposal,
+            status='completed',
+            overall_score=90,
+            can_submit=True,
+            executed_by=user,
+        )
 
         url = reverse('proposal-approve-for-submission', kwargs={'pk': proposal.pk})
         first_response = client.post(url)
         second_response = client.post(url)
 
         assert first_response.status_code == status.HTTP_200_OK
-        assert second_response.status_code == status.HTTP_200_OK
+        assert second_response.status_code == status.HTTP_400_BAD_REQUEST
         assert Project.objects.filter(proposal=proposal).count() == 0
 
     def test_manager_can_approve_proposal_created_by_another_user(self, api_client):
         owner = UserFactory(role='consultant')
         manager = UserFactory(role='manager')
         proposal = ProposalFactory(created_by=owner, status='qc_check')
+        QualityCheck.objects.create(
+            proposal=proposal,
+            status='completed',
+            overall_score=90,
+            can_submit=True,
+            executed_by=manager,
+        )
         api_client.force_authenticate(user=manager)
 
         url = reverse('proposal-approve-for-submission', kwargs={'pk': proposal.pk})
@@ -208,6 +249,17 @@ class TestProposalViewSet:
         assert proposal.status == 'ready_for_submission'
         assert response.data['proposal_id'] == proposal.id
         assert not Project.objects.filter(proposal=proposal).exists()
+
+    def test_transition_status_rejects_invalid_pipeline_jump(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='draft')
+
+        url = reverse('proposal-transition-status', kwargs={'pk': proposal.pk})
+        response = client.post(url, {'status': 'submitted'}, format='json')
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        proposal.refresh_from_db()
+        assert proposal.status == 'draft'
 
     def test_contract_signed_transition_creates_project(self, authenticated_client):
         client, user = authenticated_client

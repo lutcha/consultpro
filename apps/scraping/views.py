@@ -3,10 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.db.models import Q
-from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.core.permissions import IsConsultantOrManager, IsManager
+from apps.scraping.services.readiness import filter_ready_to_import
 
 
 class _LargePage(PageNumberPagination):
@@ -87,13 +86,7 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
         imported_opportunities = ScrapedOpportunity.objects.filter(status='imported').count()
         new_opportunities = ScrapedOpportunity.objects.filter(status='new').count()
         cv_eligible = ScrapedOpportunity.objects.filter(cv_eligible=True, status='new').count()
-        ready_to_import = ScrapedOpportunity.objects.filter(
-            status='new',
-            cv_eligible=True,
-            imported_opportunity__isnull=True,
-        ).filter(
-            Q(deadline__isnull=True) | Q(deadline__gte=timezone.now())
-        ).count()
+        ready_to_import = filter_ready_to_import(ScrapedOpportunity.objects.all()).count()
         
         avg_quality = ScrapedOpportunity.objects.aggregate(
             avg=Avg('data_quality_score')
@@ -138,13 +131,7 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         if self.request.query_params.get('ready_to_import') in ('1', 'true', 'yes'):
-            queryset = queryset.filter(
-                status='new',
-                cv_eligible=True,
-                imported_opportunity__isnull=True,
-            ).filter(
-                Q(deadline__isnull=True) | Q(deadline__gte=timezone.now())
-            )
+            queryset = filter_ready_to_import(queryset)
         return queryset
 
     def get_serializer_class(self):
@@ -167,13 +154,9 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
         from .services.opportunity_importer import import_scraped_opportunity
 
         limit = int(request.data.get('limit') or 50)
-        queryset = self.get_queryset().filter(
-            status='new',
-            cv_eligible=True,
-            imported_opportunity__isnull=True,
-        ).filter(
-            Q(deadline__isnull=True) | Q(deadline__gte=timezone.now())
-        ).order_by('deadline', '-data_quality_score', '-scraped_at')[:limit]
+        queryset = filter_ready_to_import(self.get_queryset()).order_by(
+            'deadline', '-data_quality_score', '-scraped_at'
+        )[:limit]
 
         imported = []
         skipped = []

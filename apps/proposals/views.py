@@ -253,6 +253,43 @@ PROPOSAL_STATUS_EVENT_TYPES = {
     'rejected': 'note',
 }
 
+ALLOWED_PROPOSAL_TRANSITIONS = {
+    'draft': {'in_review'},
+    'in_review': {'qc_check', 'draft'},
+    'qc_check': {'ready_for_submission', 'in_review'},
+    'ready_for_submission': {'submitted'},
+    'submitted': {'under_evaluation', 'rejected'},
+    'under_evaluation': {'shortlisted', 'clarifications_requested', 'rejected'},
+    'shortlisted': {'bafo', 'awarded', 'lost'},
+    'clarifications_requested': {'under_evaluation', 'rejected'},
+    'bafo': {'awarded', 'lost'},
+    'awarded': {'contract_negotiation'},
+    'contract_negotiation': {'contract_signed'},
+    'contract_signed': {'project_initiation'},
+    'project_initiation': {'won'},
+}
+
+
+def _proposal_has_passing_qc(proposal):
+    quality_check = getattr(proposal, 'quality_check', None)
+    return bool(
+        quality_check
+        and quality_check.status == 'completed'
+        and quality_check.can_submit
+    )
+
+
+def _validate_proposal_transition(proposal, status_value):
+    valid_statuses = {choice[0] for choice in Proposal.STATUS_CHOICES}
+    if status_value not in valid_statuses:
+        raise ValueError('Invalid proposal status.')
+
+    if status_value not in ALLOWED_PROPOSAL_TRANSITIONS.get(proposal.status, set()):
+        raise ValueError('Invalid proposal status transition.')
+
+    if status_value in {'ready_for_submission', 'submitted'} and not _proposal_has_passing_qc(proposal):
+        raise PermissionError('Proposal needs a completed passing QC before submission.')
+
 
 def _event_artifact_type_from_status(status_value):
     event_type = PROPOSAL_STATUS_EVENT_TYPES.get(status_value)
@@ -261,7 +298,10 @@ def _event_artifact_type_from_status(status_value):
     return PROPOSAL_EVENT_ARTIFACT_TYPES.get(event_type, '')
 
 
-def _set_proposal_status(proposal, status_value, user=None, note=''):
+def _set_proposal_status(proposal, status_value, user=None, note='', validate_transition=False):
+    if validate_transition:
+        _validate_proposal_transition(proposal, status_value)
+
     valid_statuses = {choice[0] for choice in Proposal.STATUS_CHOICES}
     if status_value not in valid_statuses:
         raise ValueError('Invalid proposal status.')
@@ -505,12 +545,18 @@ class ProposalViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         proposal = self.get_object()
-        _set_proposal_status(
-            proposal,
-            'submitted',
-            user=request.user,
-            note=request.data.get('note', 'Proposta submetida ao cliente/concurso.'),
-        )
+        try:
+            _set_proposal_status(
+                proposal,
+                'submitted',
+                user=request.user,
+                note=request.data.get('note', 'Proposta submetida ao cliente/concurso.'),
+                validate_transition=True,
+            )
+        except PermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
+        except ValueError:
+            return Response({'detail': 'Transicao de proposta invalida.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
             {'status': proposal.status, 'submitted_at': proposal.submitted_at}
         )
@@ -519,12 +565,18 @@ class ProposalViewSet(viewsets.ModelViewSet):
     def approve_for_submission(self, request, pk=None):
         proposal = self.get_object()
         with transaction.atomic():
-            _set_proposal_status(
-                proposal,
-                'ready_for_submission',
-                user=request.user,
-                note=request.data.get('note', 'QC aprovado. Proposta pronta para submissao.'),
-            )
+            try:
+                _set_proposal_status(
+                    proposal,
+                    'ready_for_submission',
+                    user=request.user,
+                    note=request.data.get('note', 'QC aprovado. Proposta pronta para submissao.'),
+                    validate_transition=True,
+                )
+            except PermissionError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
+            except ValueError:
+                return Response({'detail': 'Transicao de proposta invalida.'}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
             'status': proposal.status,
@@ -544,10 +596,13 @@ class ProposalViewSet(viewsets.ModelViewSet):
                     next_status,
                     user=request.user,
                     note=note,
+                    validate_transition=True,
                 )
+            except PermissionError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
             except ValueError:
                 return Response(
-                    {'detail': 'Estado de proposta invalido.'},
+                    {'detail': 'Transicao de proposta invalida.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -556,7 +611,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
                 'proposal_id': proposal.id,
                 'proposal_url': f'/proposals/{proposal.id}',
             }
-            if proposal.status == 'project_initiation':
+            if proposal.status in ('contract_signed', 'project_initiation'):
                 project = _ensure_project_for_proposal(proposal, manager=request.user)
                 data['project_id'] = project.id
                 data['project_url'] = f'/projects/{project.id}'

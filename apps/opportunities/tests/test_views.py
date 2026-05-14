@@ -4,7 +4,6 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from freezegun import freeze_time
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 

@@ -149,7 +149,12 @@ class TestQualityCheckViewSet:
     def test_approve_action(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(status='qc_check')
-        qc = QualityCheckFactory(proposal=proposal)
+        qc = QualityCheckFactory(
+            proposal=proposal,
+            status='completed',
+            overall_score=90,
+            can_submit=True,
+        )
 
         url = reverse('quality-check-approve', kwargs={'pk': qc.pk})
         response = client.post(url)
@@ -159,3 +164,20 @@ class TestQualityCheckViewSet:
         assert proposal.status == 'ready_for_submission'
         assert not Project.objects.filter(proposal=proposal).exists()
         assert response.data['proposal_id'] == proposal.id
+
+    def test_approve_action_blocks_failed_qc(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(status='qc_check')
+        qc = QualityCheckFactory(
+            proposal=proposal,
+            status='completed',
+            overall_score=70,
+            can_submit=False,
+        )
+
+        url = reverse('quality-check-approve', kwargs={'pk': qc.pk})
+        response = client.post(url)
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        proposal.refresh_from_db()
+        assert proposal.status == 'qc_check'

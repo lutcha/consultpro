@@ -121,12 +121,19 @@ class QualityCheckViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         quality_check = self.get_object()
         proposal = quality_check.proposal
+        if not quality_check.can_submit or quality_check.status != 'completed':
+            return Response(
+                {'detail': 'QC precisa estar completo e aprovado para submeter.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
         with transaction.atomic():
             _set_proposal_status(
                 proposal,
                 'ready_for_submission',
                 user=request.user,
                 note=request.data.get('note', 'QC aprovado. Proposta pronta para submissao.'),
+                validate_transition=True,
             )
 
         serializer = self.get_serializer(quality_check)

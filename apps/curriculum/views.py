@@ -92,12 +92,15 @@ class CurriculumViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path=r'match-opportunity/(?P<opp_id>[^/.]+)')
     def match_opportunity(self, request, pk=None, opp_id=None):
         """Match CV against a specific opportunity"""
-        try:
-            match = CVOpportunityMatch.objects.get(curriculum_id=pk, opportunity_id=opp_id)
-            serializer = CVOpportunityMatchSerializer(match)
-            return Response(serializer.data)
-        except CVOpportunityMatch.DoesNotExist:
-            return Response({'error': 'Opportunity match not found'}, status=status.HTTP_404_NOT_FOUND)
+        from django.shortcuts import get_object_or_404
+        from apps.opportunities.models import Opportunity
+        from .matching import match_cv_to_opportunity
+
+        curriculum = self.get_object()
+        opportunity = get_object_or_404(Opportunity, id=opp_id)
+        match = match_cv_to_opportunity(curriculum, opportunity)
+        serializer = CVOpportunityMatchSerializer(match)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'], url_path=r'adapt/(?P<template_id>[^/.]+)')
     def adapt(self, request, pk=None, template_id=None):
