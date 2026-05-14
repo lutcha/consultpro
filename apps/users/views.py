@@ -41,7 +41,7 @@ class UserViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'email', 'first_name', 'last_name']
 
     def get_serializer_class(self):
-        if self.action == 'retrieve':
+        if self.action in ('retrieve', 'update', 'partial_update'):
             return UserDetailSerializer
         if self.action == 'me':
             return MeSerializer
