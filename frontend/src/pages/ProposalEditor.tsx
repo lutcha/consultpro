@@ -182,7 +182,7 @@ const EVENT_CONFIG: Record<string, EventIconConfig> = {
 export function ProposalEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { selectedProposal, isLoading: proposalLoading, selectProposal, updateSection, addSection, updateStatus, autoSaveStatus } =
+  const { selectedProposal, isLoading: proposalLoading, selectProposal, updateSection, addSection, removeSection, reorderSections, updateStatus, autoSaveStatus } =
     useProposalStore();
   const [activeSectionId, setActiveSectionId] = useState<string>('');
   const [editorContent, setEditorContent] = useState('');
@@ -401,9 +401,36 @@ export function ProposalEditor() {
       }
       selectProposal(id);
     } catch (err) {
-      setTransitionError(err instanceof Error ? err.message : 'Erro ao transitar estado.');
+      const raw = err instanceof Error ? err.message : 'Erro ao transitar estado.';
+      const lowered = raw.toLowerCase();
+      if (lowered.includes('completed passing qc') || lowered.includes('qc')) {
+        setTransitionError('A proposta precisa de um QC aprovado e válido antes da submissão.');
+      } else if (lowered.includes('invalid') || lowered.includes('invalida')) {
+        setTransitionError('Transição inválida para o estado selecionado.');
+      } else {
+        setTransitionError(raw);
+      }
     } finally {
       setIsTransitioning(false);
+    }
+  };
+
+  const moveSection = async (sectionId: string, direction: 'up' | 'down') => {
+    if (!selectedProposal) return;
+    const ordered = [...selectedProposal.sections].sort((a, b) => a.order - b.order);
+    const idx = ordered.findIndex((section) => section.id === sectionId);
+    const target = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx < 0 || target < 0 || target >= ordered.length) return;
+    [ordered[idx], ordered[target]] = [ordered[target], ordered[idx]];
+    await reorderSections(selectedProposal.id, ordered.map((section) => section.id));
+  };
+
+  const deleteCustomSection = async (sectionId: string) => {
+    if (!selectedProposal) return;
+    await removeSection(selectedProposal.id, sectionId);
+    if (activeSectionId === sectionId) {
+      const remaining = selectedProposal.sections.filter((section) => section.id !== sectionId);
+      setActiveSectionId(remaining[0]?.id || '');
     }
   };
 
@@ -625,25 +652,37 @@ export function ProposalEditor() {
             </Button>
             <div className="space-y-0.5">
               {selectedProposal.sections.map((section) => (
-                <button
-                  key={section.id}
-                  onClick={() => handleSectionChange(section.id)}
-                  className={cn(
-                    'w-full text-left px-2.5 py-2 rounded-lg text-xs transition-all',
-                    activeSectionId === section.id
-                      ? 'bg-primary/10 text-primary font-semibold'
-                      : 'hover:bg-muted text-muted-foreground'
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    {section.isComplete ? (
-                      <CheckCircle2 className="h-3 w-3 text-emerald-500 flex-shrink-0" />
-                    ) : (
-                      <div className="h-3 w-3 rounded-full border border-muted-foreground/40 flex-shrink-0" />
+                <div key={section.id} className="group flex items-center gap-1">
+                  <button
+                    onClick={() => handleSectionChange(section.id)}
+                    className={cn(
+                      'flex-1 text-left px-2.5 py-2 rounded-lg text-xs transition-all',
+                      activeSectionId === section.id
+                        ? 'bg-primary/10 text-primary font-semibold'
+                        : 'hover:bg-muted text-muted-foreground'
                     )}
-                    <span className="truncate">{section.title}</span>
-                  </div>
-                </button>
+                  >
+                    <div className="flex items-center gap-2">
+                      {section.isComplete ? (
+                        <CheckCircle2 className="h-3 w-3 text-emerald-500 flex-shrink-0" />
+                      ) : (
+                        <div className="h-3 w-3 rounded-full border border-muted-foreground/40 flex-shrink-0" />
+                      )}
+                      <span className="truncate">{section.title}</span>
+                    </div>
+                  </button>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100" onClick={() => moveSection(section.id, 'up')}>
+                    <ArrowLeft className="h-3 w-3 rotate-90" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100" onClick={() => moveSection(section.id, 'down')}>
+                    <ArrowRight className="h-3 w-3 rotate-90" />
+                  </Button>
+                  {section.type === 'custom' && (
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive opacity-0 group-hover:opacity-100" onClick={() => deleteCustomSection(section.id)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
               ))}
             </div>
           </div>

@@ -8,6 +8,8 @@ import {
   apiGetProposals,
   apiGetProposal,
   apiCreateProposalSection,
+  apiDeleteProposalSection,
+  apiReorderProposalSections,
   apiUpdateProposalSection,
 } from '@/lib/api';
 import { mapApiProposal, mapApiProposalListItem, mapApiProposalSection } from '@/lib/apiMappers';
@@ -29,6 +31,8 @@ interface ProposalState {
     content: string
   ) => Promise<void>;
   addSection: (proposalId: string, title: string, content?: string) => Promise<string>;
+  removeSection: (proposalId: string, sectionId: string) => Promise<void>;
+  reorderSections: (proposalId: string, sectionIds: string[]) => Promise<void>;
   updateStatus: (id: string, status: ProposalStatus) => void;
   addProposal: (proposal: Proposal) => void;
   saveProposal: (proposal: Proposal) => Promise<void>;
@@ -153,6 +157,34 @@ export const useProposalStore = create<ProposalState>((set, _get) => ({
       });
       throw error;
     }
+  },
+
+  removeSection: async (proposalId, sectionId) => {
+    await apiDeleteProposalSection(proposalId, sectionId);
+    set((state) => ({
+      selectedProposal:
+        state.selectedProposal?.id === proposalId
+          ? {
+              ...state.selectedProposal,
+              sections: state.selectedProposal.sections.filter((section) => section.id !== sectionId),
+              updatedAt: new Date(),
+            }
+          : state.selectedProposal,
+    }));
+  },
+
+  reorderSections: async (proposalId, sectionIds) => {
+    const reordered = await apiReorderProposalSections(proposalId, sectionIds);
+    set((state) => ({
+      selectedProposal:
+        state.selectedProposal?.id === proposalId
+          ? {
+              ...state.selectedProposal,
+              sections: reordered.map(mapApiProposalSection),
+              updatedAt: new Date(),
+            }
+          : state.selectedProposal,
+    }));
   },
 
   updateStatus: (id, status) => {

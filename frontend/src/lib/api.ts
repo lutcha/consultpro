@@ -493,6 +493,25 @@ export async function apiCreateProposalSection(
   });
 }
 
+export async function apiDeleteProposalSection(
+  proposalId: string,
+  sectionId: string
+): Promise<void> {
+  return apiRequest<void>(`/proposals/${proposalId}/sections/${sectionId}/`, {
+    method: 'DELETE',
+  });
+}
+
+export async function apiReorderProposalSections(
+  proposalId: string,
+  sectionIds: string[]
+): Promise<ApiProposalSection[]> {
+  return apiRequest<ApiProposalSection[]>(`/proposals/${proposalId}/reorder_sections/`, {
+    method: 'POST',
+    body: JSON.stringify({ section_ids: sectionIds.map((id) => parseInt(id, 10)) }),
+  });
+}
+
 export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {
   const token = localStorage.getItem('access_token');
   const response = await fetch(`/api/proposals/${proposalId}/download_word/`, {
