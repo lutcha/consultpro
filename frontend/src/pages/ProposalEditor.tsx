@@ -24,8 +24,8 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useProposalStore } from '@/stores';
 import {
   apiDownloadProposalWord, apiDownloadProposalPdf, apiUploadProposalLogo,
-  apiGetProposalEvents, apiCreateProposalEvent, apiTransitionProposalStatus,
-  type ApiProposalEvent,
+  apiGetProposalEvents, apiCreateProposalEvent, apiTransitionProposalStatus, apiGetProposalTeamMatch,
+  type ApiProposalEvent, type ApiProposalTeamMatch,
 } from '@/lib/api';
 import type { ProposalStatus } from '@/types';
 import { cn } from '@/lib/utils';
@@ -229,11 +229,15 @@ export function ProposalEditor() {
   });
   const [eventError, setEventError] = useState('');
   const [eventSaving, setEventSaving] = useState(false);
+  const [teamMatch, setTeamMatch] = useState<ApiProposalTeamMatch | null>(null);
+  const [teamMatchLoading, setTeamMatchLoading] = useState(false);
+  const [teamMatchError, setTeamMatchError] = useState('');
 
   useEffect(() => {
     if (id) {
       selectProposal(id);
       loadEvents(id);
+      loadTeamMatch(id);
     }
   }, [id, selectProposal]);
 
@@ -266,6 +270,19 @@ export function ProposalEditor() {
       // ignore
     } finally {
       setEventsLoading(false);
+    }
+  };
+
+  const loadTeamMatch = async (proposalId: string) => {
+    setTeamMatchLoading(true);
+    setTeamMatchError('');
+    try {
+      const data = await apiGetProposalTeamMatch(proposalId);
+      setTeamMatch(data);
+    } catch (err) {
+      setTeamMatchError(err instanceof Error ? err.message : 'Erro ao carregar score da equipa.');
+    } finally {
+      setTeamMatchLoading(false);
     }
   };
 
@@ -736,6 +753,58 @@ export function ProposalEditor() {
                 </div>
                 {stageContext && (
                   <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{stageContext.hint}</p>
+                )}
+              </div>
+
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Match da Equipa
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => id && loadTeamMatch(id)}
+                    disabled={teamMatchLoading}
+                  >
+                    Atualizar
+                  </Button>
+                </div>
+                {teamMatchLoading && (
+                  <p className="text-xs text-muted-foreground">A calcular score...</p>
+                )}
+                {!teamMatchLoading && teamMatchError && (
+                  <p className="text-xs text-destructive">{teamMatchError}</p>
+                )}
+                {!teamMatchLoading && !teamMatchError && teamMatch && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Score global</span>
+                      <span className="font-semibold">{teamMatch.team_score}/100</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Membros com CV analisado</span>
+                      <span className="font-semibold">{teamMatch.scored_members}/{teamMatch.team_size}</span>
+                    </div>
+                    <div className="space-y-1.5 pt-1">
+                      {teamMatch.items.slice(0, 3).map((item) => (
+                        <div key={item.member_id} className="rounded border border-border p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-medium truncate">{item.name}</p>
+                            <Badge variant={item.has_analyzed_cv ? 'outline' : 'destructive'} className="text-[10px]">
+                              {item.has_analyzed_cv ? `${item.overall_score ?? 0}` : 'Sem CV'}
+                            </Badge>
+                          </div>
+                          {item.missing_skills && item.missing_skills.length > 0 && (
+                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
+                              Falhas: {item.missing_skills.slice(0, 4).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 

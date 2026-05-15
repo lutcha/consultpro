@@ -602,8 +602,36 @@ export interface ApiProposalEvent {
   updated_at: string;
 }
 
+export interface ApiProposalTeamMatchItem {
+  member_id: number;
+  user_id: number;
+  name: string;
+  role: string;
+  has_analyzed_cv: boolean;
+  overall_score: number | null;
+  skills_match_score?: number;
+  experience_match_score?: number;
+  education_match_score?: number;
+  language_match_score?: number;
+  missing_skills?: string[];
+  recommendations: string[];
+}
+
+export interface ApiProposalTeamMatch {
+  proposal_id: number;
+  opportunity_id: number;
+  team_size: number;
+  scored_members: number;
+  team_score: number;
+  items: ApiProposalTeamMatchItem[];
+}
+
 export async function apiGetProposalEvents(proposalId: string): Promise<ApiProposalEvent[]> {
   return apiRequest<ApiProposalEvent[]>(`/proposals/${proposalId}/events/`);
+}
+
+export async function apiGetProposalTeamMatch(proposalId: string): Promise<ApiProposalTeamMatch> {
+  return apiRequest<ApiProposalTeamMatch>(`/proposals/${proposalId}/team_match/`);
 }
 
 export async function apiCreateProposalEvent(
