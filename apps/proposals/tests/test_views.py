@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.projects.models import Project
+from apps.curriculum.models import Curriculum
 from apps.proposals.document_generator import generate_proposal_docx, generate_proposal_pdf
 from apps.proposals.models import Budget, Proposal, ProposalEvent
 from apps.quality_checks.models import QualityCheck
@@ -332,6 +333,43 @@ class TestProposalViewSet:
         assert response.status_code == status.HTTP_200_OK
         proposal.budget.refresh_from_db()
         assert proposal.budget.total == 2000.00
+
+    def test_team_match_returns_scores_and_missing_cv_flags(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user)
+        member_with_cv = UserFactory()
+        member_without_cv = UserFactory()
+        proposal.team_members_detail.create(user=member_with_cv, role='Expert')
+        proposal.team_members_detail.create(user=member_without_cv, role='Analyst')
+        Curriculum.objects.create(
+            user=member_with_cv,
+            file_name='expert.docx',
+            file_type='docx',
+            file='curricula/2026/05/expert.docx',
+            status='analyzed',
+            extracted_data={
+                'skills': ['procurement', 'governance', 'monitoring'],
+                'experience': [{'title': 'Senior Consultant', 'description': 'Procurement governance'}],
+                'education': [{'title': 'MSc'}],
+                'languages': ['Portuguese', 'English'],
+            },
+        )
+        proposal.opportunity.requirements.create(
+            category='technical',
+            description='Procurement governance monitoring',
+            priority='mandatory',
+        )
+
+        url = reverse('proposal-team-match', kwargs={'pk': proposal.pk})
+        response = client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['proposal_id'] == proposal.id
+        assert response.data['team_size'] == 2
+        assert response.data['scored_members'] == 1
+        assert response.data['team_score'] > 0
+        assert any(item['has_analyzed_cv'] is False for item in response.data['items'])
+        assert any(item['has_analyzed_cv'] is True for item in response.data['items'])
 
     def test_document_exports_render_html_tables(self):
         proposal = ProposalFactory()

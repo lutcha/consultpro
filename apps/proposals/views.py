@@ -9,6 +9,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import IsOwnerOrAdmin
+from apps.curriculum.matching import match_cv_to_opportunity
+from apps.curriculum.models import Curriculum
 from apps.projects.models import Project, ProjectArtifact, ProjectPhase
 from apps.users.models import User
 from .document_generator import generate_proposal_docx, generate_proposal_pdf
@@ -624,6 +626,60 @@ class ProposalViewSet(viewsets.ModelViewSet):
         team = proposal.team_members_detail.all()
         serializer = ProposalTeamMemberSerializer(team, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def team_match(self, request, pk=None):
+        proposal = self.get_object()
+        members = proposal.team_members_detail.select_related('user').all()
+        items = []
+        total_score = 0
+        scored_members = 0
+
+        for member in members:
+            curriculum = (
+                Curriculum.objects.filter(user=member.user, status='analyzed')
+                .order_by('-updated_at')
+                .first()
+            )
+            if not curriculum:
+                items.append({
+                    'member_id': member.id,
+                    'user_id': member.user_id,
+                    'name': member.user.get_full_name() or member.user.email,
+                    'role': member.role,
+                    'has_analyzed_cv': False,
+                    'overall_score': None,
+                    'recommendations': ['Sem CV analisado para este membro.'],
+                })
+                continue
+
+            match = match_cv_to_opportunity(curriculum, proposal.opportunity)
+            total_score += match.overall_score
+            scored_members += 1
+            items.append({
+                'member_id': member.id,
+                'user_id': member.user_id,
+                'name': member.user.get_full_name() or member.user.email,
+                'role': member.role,
+                'has_analyzed_cv': True,
+                'overall_score': match.overall_score,
+                'skills_match_score': match.skills_match_score,
+                'experience_match_score': match.experience_match_score,
+                'education_match_score': match.education_match_score,
+                'language_match_score': match.language_match_score,
+                'missing_skills': match.missing_skills,
+                'recommendations': match.recommendations,
+            })
+
+        team_score = int(total_score / scored_members) if scored_members else 0
+        return Response({
+            'proposal_id': proposal.id,
+            'opportunity_id': proposal.opportunity_id,
+            'team_size': members.count(),
+            'scored_members': scored_members,
+            'team_score': team_score,
+            'items': items,
+        })
 
     @action(detail=True, methods=['post'])
     def add_team_member(self, request, pk=None):
