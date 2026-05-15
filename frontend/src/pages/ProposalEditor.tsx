@@ -164,6 +164,63 @@ const EVENT_TYPE_OPTIONS = [
   { value: 'note',         label: 'Nota' },
 ];
 
+const EVENT_FILTER_OPTIONS = [
+  { value: 'all', label: 'Todos' },
+  ...EVENT_TYPE_OPTIONS,
+];
+
+const EVENT_PERIOD_OPTIONS = [
+  { value: 'all', label: 'Todo periodo' },
+  { value: '7', label: '7 dias' },
+  { value: '30', label: '30 dias' },
+  { value: '90', label: '90 dias' },
+];
+
+const CONTEXT_EVENT_BY_STATUS: Record<string, { event_type: string; artifact_type: string; title: string; notes: string }> = {
+  submitted: {
+    event_type: 'submission',
+    artifact_type: 'final_proposal',
+    title: 'Proposta submetida',
+    notes: 'Registar comprovativo, canal de submissao e referencia do concurso.',
+  },
+  clarifications_requested: {
+    event_type: 'clarification',
+    artifact_type: 'other',
+    title: 'Pedido de clarificacao recebido',
+    notes: 'Registar perguntas do cliente, prazo de resposta e responsavel interno.',
+  },
+  bafo: {
+    event_type: 'bafo',
+    artifact_type: 'final_proposal',
+    title: 'Pedido de BAFO recebido',
+    notes: 'Registar alteracoes esperadas, prazo e impacto no orcamento.',
+  },
+  awarded: {
+    event_type: 'award',
+    artifact_type: 'other',
+    title: 'Proposta adjudicada',
+    notes: 'Registar decisao, proximos passos contratuais e documentos pendentes.',
+  },
+  contract_negotiation: {
+    event_type: 'contracting',
+    artifact_type: 'contract',
+    title: 'Negociacao contratual',
+    notes: 'Registar pontos negociados, riscos e decisoes pendentes.',
+  },
+  contract_signed: {
+    event_type: 'contracting',
+    artifact_type: 'contract',
+    title: 'Contrato assinado',
+    notes: 'Anexar contrato assinado e preparar handover para execucao.',
+  },
+  project_initiation: {
+    event_type: 'handover',
+    artifact_type: 'handover',
+    title: 'Handover para projeto',
+    notes: 'Registar pacote de arranque, equipa responsavel e proximas reunioes.',
+  },
+};
+
 type EventIconConfig = { icon: React.ElementType; dot: string; card: string; iconColor: string };
 const EVENT_CONFIG: Record<string, EventIconConfig> = {
   submission:    { icon: Send,          dot: 'bg-blue-500',   card: 'border-l-blue-400 bg-blue-50/60 dark:bg-blue-950/30',   iconColor: 'text-blue-600' },
@@ -232,6 +289,8 @@ export function ProposalEditor() {
   const [teamMatch, setTeamMatch] = useState<ApiProposalTeamMatch | null>(null);
   const [teamMatchLoading, setTeamMatchLoading] = useState(false);
   const [teamMatchError, setTeamMatchError] = useState('');
+  const [eventTypeFilter, setEventTypeFilter] = useState('all');
+  const [eventPeriodFilter, setEventPeriodFilter] = useState('all');
 
   useEffect(() => {
     if (id) {
@@ -458,12 +517,30 @@ export function ProposalEditor() {
     }
   };
 
+  const openEventSheet = (preset?: Partial<typeof newEvent>) => {
+    setEventError('');
+    setNewEvent((prev) => ({
+      ...prev,
+      ...preset,
+      artifact_type: preset?.artifact_type || prev.artifact_type || 'none',
+    }));
+    setEventSheet(true);
+  };
+
   const activeSection = selectedProposal?.sections.find((s) => s.id === activeSectionId);
   const currentStatus = selectedProposal?.status || 'draft';
   const availableTransitions = PIPELINE_TRANSITIONS[currentStatus] || [];
   const currentStageIndex = STATUS_ORDER[currentStatus] ?? -1;
   const isTerminal = TERMINAL_STAGES.some((t) => t.status === currentStatus);
   const stageContext = STAGE_CONTEXT[currentStatus];
+  const contextEvent = CONTEXT_EVENT_BY_STATUS[currentStatus];
+  const filteredEvents = events.filter((ev) => {
+    if (eventTypeFilter !== 'all' && ev.event_type !== eventTypeFilter) return false;
+    if (eventPeriodFilter === 'all') return true;
+    const days = Number(eventPeriodFilter);
+    const since = Date.now() - days * 24 * 60 * 60 * 1000;
+    return new Date(ev.occurred_at).getTime() >= since;
+  });
 
   // Preview HTML
   const previewHtml = selectedProposal
@@ -864,6 +941,26 @@ export function ProposalEditor() {
                 </div>
               )}
 
+              {contextEvent && (
+                <div className="px-4 py-3 border-b border-border">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                    Acoes Contextuais
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-full justify-start text-xs"
+                    onClick={() => {
+                      setRightTab('events');
+                      openEventSheet(contextEvent);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Registar marco desta fase
+                  </Button>
+                </div>
+              )}
+
               {/* Available transitions */}
               {availableTransitions.length > 0 && (
                 <div className="p-4 border-b border-border space-y-2">
@@ -993,20 +1090,40 @@ export function ProposalEditor() {
                 <div>
                   <p className="text-xs font-semibold">Linha do Tempo</p>
                   <p className="text-[10px] text-muted-foreground">
-                    {eventsLoading ? 'A carregar...' : `${events.length} evento${events.length !== 1 ? 's' : ''}`}
+                    {eventsLoading ? 'A carregar...' : `${filteredEvents.length} de ${events.length} evento${events.length !== 1 ? 's' : ''}`}
                   </p>
                 </div>
                 <Button
                   size="sm"
                   className="h-7 px-3 text-xs gap-1"
-                  onClick={() => {
-                    setEventError('');
-                    setEventSheet(true);
-                  }}
+                  onClick={() => openEventSheet({ event_type: 'note', artifact_type: 'none', title: '', notes: '', external_url: '' })}
                 >
                   <Plus className="h-3 w-3" />
                   Novo Evento
                 </Button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 border-b border-border px-4 py-3">
+                <Select value={eventTypeFilter} onValueChange={setEventTypeFilter}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_FILTER_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={eventPeriodFilter} onValueChange={setEventPeriodFilter}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Periodo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_PERIOD_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Timeline */}
@@ -1032,7 +1149,7 @@ export function ProposalEditor() {
                       variant="outline"
                       size="sm"
                       className="mt-4 h-8 text-xs"
-                      onClick={() => { setEventError(''); setEventSheet(true); }}
+                      onClick={() => openEventSheet({ event_type: 'note', artifact_type: 'none', title: '', notes: '', external_url: '' })}
                     >
                       <Plus className="h-3 w-3 mr-1.5" />
                       Registar Primeiro Evento
@@ -1040,15 +1157,26 @@ export function ProposalEditor() {
                   </div>
                 )}
 
-                {!eventsLoading && events.length > 0 && (
+                {!eventsLoading && events.length > 0 && filteredEvents.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
+                    <p className="text-sm font-medium text-foreground">Sem eventos neste filtro</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Ajuste o tipo ou periodo para rever outros marcos da proposta.
+                    </p>
+                  </div>
+                )}
+
+                {!eventsLoading && filteredEvents.length > 0 && (
                   <div className="relative px-4 py-3">
                     {/* Vertical spine */}
                     <div className="absolute left-7 top-3 bottom-3 w-px bg-border" aria-hidden />
 
                     <div className="space-y-3">
-                      {events.map((ev) => {
+                      {filteredEvents.map((ev) => {
                         const conf = EVENT_CONFIG[ev.event_type] ?? EVENT_CONFIG.note;
                         const Icon = conf.icon;
+                        const eventDate = new Date(ev.occurred_at);
+                        const eventAuthor = ev.created_by_detail?.first_name || ev.created_by_detail?.email || 'Sistema';
                         return (
                           <div key={ev.id} className="flex gap-3">
                             {/* Dot on spine */}
@@ -1056,24 +1184,22 @@ export function ProposalEditor() {
                               <Icon className="h-3.5 w-3.5 text-white" />
                             </div>
                             {/* Card */}
-                            <div className={cn('flex-1 rounded-lg border border-l-4 p-2.5 min-w-0', conf.card)}>
-                              <div className="flex items-start justify-between gap-1 mb-1">
-                                <span className="text-xs font-semibold text-foreground leading-tight truncate">{ev.title}</span>
+                            <div className={cn('flex-1 rounded-lg border border-l-4 p-3 min-w-0 shadow-sm', conf.card)}>
+                              <div className="flex items-start justify-between gap-2 mb-1.5">
+                                <span className="text-sm font-semibold text-foreground leading-tight">{ev.title}</span>
                                 <span className={cn('text-[10px] font-medium rounded px-1.5 py-0.5 flex-shrink-0 capitalize', conf.iconColor)}>
                                   {ev.event_type_display}
                                 </span>
                               </div>
                               {ev.notes && (
-                                <p className="text-xs text-muted-foreground line-clamp-2 mb-1.5">{ev.notes}</p>
+                                <p className="text-xs text-muted-foreground leading-relaxed mb-2">{ev.notes}</p>
                               )}
-                              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                                <Calendar className="h-2.5 w-2.5 flex-shrink-0" />
-                                <span>{new Date(ev.occurred_at).toLocaleDateString('pt-PT')}</span>
-                                {ev.created_by_detail && (
-                                  <span className="ml-auto truncate max-w-[70px]">
-                                    {ev.created_by_detail.first_name}
-                                  </span>
-                                )}
+                              <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                                <span className="inline-flex items-center gap-1">
+                                  <Calendar className="h-2.5 w-2.5 flex-shrink-0" />
+                                  {eventDate.toLocaleDateString('pt-PT')} {eventDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <span className="truncate">por {eventAuthor}</span>
                                 <div className="flex items-center gap-1 ml-auto">
                                   {ev.attachment_url && (
                                     <a href={ev.attachment_url} target="_blank" rel="noreferrer" className="hover:text-foreground transition-colors">
