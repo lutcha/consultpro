@@ -173,6 +173,35 @@ class TestProposalViewSet:
         )
         url = reverse('proposal-submit', kwargs={'pk': proposal.pk})
         response = client.post(url)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'ready_for_submission' in response.data['detail']
+
+    def test_submit_action_requires_required_sections_complete(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='ready_for_submission')
+        for section in proposal.sections.all():
+            section.is_complete = True
+            section.save(update_fields=['is_complete'])
+        section = proposal.sections.filter(section_type='methodology').first()
+        section.is_complete = False
+        section.save(update_fields=['is_complete'])
+
+        url = reverse('proposal-submit', kwargs={'pk': proposal.pk})
+        response = client.post(url)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'methodology' in response.data['incomplete_required_sections']
+
+    def test_submit_action_success_when_ready_and_complete(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='ready_for_submission')
+        for section in proposal.sections.all():
+            section.is_complete = True
+            section.save(update_fields=['is_complete'])
+
+        url = reverse('proposal-submit', kwargs={'pk': proposal.pk})
+        response = client.post(url)
+
         assert response.status_code == status.HTTP_200_OK
         proposal.refresh_from_db()
         assert proposal.status == 'submitted'

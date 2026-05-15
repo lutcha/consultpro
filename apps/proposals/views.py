@@ -152,6 +152,42 @@ def ensure_default_sections(proposal):
         )
 
 
+def _validate_submission_readiness(proposal):
+    ensure_default_sections(proposal)
+    required_types = {item[0] for item in DEFAULT_PROPOSAL_SECTIONS if item[0] != 'annexes'}
+    sections = proposal.sections.all()
+    section_by_type = {section.section_type: section for section in sections}
+
+    missing_required = sorted(required_types - set(section_by_type.keys()))
+    incomplete_required = sorted(
+        section_type
+        for section_type in required_types
+        if section_type in section_by_type and not section_by_type[section_type].is_complete
+    )
+
+    if proposal.status != 'ready_for_submission':
+        return (
+            False,
+            {
+                'detail': 'A proposta deve estar no estado ready_for_submission antes de submeter.',
+                'missing_required_sections': missing_required,
+                'incomplete_required_sections': incomplete_required,
+            },
+        )
+
+    if missing_required or incomplete_required:
+        return (
+            False,
+            {
+                'detail': 'Existem secções obrigatórias em falta ou incompletas.',
+                'missing_required_sections': missing_required,
+                'incomplete_required_sections': incomplete_required,
+            },
+        )
+
+    return True, None
+
+
 def _ensure_project_for_proposal(proposal, manager=None):
     opportunity = proposal.opportunity
     budget = getattr(proposal, 'budget', None)
@@ -424,7 +460,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
-        methods=['get', 'put'],
+        methods=['get', 'put', 'delete'],
         url_path='sections/(?P<section_id>[^/.]+)',
     )
     def section_detail(self, request, pk=None, section_id=None):
@@ -441,11 +477,54 @@ class ProposalViewSet(viewsets.ModelViewSet):
             serializer = ProposalSectionSerializer(section)
             return Response(serializer.data)
 
-        serializer = ProposalSectionSerializer(
-            section, data=request.data, partial=True
-        )
+        if request.method == 'DELETE':
+            if section.section_type != 'custom':
+                return Response(
+                    {'detail': 'Apenas secções custom podem ser removidas.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            section.delete()
+            remaining = proposal.sections.all().order_by('order', 'id')
+            for order, remaining_section in enumerate(remaining, start=1):
+                if remaining_section.order != order:
+                    remaining_section.order = order
+                    remaining_section.save(update_fields=['order', 'updated_at'])
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = ProposalSectionSerializer(section, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def reorder_sections(self, request, pk=None):
+        proposal = self.get_object()
+        section_ids = request.data.get('section_ids')
+        if not isinstance(section_ids, list) or not section_ids:
+            return Response(
+                {'detail': 'section_ids must be a non-empty list.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        existing_sections = list(proposal.sections.values_list('id', flat=True))
+        try:
+            normalized = [int(section_id) for section_id in section_ids]
+        except (TypeError, ValueError):
+            return Response(
+                {'detail': 'section_ids must contain valid integer ids.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if sorted(normalized) != sorted(existing_sections):
+            return Response(
+                {'detail': 'section_ids must match all proposal sections exactly.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            for order, section_id in enumerate(normalized, start=1):
+                ProposalSection.objects.filter(proposal=proposal, id=section_id).update(order=order)
+
+        serializer = ProposalSectionSerializer(proposal.sections.all(), many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
@@ -547,6 +626,9 @@ class ProposalViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         proposal = self.get_object()
+        is_ready, error_payload = _validate_submission_readiness(proposal)
+        if not is_ready:
+            return Response(error_payload, status=status.HTTP_400_BAD_REQUEST)
         try:
             _set_proposal_status(
                 proposal,
