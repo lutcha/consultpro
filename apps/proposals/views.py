@@ -1,3 +1,7 @@
+import html
+import re
+import unicodedata
+
 from django.db import transaction
 from django.db.models import Max
 from django.http import HttpResponse
@@ -46,6 +50,37 @@ DEFAULT_PROPOSAL_SECTIONS = [
     ('budget', 'Orcamento', 6),
     ('annexes', 'Anexos', 7),
 ]
+
+SECTION_COS_SOURCES = {
+    'cover': ('submission_requirements',),
+    'executive_summary': (
+        'proposal_strategy',
+        'strategic_opportunities',
+        'tor_dissection_matrix',
+    ),
+    'methodology': (
+        'methodology_blueprint',
+        'tor_dissection_matrix',
+        'qc_checklist',
+    ),
+    'team': ('team_requirements',),
+    'workplan': ('workplan_requirements',),
+    'budget': ('budget_requirements',),
+    'annexes': ('submission_requirements', 'qc_checklist'),
+    'custom': (
+        'proposal_strategy',
+        'methodology_blueprint',
+        'submission_requirements',
+        'qc_checklist',
+    ),
+}
+
+GAP_STOPWORDS = {
+    'a', 'ao', 'aos', 'as', 'com', 'como', 'da', 'das', 'de', 'do', 'dos',
+    'e', 'em', 'na', 'nas', 'no', 'nos', 'o', 'os', 'ou', 'para', 'por',
+    'que', 'se', 'sem', 'the', 'and', 'for', 'with', 'from', 'into', 'this',
+    'that', 'shall', 'must', 'will', 'should',
+}
 
 
 def _extract_cos_value(opportunity, *keys):
@@ -137,6 +172,146 @@ def _build_proposal_ai_context(proposal):
             context_parts.append(f"{key}:\n{formatted_value}")
 
     return '\n\n'.join(part for part in context_parts if part).strip()[:12000]
+
+
+def _normalize_gap_text(value):
+    text = html.unescape(str(value or ''))
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = unicodedata.normalize('NFKD', text)
+    text = text.encode('ascii', 'ignore').decode('ascii')
+    text = re.sub(r'[^a-zA-Z0-9]+', ' ', text).lower()
+    return re.sub(r'\s+', ' ', text).strip()
+
+
+def _gap_keywords(label):
+    return [
+        token
+        for token in _normalize_gap_text(label).split()
+        if len(token) > 3 and token not in GAP_STOPWORDS
+    ]
+
+
+def _clean_gap_label(value):
+    label = re.sub(r'\s+', ' ', str(value or '')).strip()
+    return label[:260]
+
+
+def _gap_items_from_value(value, source, priority='context'):
+    if not value:
+        return []
+    if isinstance(value, str):
+        label = _clean_gap_label(value)
+        return [{'label': label, 'source': source, 'priority': priority}] if label else []
+    if isinstance(value, list):
+        items = []
+        for item in value:
+            items.extend(_gap_items_from_value(item, source, priority))
+        return items
+    if isinstance(value, dict):
+        items = []
+        for key, item in value.items():
+            source_label = f"{source} - {str(key).replace('_', ' ')}"
+            if isinstance(item, (list, dict)):
+                items.extend(_gap_items_from_value(item, source_label, priority))
+            else:
+                items.extend(_gap_items_from_value(item, source_label, priority))
+        return items
+    label = _clean_gap_label(value)
+    return [{'label': label, 'source': source, 'priority': priority}] if label else []
+
+
+def _requirement_matches_section(section_type, requirement):
+    if section_type == 'custom':
+        return True
+    category_map = {
+        'financial': {'budget', 'executive_summary'},
+        'institutional': {'team', 'annexes', 'executive_summary'},
+        'technical': {'methodology', 'workplan', 'team', 'executive_summary'},
+        'functional': {'methodology', 'workplan', 'executive_summary'},
+    }
+    return section_type in category_map.get(requirement.category, {'methodology'})
+
+
+def _score_gap_item(label, section_content):
+    content = _normalize_gap_text(section_content)
+    normalized_label = _normalize_gap_text(label)
+    if not content:
+        return 'missing', ''
+    if normalized_label and len(normalized_label) > 24 and normalized_label in content:
+        return 'covered', label[:120]
+
+    keywords = _gap_keywords(label)
+    if not keywords:
+        return ('covered', label[:120]) if normalized_label in content else ('missing', '')
+
+    matched = [keyword for keyword in keywords if keyword in content]
+    if not matched:
+        return 'missing', ''
+
+    ratio = len(matched) / len(set(keywords))
+    if len(matched) >= min(3, len(set(keywords))) or ratio >= 0.45:
+        return 'covered', ', '.join(matched[:5])
+    return 'partial', ', '.join(matched[:5])
+
+
+def _build_section_gap_analysis(proposal, section):
+    opportunity = proposal.opportunity
+    raw_items = []
+    for requirement in opportunity.requirements.all():
+        if _requirement_matches_section(section.section_type, requirement):
+            raw_items.append(
+                {
+                    'label': _clean_gap_label(requirement.description),
+                    'source': 'Requisito da oportunidade',
+                    'priority': requirement.priority,
+                }
+            )
+
+    cos_analysis = (opportunity.ai_extraction or {}).get('cos_analysis') or {}
+    for key in SECTION_COS_SOURCES.get(section.section_type, SECTION_COS_SOURCES['custom']):
+        raw_items.extend(
+            _gap_items_from_value(
+                cos_analysis.get(key),
+                f"COS: {key.replace('_', ' ')}",
+            )
+        )
+
+    seen = set()
+    items = []
+    for item in raw_items:
+        normalized = _normalize_gap_text(item['label'])
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        item_status, evidence = _score_gap_item(item['label'], section.content or '')
+        items.append({**item, 'status': item_status, 'evidence': evidence})
+
+    status_order = {'missing': 0, 'partial': 1, 'covered': 2}
+    items.sort(key=lambda item: (status_order[item['status']], item['source'], item['label']))
+
+    total = len(items)
+    covered = sum(1 for item in items if item['status'] == 'covered')
+    partial = sum(1 for item in items if item['status'] == 'partial')
+    score = round(((covered + partial * 0.5) / total) * 100) if total else 0
+    suggestions = [
+        f"Integrar na seccao: {item['label']}"
+        for item in items
+        if item['status'] in ('missing', 'partial')
+    ][:5]
+
+    return {
+        'section': {
+            'id': section.id,
+            'title': section.title,
+            'section_type': section.section_type,
+        },
+        'score': score,
+        'covered_count': covered,
+        'partial_count': partial,
+        'total_count': total,
+        'items': items,
+        'suggestions': suggestions,
+    }
 
 
 def ensure_default_sections(proposal):
@@ -526,6 +701,24 @@ class ProposalViewSet(viewsets.ModelViewSet):
 
         serializer = ProposalSectionSerializer(proposal.sections.all(), many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def section_gap(self, request, pk=None):
+        proposal = self.get_object()
+        section_id = request.query_params.get('section_id')
+        if not section_id:
+            return Response(
+                {'detail': 'section_id is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            section = proposal.sections.get(pk=section_id)
+        except ProposalSection.DoesNotExist:
+            return Response(
+                {'detail': 'Section not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(_build_section_gap_analysis(proposal, section))
 
     @action(detail=True, methods=['post'])
     def add_comment(self, request, pk=None):

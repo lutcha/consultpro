@@ -10,6 +10,7 @@ from apps.projects.models import Project
 from apps.curriculum.models import Curriculum
 from apps.proposals.document_generator import generate_proposal_docx, generate_proposal_pdf
 from apps.proposals.models import Budget, Proposal, ProposalEvent
+from apps.proposals.views import ensure_default_sections
 from apps.quality_checks.models import QualityCheck
 from apps.proposals.tests.factories import (
     BudgetFactory,
@@ -123,6 +124,50 @@ class TestProposalViewSet:
         assert response.data['section_type'] == 'custom'
         assert response.data['order'] == 4
 
+    def test_section_gap_scores_requirements_against_section_content(self, authenticated_client):
+        client, user = authenticated_client
+        opportunity = OpportunityFactory(
+            ai_extraction={
+                'cos_analysis': {
+                    'methodology_blueprint': [
+                        'Plano de capacitacao em turismo resiliente',
+                        'Matriz de monitoria e avaliacao',
+                    ],
+                }
+            }
+        )
+        opportunity.requirements.create(
+            category='technical',
+            priority='mandatory',
+            description='Plano de capacitacao em turismo resiliente',
+        )
+        proposal = ProposalFactory(created_by=user, opportunity=opportunity)
+        section = ProposalSectionFactory(
+            proposal=proposal,
+            section_type='methodology',
+            title='Metodologia',
+            content='<p>A metodologia inclui capacitacao em turismo resiliente.</p>',
+        )
+        url = reverse('proposal-section-gap', kwargs={'pk': proposal.pk})
+
+        response = client.get(url, {'section_id': section.pk})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['section']['id'] == section.id
+        assert response.data['total_count'] >= 2
+        assert response.data['covered_count'] >= 1
+        assert response.data['score'] > 0
+        assert any(item['status'] == 'missing' for item in response.data['items'])
+
+    def test_section_gap_requires_section_id(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user)
+        url = reverse('proposal-section-gap', kwargs={'pk': proposal.pk})
+
+        response = client.get(url)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
     def test_add_comment(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user)
@@ -179,6 +224,7 @@ class TestProposalViewSet:
     def test_submit_action_requires_required_sections_complete(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user, status='ready_for_submission')
+        ensure_default_sections(proposal)
         for section in proposal.sections.all():
             section.is_complete = True
             section.save(update_fields=['is_complete'])
@@ -195,6 +241,7 @@ class TestProposalViewSet:
     def test_submit_action_success_when_ready_and_complete(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user, status='ready_for_submission')
+        ensure_default_sections(proposal)
         for section in proposal.sections.all():
             section.is_complete = True
             section.save(update_fields=['is_complete'])
@@ -291,16 +338,16 @@ class TestProposalViewSet:
         proposal.refresh_from_db()
         assert proposal.status == 'draft'
 
-    def test_contract_signed_transition_creates_project(self, authenticated_client):
+    def test_project_initiation_transition_creates_project(self, authenticated_client):
         client, user = authenticated_client
-        proposal = ProposalFactory(created_by=user, status='contract_negotiation')
+        proposal = ProposalFactory(created_by=user, status='contract_signed')
 
         url = reverse('proposal-transition-status', kwargs={'pk': proposal.pk})
-        response = client.post(url, {'status': 'contract_signed'}, format='json')
+        response = client.post(url, {'status': 'project_initiation'}, format='json')
 
         assert response.status_code == status.HTTP_200_OK
         proposal.refresh_from_db()
-        assert proposal.status == 'contract_signed'
+        assert proposal.status == 'project_initiation'
         assert response.data['project_id'] == proposal.project.id
         assert proposal.project.status == Project.Status.PLANNING
         assert proposal.project.phases.count() == 5

@@ -401,6 +401,28 @@ export interface ApiProposalSection {
   updated_at: string;
 }
 
+export interface ApiProposalSectionGapItem {
+  label: string;
+  source: string;
+  status: 'covered' | 'partial' | 'missing';
+  evidence: string;
+  priority: string;
+}
+
+export interface ApiProposalSectionGap {
+  section: {
+    id: number;
+    title: string;
+    section_type: string;
+  };
+  score: number;
+  covered_count: number;
+  partial_count: number;
+  total_count: number;
+  items: ApiProposalSectionGapItem[];
+  suggestions: string[];
+}
+
 export interface ApiTeamMember {
   id: number;
   user: { id: number; email: string; first_name: string; last_name: string };
@@ -510,6 +532,15 @@ export async function apiReorderProposalSections(
     method: 'POST',
     body: JSON.stringify({ section_ids: sectionIds.map((id) => parseInt(id, 10)) }),
   });
+}
+
+export async function apiGetProposalSectionGap(
+  proposalId: string,
+  sectionId: string
+): Promise<ApiProposalSectionGap> {
+  return apiRequest<ApiProposalSectionGap>(
+    `/proposals/${proposalId}/section_gap/?section_id=${sectionId}`
+  );
 }
 
 export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {

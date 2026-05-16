@@ -25,7 +25,8 @@ import { useProposalStore } from '@/stores';
 import {
   apiDownloadProposalWord, apiDownloadProposalPdf, apiUploadProposalLogo,
   apiGetProposalEvents, apiCreateProposalEvent, apiTransitionProposalStatus, apiGetProposalTeamMatch,
-  type ApiProposalEvent, type ApiProposalTeamMatch,
+  apiGetProposalSectionGap, type ApiProposalEvent, type ApiProposalSectionGap,
+  type ApiProposalTeamMatch,
 } from '@/lib/api';
 import type { ProposalStatus } from '@/types';
 import { cn } from '@/lib/utils';
@@ -234,6 +235,18 @@ const EVENT_CONFIG: Record<string, EventIconConfig> = {
   note:          { icon: FileText,      dot: 'bg-slate-400',  card: 'border-l-slate-300 bg-slate-50/60 dark:bg-slate-900/30', iconColor: 'text-slate-500' },
 };
 
+const GAP_STATUS_LABELS: Record<string, string> = {
+  covered: 'Coberto',
+  partial: 'Parcial',
+  missing: 'Em falta',
+};
+
+const GAP_STATUS_STYLES: Record<string, string> = {
+  covered: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300',
+  partial: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300',
+  missing: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300',
+};
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function ProposalEditor() {
@@ -255,6 +268,9 @@ export function ProposalEditor() {
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [newSectionError, setNewSectionError] = useState('');
   const [isAddingSection, setIsAddingSection] = useState(false);
+  const [sectionGap, setSectionGap] = useState<ApiProposalSectionGap | null>(null);
+  const [sectionGapLoading, setSectionGapLoading] = useState(false);
+  const [sectionGapError, setSectionGapError] = useState('');
 
   // Mobile panel toggles
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -344,6 +360,27 @@ export function ProposalEditor() {
       setTeamMatchLoading(false);
     }
   };
+
+  const loadSectionGap = useCallback(async (proposalId: string, sectionId: string) => {
+    setSectionGapLoading(true);
+    setSectionGap(null);
+    setSectionGapError('');
+    try {
+      const data = await apiGetProposalSectionGap(proposalId, sectionId);
+      setSectionGap(data);
+    } catch (err) {
+      setSectionGap(null);
+      setSectionGapError(err instanceof Error ? err.message : 'Erro ao analisar lacunas.');
+    } finally {
+      setSectionGapLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (id && activeSectionId) {
+      loadSectionGap(id, activeSectionId);
+    }
+  }, [id, activeSectionId, loadSectionGap]);
 
   const saveSection = useCallback(
     (content: string) => {
@@ -777,16 +814,120 @@ export function ProposalEditor() {
                 </Badge>
               )}
             </div>
-            <AIAssistButton
-              section={activeSection?.title || ''}
-              proposalId={id || ''}
-              sectionId={activeSectionId}
-              currentContent={editorContent}
-              onApply={handleAISuggestion}
-            />
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                disabled={!id || !activeSectionId || sectionGapLoading}
+                onClick={() => id && activeSectionId && loadSectionGap(id, activeSectionId)}
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5 mr-1.5', sectionGapLoading && 'animate-spin')} />
+                Gap {sectionGap ? `${sectionGap.score}%` : ''}
+              </Button>
+              <AIAssistButton
+                section={activeSection?.title || ''}
+                proposalId={id || ''}
+                sectionId={activeSectionId}
+                currentContent={editorContent}
+                onApply={handleAISuggestion}
+              />
+            </div>
           </div>
 
           <div className="flex-1 overflow-auto p-4">
+            {(sectionGap || sectionGapLoading || sectionGapError) && (
+              <div className="mb-4 rounded-lg border border-border bg-muted/20 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-primary" />
+                      <h3 className="text-sm font-semibold">Gap analysis da secção</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Cobertura dos requisitos da oportunidade e contexto COS.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {sectionGapLoading ? (
+                      <Badge variant="outline">A analisar...</Badge>
+                    ) : sectionGap ? (
+                      <>
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                          {sectionGap.score}/100
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {sectionGap.covered_count}/{sectionGap.total_count} cobertos
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+
+                {sectionGapError && (
+                  <div className="flex items-center gap-2 text-xs text-destructive">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {sectionGapError}
+                  </div>
+                )}
+
+                {sectionGap && sectionGap.total_count === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Ainda não há requisitos estruturados para avaliar esta secção.
+                  </p>
+                )}
+
+                {sectionGap && sectionGap.total_count > 0 && (
+                  <div className="grid gap-3 xl:grid-cols-[1fr_0.8fr]">
+                    <div className="space-y-2 max-h-44 overflow-auto pr-1">
+                      {sectionGap.items.slice(0, 6).map((item, idx) => {
+                        const Icon = item.status === 'covered' ? CheckCircle2 : item.status === 'partial' ? Clock : AlertCircle;
+                        return (
+                          <div key={`${item.source}-${idx}`} className="rounded-md border border-border bg-background px-3 py-2">
+                            <div className="flex items-start gap-2">
+                              <Icon className={cn(
+                                'h-4 w-4 mt-0.5 flex-shrink-0',
+                                item.status === 'covered' && 'text-emerald-600',
+                                item.status === 'partial' && 'text-amber-600',
+                                item.status === 'missing' && 'text-red-600'
+                              )} />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <Badge variant="outline" className={cn('text-[10px]', GAP_STATUS_STYLES[item.status])}>
+                                    {GAP_STATUS_LABELS[item.status]}
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground truncate">{item.source}</span>
+                                </div>
+                                <p className="text-xs leading-snug mt-1">{item.label}</p>
+                                {item.evidence && (
+                                  <p className="text-[10px] text-muted-foreground mt-1">Evidência: {item.evidence}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="rounded-md border border-border bg-background px-3 py-2">
+                      <h4 className="text-xs font-semibold mb-2">Próximas melhorias</h4>
+                      {sectionGap.suggestions.length > 0 ? (
+                        <ul className="space-y-1.5">
+                          {sectionGap.suggestions.slice(0, 4).map((suggestion) => (
+                            <li key={suggestion} className="text-xs text-muted-foreground leading-snug">
+                              {suggestion}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Esta secção cobre os pontos avaliados.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <RichTextEditor
               value={editorContent}
               onChange={handleContentChange}
