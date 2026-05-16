@@ -179,6 +179,7 @@ class TestQualityCheckViewSet:
         response = client.post(url)
 
         assert response.status_code == status.HTTP_409_CONFLICT
+        assert 'score 70/100' in response.data['detail']
         proposal.refresh_from_db()
         assert proposal.status == 'qc_check'
 

@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager
-from apps.proposals.views import _qc_min_score_from_request, _proposal_has_passing_qc, _set_proposal_status
+from apps.proposals.views import _proposal_qc_block_reason, _qc_min_score_from_request, _set_proposal_status
 
 from .models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
 from .serializers import QualityCheckListSerializer, QualityCheckSerializer
@@ -126,9 +126,10 @@ class QualityCheckViewSet(viewsets.ModelViewSet):
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not _proposal_has_passing_qc(proposal, min_score=qc_min_score):
+        qc_block_reason = _proposal_qc_block_reason(proposal, min_score=qc_min_score)
+        if qc_block_reason:
             return Response(
-                {'detail': 'QC precisa estar completo e aprovado para submeter.'},
+                {'detail': qc_block_reason},
                 status=status.HTTP_409_CONFLICT,
             )
 

@@ -284,6 +284,7 @@ class TestProposalViewSet:
         response = client.post(url)
 
         assert response.status_code == status.HTTP_409_CONFLICT
+        assert 'QC ainda nao foi executado' in response.data['detail']
         proposal.refresh_from_db()
         assert proposal.status == 'ready_for_submission'
 
@@ -324,6 +325,24 @@ class TestProposalViewSet:
         assert response.status_code == status.HTTP_200_OK
         proposal.refresh_from_db()
         assert proposal.status == 'ready_for_submission'
+
+    def test_approve_for_submission_explains_configured_qc_threshold(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='qc_check')
+        QualityCheck.objects.create(
+            proposal=proposal,
+            status='completed',
+            overall_score=40,
+            can_submit=False,
+            executed_by=user,
+        )
+
+        url = reverse('proposal-approve-for-submission', kwargs={'pk': proposal.pk})
+        response = client.post(url, {'qc_min_score': 50}, format='json')
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert 'score 40/100' in response.data['detail']
+        assert '50/100' in response.data['detail']
 
     def test_approve_for_submission_is_idempotent_without_project(self, authenticated_client):
         client, user = authenticated_client
@@ -376,6 +395,33 @@ class TestProposalViewSet:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         proposal.refresh_from_db()
         assert proposal.status == 'draft'
+
+    def test_transition_status_to_submitted_requires_complete_sections(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='ready_for_submission')
+        ensure_default_sections(proposal)
+        for section in proposal.sections.all():
+            section.is_complete = True
+            section.save(update_fields=['is_complete'])
+        section = proposal.sections.filter(section_type='methodology').first()
+        section.is_complete = False
+        section.save(update_fields=['is_complete'])
+        QualityCheck.objects.create(
+            proposal=proposal,
+            status='completed',
+            overall_score=90,
+            can_submit=True,
+            executed_by=user,
+        )
+
+        url = reverse('proposal-transition-status', kwargs={'pk': proposal.pk})
+        response = client.post(url, {'status': 'submitted'}, format='json')
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert 'Secoes incompletas' in response.data['detail']
+        assert 'methodology' in response.data['detail']
+        proposal.refresh_from_db()
+        assert proposal.status == 'ready_for_submission'
 
     def test_project_initiation_transition_creates_project(self, authenticated_client):
         client, user = authenticated_client

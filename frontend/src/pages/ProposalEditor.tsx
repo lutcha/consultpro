@@ -249,6 +249,17 @@ const GAP_STATUS_STYLES: Record<string, string> = {
   missing: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300',
 };
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+const cleanGapSuggestion = (suggestion: string) =>
+  suggestion.replace(/^Integrar na seccao:\s*/i, '').trim();
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function ProposalEditor() {
@@ -446,6 +457,38 @@ export function ProposalEditor() {
     handleContentChange(normalizedContent);
   };
 
+  const applyGapSuggestion = (suggestion: string) => {
+    const cleaned = cleanGapSuggestion(suggestion);
+    if (!cleaned) return;
+    const block = `<p><strong>Melhoria sugerida:</strong> ${escapeHtml(cleaned)}</p>`;
+    const nextContent = editorContent.trim() ? `${editorContent}${block}` : block;
+    setEditorContent(nextContent);
+    saveSection(nextContent);
+  };
+
+  const formatTransitionError = (raw: string) => {
+    const lowered = raw.toLowerCase();
+    if (
+      lowered.includes('qc ainda') ||
+      lowered.includes('score') ||
+      lowered.includes('limiar') ||
+      lowered.includes('secoes incompletas') ||
+      lowered.includes('secoes em falta')
+    ) {
+      return raw;
+    }
+    if (lowered.includes('completed passing qc') || lowered.includes('qc')) {
+      return `A proposta precisa de QC completo com score minimo de ${qcMinScore}/100.`;
+    }
+    if (lowered.includes('obrigat') || lowered.includes('required section')) {
+      return 'Existem secoes obrigatorias em falta ou incompletas.';
+    }
+    if (lowered.includes('invalid') || lowered.includes('invalida')) {
+      return 'Transicao invalida para o estado selecionado.';
+    }
+    return raw;
+  };
+
   const handleExport = async (type: 'word' | 'pdf') => {
     if (!id) return;
     setIsExporting(type);
@@ -520,14 +563,7 @@ export function ProposalEditor() {
       selectProposal(id);
     } catch (err) {
       const raw = err instanceof Error ? err.message : 'Erro ao transitar estado.';
-      const lowered = raw.toLowerCase();
-      if (lowered.includes('completed passing qc') || lowered.includes('qc')) {
-        setTransitionError(`A proposta precisa de QC completo com score mínimo de ${qcMinScore}/100.`);
-      } else if (lowered.includes('invalid') || lowered.includes('invalida')) {
-        setTransitionError('Transição inválida para o estado selecionado.');
-      } else {
-        setTransitionError(raw);
-      }
+      setTransitionError(formatTransitionError(raw));
     } finally {
       setIsTransitioning(false);
     }
@@ -588,6 +624,9 @@ export function ProposalEditor() {
 
   const activeSection = selectedProposal?.sections.find((s) => s.id === activeSectionId);
   const currentStatus = selectedProposal?.status || 'draft';
+  const hasPendingTeamValidation = Boolean(
+    teamMatch && (teamMatch.team_size === 0 || teamMatch.scored_members < teamMatch.team_size)
+  );
   const availableTransitions = PIPELINE_TRANSITIONS[currentStatus] || [];
   const currentStageIndex = STATUS_ORDER[currentStatus] ?? -1;
   const isTerminal = TERMINAL_STAGES.some((t) => t.status === currentStatus);
@@ -935,8 +974,19 @@ export function ProposalEditor() {
                       {sectionGap.suggestions.length > 0 ? (
                         <ul className="space-y-1.5">
                           {sectionGap.suggestions.slice(0, 4).map((suggestion) => (
-                            <li key={suggestion} className="text-xs text-muted-foreground leading-snug">
-                              {suggestion}
+                            <li key={suggestion} className="rounded border border-border bg-muted/20 p-2">
+                              <p className="text-xs text-muted-foreground leading-snug">
+                                {suggestion}
+                              </p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-2 h-7 text-[10px]"
+                                onClick={() => applyGapSuggestion(suggestion)}
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                Aplicar melhoria
+                              </Button>
                             </li>
                           ))}
                         </ul>
@@ -1037,9 +1087,14 @@ export function ProposalEditor() {
 
               <div className="p-4 border-b border-border">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Match da Equipa
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Match da Equipa
+                    </p>
+                    <Badge variant="outline" className="text-[10px]">
+                      Informativo
+                    </Badge>
+                  </div>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1066,6 +1121,11 @@ export function ProposalEditor() {
                       <span className="text-muted-foreground">Membros com CV analisado</span>
                       <span className="font-semibold">{teamMatch.scored_members}/{teamMatch.team_size}</span>
                     </div>
+                    {hasPendingTeamValidation && (
+                      <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                        A equipa ainda pode estar em negociacao. Este score orienta perfis e CVs, mas nao bloqueia o QC nesta fase.
+                      </p>
+                    )}
                     <div className="space-y-1.5 pt-1">
                       {teamMatch.items.slice(0, 3).map((item) => (
                         <div key={item.member_id} className="rounded border border-border p-2">
@@ -1486,6 +1546,14 @@ export function ProposalEditor() {
               <span className="text-muted-foreground">Novo estado:</span>
               <strong className="ml-1">{transitionModal.targetStatus ? STATUS_LABELS[transitionModal.targetStatus] : ''}</strong>
             </div>
+            {transitionModal.targetStatus === 'ready_for_submission' && hasPendingTeamValidation && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>
+                  Equipa ainda pendente. Pode avancar com QC para teste; confirme perfis, CVs e disponibilidade antes da submissao final.
+                </span>
+              </div>
+            )}
             <Textarea
               placeholder="Nota sobre esta transição (opcional)..."
               value={transitionNote}

@@ -494,13 +494,27 @@ def _qc_min_score_from_request(request):
 
 
 def _proposal_has_passing_qc(proposal, min_score=None):
+    return _proposal_qc_block_reason(proposal, min_score=min_score) is None
+
+
+def _proposal_qc_block_reason(proposal, min_score=None):
     quality_check = getattr(proposal, 'quality_check', None)
-    if not quality_check or quality_check.status != 'completed':
-        return False
+    if not quality_check:
+        return 'QC ainda nao foi executado para esta proposta.'
+    if quality_check.status != 'completed':
+        return f'QC ainda nao esta completo. Estado atual: {quality_check.status}.'
     if min_score is not None:
-        return quality_check.overall_score >= min_score
-    return bool(
-        quality_check.can_submit
+        if quality_check.overall_score >= min_score:
+            return None
+        return (
+            f'QC completo, mas score {quality_check.overall_score}/100 '
+            f'esta abaixo do limiar configurado de {min_score}/100.'
+        )
+    if quality_check.can_submit:
+        return None
+    return (
+        f'QC completo, mas ainda nao esta aprovado para submissao '
+        f'(score {quality_check.overall_score}/100). Ajuste o limiar ou revise os itens de QC.'
     )
 
 
@@ -512,11 +526,15 @@ def _validate_proposal_transition(proposal, status_value, qc_min_score=None):
     if status_value not in ALLOWED_PROPOSAL_TRANSITIONS.get(proposal.status, set()):
         raise ValueError('Invalid proposal status transition.')
 
-    if status_value in {'ready_for_submission', 'submitted'} and not _proposal_has_passing_qc(
-        proposal,
-        min_score=qc_min_score,
-    ):
-        raise PermissionError('Proposal needs a completed passing QC before submission.')
+    if status_value == 'submitted':
+        is_ready, error_payload = _validate_submission_readiness(proposal)
+        if not is_ready:
+            raise PermissionError(_format_submission_readiness_error(error_payload))
+
+    if status_value in {'ready_for_submission', 'submitted'}:
+        qc_block_reason = _proposal_qc_block_reason(proposal, min_score=qc_min_score)
+        if qc_block_reason:
+            raise PermissionError(qc_block_reason)
 
 
 def _event_artifact_type_from_status(status_value):
@@ -565,6 +583,18 @@ def _set_proposal_status(
             created_by=user,
         )
     return proposal
+
+
+def _format_submission_readiness_error(error_payload):
+    detail = error_payload.get('detail', 'A proposta ainda nao esta pronta para submissao.')
+    missing = error_payload.get('missing_required_sections') or []
+    incomplete = error_payload.get('incomplete_required_sections') or []
+    parts = [detail]
+    if missing:
+        parts.append(f"Secoes em falta: {', '.join(missing)}.")
+    if incomplete:
+        parts.append(f"Secoes incompletas: {', '.join(incomplete)}.")
+    return ' '.join(parts)
 
 
 class ProposalViewSet(viewsets.ModelViewSet):
