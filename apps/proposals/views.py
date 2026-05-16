@@ -483,16 +483,28 @@ ALLOWED_PROPOSAL_TRANSITIONS = {
 }
 
 
-def _proposal_has_passing_qc(proposal):
+def _qc_min_score_from_request(request):
+    raw_value = request.data.get('qc_min_score')
+    if raw_value in (None, ''):
+        return None
+    try:
+        return max(0, min(100, int(raw_value)))
+    except (TypeError, ValueError):
+        raise ValueError('Invalid QC minimum score.')
+
+
+def _proposal_has_passing_qc(proposal, min_score=None):
     quality_check = getattr(proposal, 'quality_check', None)
+    if not quality_check or quality_check.status != 'completed':
+        return False
+    if min_score is not None:
+        return quality_check.overall_score >= min_score
     return bool(
-        quality_check
-        and quality_check.status == 'completed'
-        and quality_check.can_submit
+        quality_check.can_submit
     )
 
 
-def _validate_proposal_transition(proposal, status_value):
+def _validate_proposal_transition(proposal, status_value, qc_min_score=None):
     valid_statuses = {choice[0] for choice in Proposal.STATUS_CHOICES}
     if status_value not in valid_statuses:
         raise ValueError('Invalid proposal status.')
@@ -500,7 +512,10 @@ def _validate_proposal_transition(proposal, status_value):
     if status_value not in ALLOWED_PROPOSAL_TRANSITIONS.get(proposal.status, set()):
         raise ValueError('Invalid proposal status transition.')
 
-    if status_value in {'ready_for_submission', 'submitted'} and not _proposal_has_passing_qc(proposal):
+    if status_value in {'ready_for_submission', 'submitted'} and not _proposal_has_passing_qc(
+        proposal,
+        min_score=qc_min_score,
+    ):
         raise PermissionError('Proposal needs a completed passing QC before submission.')
 
 
@@ -511,9 +526,16 @@ def _event_artifact_type_from_status(status_value):
     return PROPOSAL_EVENT_ARTIFACT_TYPES.get(event_type, '')
 
 
-def _set_proposal_status(proposal, status_value, user=None, note='', validate_transition=False):
+def _set_proposal_status(
+    proposal,
+    status_value,
+    user=None,
+    note='',
+    validate_transition=False,
+    qc_min_score=None,
+):
     if validate_transition:
-        _validate_proposal_transition(proposal, status_value)
+        _validate_proposal_transition(proposal, status_value, qc_min_score=qc_min_score)
 
     valid_statuses = {choice[0] for choice in Proposal.STATUS_CHOICES}
     if status_value not in valid_statuses:
@@ -824,12 +846,17 @@ class ProposalViewSet(viewsets.ModelViewSet):
         if not is_ready:
             return Response(error_payload, status=status.HTTP_400_BAD_REQUEST)
         try:
+            qc_min_score = _qc_min_score_from_request(request)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        try:
             _set_proposal_status(
                 proposal,
                 'submitted',
                 user=request.user,
                 note=request.data.get('note', 'Proposta submetida ao cliente/concurso.'),
                 validate_transition=True,
+                qc_min_score=qc_min_score,
             )
         except PermissionError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
@@ -842,6 +869,10 @@ class ProposalViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def approve_for_submission(self, request, pk=None):
         proposal = self.get_object()
+        try:
+            qc_min_score = _qc_min_score_from_request(request)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         with transaction.atomic():
             try:
                 _set_proposal_status(
@@ -850,6 +881,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
                     user=request.user,
                     note=request.data.get('note', 'QC aprovado. Proposta pronta para submissao.'),
                     validate_transition=True,
+                    qc_min_score=qc_min_score,
                 )
             except PermissionError as exc:
                 return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
@@ -867,6 +899,10 @@ class ProposalViewSet(viewsets.ModelViewSet):
         proposal = self.get_object()
         next_status = request.data.get('status')
         note = request.data.get('note', '')
+        try:
+            qc_min_score = _qc_min_score_from_request(request)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         with transaction.atomic():
             try:
                 _set_proposal_status(
@@ -875,6 +911,7 @@ class ProposalViewSet(viewsets.ModelViewSet):
                     user=request.user,
                     note=note,
                     validate_transition=True,
+                    qc_min_score=qc_min_score,
                 )
             except PermissionError as exc:
                 return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)

@@ -222,7 +222,7 @@ class TestProposalViewSet:
         url = reverse('proposal-submit', kwargs={'pk': proposal.pk})
         response = client.post(url)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'ready_for_submission' in response.data['detail']
+        assert 'obrigatórias' in response.data['detail']
 
     def test_submit_action_requires_required_sections_complete(self, authenticated_client):
         client, user = authenticated_client
@@ -231,6 +231,13 @@ class TestProposalViewSet:
         for section in proposal.sections.all():
             section.is_complete = True
             section.save(update_fields=['is_complete'])
+        QualityCheck.objects.create(
+            proposal=proposal,
+            status='completed',
+            overall_score=90,
+            can_submit=True,
+            executed_by=user,
+        )
         section = proposal.sections.filter(section_type='methodology').first()
         section.is_complete = False
         section.save(update_fields=['is_complete'])
@@ -248,6 +255,13 @@ class TestProposalViewSet:
         for section in proposal.sections.all():
             section.is_complete = True
             section.save(update_fields=['is_complete'])
+        QualityCheck.objects.create(
+            proposal=proposal,
+            status='completed',
+            overall_score=90,
+            can_submit=True,
+            executed_by=user,
+        )
 
         url = reverse('proposal-submit', kwargs={'pk': proposal.pk})
         response = client.post(url)
@@ -261,6 +275,10 @@ class TestProposalViewSet:
     def test_submit_action_requires_passing_qc(self, authenticated_client):
         client, user = authenticated_client
         proposal = ProposalFactory(created_by=user, status='ready_for_submission')
+        ensure_default_sections(proposal)
+        for section in proposal.sections.all():
+            section.is_complete = True
+            section.save(update_fields=['is_complete'])
         url = reverse('proposal-submit', kwargs={'pk': proposal.pk})
 
         response = client.post(url)
@@ -288,6 +306,24 @@ class TestProposalViewSet:
         assert proposal.status == 'ready_for_submission'
         assert response.data['proposal_id'] == proposal.id
         assert not Project.objects.filter(proposal=proposal).exists()
+
+    def test_approve_for_submission_accepts_configured_qc_threshold(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='qc_check')
+        QualityCheck.objects.create(
+            proposal=proposal,
+            status='completed',
+            overall_score=60,
+            can_submit=False,
+            executed_by=user,
+        )
+
+        url = reverse('proposal-approve-for-submission', kwargs={'pk': proposal.pk})
+        response = client.post(url, {'qc_min_score': 50}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        proposal.refresh_from_db()
+        assert proposal.status == 'ready_for_submission'
 
     def test_approve_for_submission_is_idempotent_without_project(self, authenticated_client):
         client, user = authenticated_client

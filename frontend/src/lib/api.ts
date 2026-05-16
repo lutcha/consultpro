@@ -606,31 +606,34 @@ export interface ApiTransitionResponse {
 export async function apiTransitionProposalStatus(
   proposalId: string,
   newStatus: string,
-  note?: string
+  note?: string,
+  options?: { qc_min_score?: number }
 ): Promise<ApiTransitionResponse> {
   return apiRequest<ApiTransitionResponse>(`/proposals/${proposalId}/transition_status/`, {
     method: 'POST',
-    body: JSON.stringify({ status: newStatus, note: note || '' }),
+    body: JSON.stringify({ status: newStatus, note: note || '', ...options }),
   });
 }
 
 export async function apiSubmitProposal(
   proposalId: string,
-  note?: string
+  note?: string,
+  options?: { qc_min_score?: number }
 ): Promise<{ status: string; submitted_at: string }> {
   return apiRequest(`/proposals/${proposalId}/submit/`, {
     method: 'POST',
-    body: JSON.stringify({ note: note || 'Proposta submetida.' }),
+    body: JSON.stringify({ note: note || 'Proposta submetida.', ...options }),
   });
 }
 
 export async function apiApproveProposalForSubmission(
   proposalId: string,
-  note?: string
+  note?: string,
+  options?: { qc_min_score?: number }
 ): Promise<ApiTransitionResponse> {
   return apiRequest<ApiTransitionResponse>(`/proposals/${proposalId}/approve_for_submission/`, {
     method: 'POST',
-    body: JSON.stringify({ note: note || 'QC aprovado.' }),
+    body: JSON.stringify({ note: note || 'QC aprovado.', ...options }),
   });
 }
 
@@ -777,11 +780,12 @@ export async function apiRunQualityCheck(
 
 export async function apiApproveQualityCheck(
   qcId: number,
-  note?: string
+  note?: string,
+  options?: { qc_min_score?: number }
 ): Promise<ApiQualityCheck & { proposal_id: number }> {
   return apiRequest<ApiQualityCheck & { proposal_id: number }>(`/quality-checks/${qcId}/approve/`, {
     method: 'POST',
-    body: JSON.stringify({ note: note || 'QC aprovado. Proposta pronta para submissão.' }),
+    body: JSON.stringify({ note: note || 'QC aprovado. Proposta pronta para submissão.', ...options }),
   });
 }
 

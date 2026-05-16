@@ -14,6 +14,7 @@ import {
 } from '@/lib/api';
 import { useProposalStore } from './useProposalStore';
 import { mapApiProposal } from '@/lib/apiMappers';
+import { readQCSettings } from '@/lib/qcSettings';
 
 interface QCStoreState {
   qcState: QCState | null;
@@ -215,7 +216,8 @@ export const useQCStore = create<QCStoreState>((set, get) => ({
     const { qcId } = get();
     if (!qcId) return null;
     try {
-      const result = await apiApproveQualityCheck(qcId, note);
+      const settings = readQCSettings();
+      const result = await apiApproveQualityCheck(qcId, note, { qc_min_score: settings.minScore });
       return { proposal_id: result.proposal_id };
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Erro ao aprovar QC' });
@@ -252,9 +254,7 @@ export const useQCStore = create<QCStoreState>((set, get) => ({
   canSubmit: () => {
     const state = get().qcState;
     if (!state) return false;
-    // Use the backend's can_submit flag (score >= 85 && no category fail).
-    // Fallback: allow if QC has been run (status === 'completed') so the
-    // reviewer can override a marginal score and the backend enforces the rules.
-    return state.canSubmit || state.status === 'completed';
+    const settings = readQCSettings();
+    return state.status === 'completed' && state.overallScore >= settings.minScore;
   },
 }));

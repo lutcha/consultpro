@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager
-from apps.proposals.views import _set_proposal_status
+from apps.proposals.views import _qc_min_score_from_request, _proposal_has_passing_qc, _set_proposal_status
 
 from .models import QCCheckCategory, QCItem, QCSuggestion, QualityCheck
 from .serializers import QualityCheckListSerializer, QualityCheckSerializer
@@ -121,7 +121,12 @@ class QualityCheckViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         quality_check = self.get_object()
         proposal = quality_check.proposal
-        if not quality_check.can_submit or quality_check.status != 'completed':
+        try:
+            qc_min_score = _qc_min_score_from_request(request)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not _proposal_has_passing_qc(proposal, min_score=qc_min_score):
             return Response(
                 {'detail': 'QC precisa estar completo e aprovado para submeter.'},
                 status=status.HTTP_409_CONFLICT,
@@ -134,6 +139,7 @@ class QualityCheckViewSet(viewsets.ModelViewSet):
                 user=request.user,
                 note=request.data.get('note', 'QC aprovado. Proposta pronta para submissao.'),
                 validate_transition=True,
+                qc_min_score=qc_min_score,
             )
 
         serializer = self.get_serializer(quality_check)

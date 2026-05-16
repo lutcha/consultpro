@@ -181,3 +181,20 @@ class TestQualityCheckViewSet:
         assert response.status_code == status.HTTP_409_CONFLICT
         proposal.refresh_from_db()
         assert proposal.status == 'qc_check'
+
+    def test_approve_action_accepts_configured_qc_threshold(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(status='qc_check')
+        qc = QualityCheckFactory(
+            proposal=proposal,
+            status='completed',
+            overall_score=60,
+            can_submit=False,
+        )
+
+        url = reverse('quality-check-approve', kwargs={'pk': qc.pk})
+        response = client.post(url, {'qc_min_score': 50}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        proposal.refresh_from_db()
+        assert proposal.status == 'ready_for_submission'

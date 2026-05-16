@@ -9,7 +9,7 @@ import {
   Upload, Building2, UserCircle, Plus, X, Eye, ChevronRight, Calendar,
   Paperclip, ExternalLink, ArrowRight, Send, Star, MessageSquare,
   RefreshCw, Trophy, CheckCircle2, Zap, Handshake, Clock, FileCheck,
-  AlertCircle, GitBranch, Flag,
+  AlertCircle, GitBranch, Flag, SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,7 @@ import {
 import type { ProposalStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { markdownToEditorHtml, shouldNormalizeMarkdown } from '@/lib/contentFormat';
+import { readQCSettings, writeQCSettings } from '@/lib/qcSettings';
 
 // ── Pipeline config ────────────────────────────────────────────────────────
 
@@ -308,6 +309,7 @@ export function ProposalEditor() {
   const [teamMatchError, setTeamMatchError] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('all');
   const [eventPeriodFilter, setEventPeriodFilter] = useState('all');
+  const [qcMinScore, setQcMinScore] = useState(() => readQCSettings().minScore);
 
   useEffect(() => {
     if (id) {
@@ -316,6 +318,10 @@ export function ProposalEditor() {
       loadTeamMatch(id);
     }
   }, [id, selectProposal]);
+
+  useEffect(() => {
+    writeQCSettings({ minScore: qcMinScore });
+  }, [qcMinScore]);
 
   useEffect(() => {
     if (selectedProposal) {
@@ -499,7 +505,12 @@ export function ProposalEditor() {
     setIsTransitioning(true);
     setTransitionError('');
     try {
-      const result = await apiTransitionProposalStatus(id, transitionModal.targetStatus, transitionNote);
+      const result = await apiTransitionProposalStatus(
+        id,
+        transitionModal.targetStatus,
+        transitionNote,
+        { qc_min_score: qcMinScore }
+      );
       updateStatus(id, result.status as ProposalStatus);
       setTransitionModal({ open: false, targetStatus: null, label: '' });
       if (result.project_id) {
@@ -511,7 +522,7 @@ export function ProposalEditor() {
       const raw = err instanceof Error ? err.message : 'Erro ao transitar estado.';
       const lowered = raw.toLowerCase();
       if (lowered.includes('completed passing qc') || lowered.includes('qc')) {
-        setTransitionError('A proposta precisa de um QC aprovado e válido antes da submissão.');
+        setTransitionError(`A proposta precisa de QC completo com score mínimo de ${qcMinScore}/100.`);
       } else if (lowered.includes('invalid') || lowered.includes('invalida')) {
         setTransitionError('Transição inválida para o estado selecionado.');
       } else {
@@ -1074,6 +1085,45 @@ export function ProposalEditor() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className="p-4 border-b border-border bg-muted/20">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Limiar QC
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-[10px]">
+                    {qcMinScore}/100
+                  </Badge>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={qcMinScore}
+                  onChange={(event) => setQcMinScore(Number(event.target.value))}
+                  className="w-full accent-primary"
+                />
+                <div className="grid grid-cols-3 gap-1.5 mt-2">
+                  {[50, 70, 85].map((score) => (
+                    <Button
+                      key={score}
+                      variant={qcMinScore === score ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-7 text-[10px]"
+                      onClick={() => setQcMinScore(score)}
+                    >
+                      {score === 50 ? 'Teste' : score === 70 ? 'Piloto' : 'Padrão'}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
+                  Para testes, baixa o limiar. A proposta só precisa de QC completo com score igual ou superior.
+                </p>
               </div>
 
               {/* COS artifacts for current stage */}

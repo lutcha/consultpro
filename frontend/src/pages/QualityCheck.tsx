@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   XCircle,
   FileCheck,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useQCStore, useProposalStore } from '@/stores';
 import { cn } from '@/lib/utils';
+import { readQCSettings, writeQCSettings } from '@/lib/qcSettings';
 
 const checkLabels: Record<string, string> = {
   compliance: 'Conformidade com ToR',
@@ -55,11 +57,16 @@ const statusLabels = {
 export function QualityCheck() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { qcState, isRunning, runQC, approveQC, applySuggestion, ignoreSuggestion, canSubmit } =
+  const { qcState, isRunning, runQC, approveQC, applySuggestion, ignoreSuggestion } =
     useQCStore();
   const { selectedProposal, selectProposal } = useProposalStore();
   const [isApproving, setIsApproving] = useState(false);
   const [approveError, setApproveError] = useState('');
+  const [qcMinScore, setQcMinScore] = useState(() => readQCSettings().minScore);
+
+  useEffect(() => {
+    writeQCSettings({ minScore: qcMinScore });
+  }, [qcMinScore]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +115,9 @@ export function QualityCheck() {
     return 'text-error';
   };
 
+  const meetsConfiguredThreshold =
+    qcState.status === 'completed' && qcState.overallScore >= qcMinScore;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -141,7 +151,7 @@ export function QualityCheck() {
             <Download className="h-4 w-4 mr-2" />
             Exportar Report
           </Button>
-          <Button disabled={!canSubmit() || isApproving} onClick={handleApprove}>
+          <Button disabled={!meetsConfiguredThreshold || isApproving} onClick={handleApprove}>
             <CheckCircle className="h-4 w-4 mr-2" />
             {isApproving ? 'A aprovar...' : 'Aprovar'}
           </Button>
@@ -166,9 +176,9 @@ export function QualityCheck() {
               </div>
               <Progress value={qcState.overallScore} className="h-3" />
               <p className="text-sm text-muted-foreground mt-2">
-                {qcState.overallScore >= 85
+                {qcState.overallScore >= qcMinScore
                   ? 'Proposta pronta para submissão'
-                  : qcState.overallScore >= 70
+                  : qcState.overallScore >= Math.max(0, qcMinScore - 15)
                   ? 'Melhorias recomendadas antes da submissão'
                   : 'Revisões necessárias antes da submissão'}
               </p>
@@ -210,11 +220,35 @@ export function QualityCheck() {
             </div>
           </div>
 
-          {!canSubmit() && (
+          <div className="mt-4 p-3 rounded-lg border border-border bg-muted/40">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Limiar minimo para aprovar QC</p>
+                  <p className="text-xs text-muted-foreground">
+                    Configuravel para teste e calibracao do fluxo comercial.
+                  </p>
+                </div>
+              </div>
+              <Badge variant="outline">{qcMinScore}/100</Badge>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={qcMinScore}
+              onChange={(event) => setQcMinScore(Number(event.target.value))}
+              className="mt-3 w-full accent-primary"
+            />
+          </div>
+
+          {!meetsConfiguredThreshold && (
             <div className="mt-4 p-3 bg-error/10 border border-error/20 rounded-lg flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-error" />
               <p className="text-sm text-error">
-                Score &lt; 85 bloqueia submissão. Revise os itens assinalados.
+                Score abaixo de {qcMinScore}/100 bloqueia submissao. Revise os itens assinalados.
               </p>
             </div>
           )}
@@ -347,7 +381,7 @@ export function QualityCheck() {
           {approveError && (
             <span className="text-sm text-destructive">{approveError}</span>
           )}
-          <Button disabled={!canSubmit() || isApproving} onClick={handleApprove}>
+          <Button disabled={!meetsConfiguredThreshold || isApproving} onClick={handleApprove}>
             <CheckCircle className="h-4 w-4 mr-2" />
             {isApproving ? 'A aprovar...' : 'Aprovar para Submissão'}
           </Button>
