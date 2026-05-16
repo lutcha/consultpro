@@ -170,7 +170,7 @@ const EVENT_FILTER_OPTIONS = [
 ];
 
 const EVENT_PERIOD_OPTIONS = [
-  { value: 'all', label: 'Todo periodo' },
+  { value: 'all', label: 'Todo período' },
   { value: '7', label: '7 dias' },
   { value: '30', label: '30 dias' },
   { value: '90', label: '90 dias' },
@@ -725,7 +725,7 @@ export function ProposalEditor() {
               }}
             >
               <Plus className="h-3.5 w-3.5" />
-              Adicionar seccao
+              Adicionar secção
             </Button>
             <div className="space-y-0.5">
               {selectedProposal.sections.map((section) => (
@@ -816,7 +816,7 @@ export function ProposalEditor() {
         </div>
 
         {/* ── Right Panel — Pipeline + Events — hidden on mobile, permanent on lg+ ── */}
-        <div className="hidden lg:flex w-72 flex-shrink-0 flex-col border-l border-border overflow-hidden bg-background">
+        <div className="hidden lg:flex w-80 xl:w-96 flex-shrink-0 flex-col border-l border-border overflow-hidden bg-background">
 
           {/* Tab headers — custom, no Radix Tabs */}
           <div className="flex flex-shrink-0 border-b border-border">
@@ -944,7 +944,7 @@ export function ProposalEditor() {
               {contextEvent && (
                 <div className="px-4 py-3 border-b border-border">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                    Acoes Contextuais
+                    Ações Contextuais
                   </p>
                   <Button
                     variant="outline"
@@ -1116,7 +1116,7 @@ export function ProposalEditor() {
                 </Select>
                 <Select value={eventPeriodFilter} onValueChange={setEventPeriodFilter}>
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Periodo" />
+                    <SelectValue placeholder="Período" />
                   </SelectTrigger>
                   <SelectContent>
                     {EVENT_PERIOD_OPTIONS.map((opt) => (
@@ -1184,7 +1184,7 @@ export function ProposalEditor() {
                               <Icon className="h-3.5 w-3.5 text-white" />
                             </div>
                             {/* Card */}
-                            <div className={cn('flex-1 rounded-lg border border-l-4 p-3 min-w-0 shadow-sm', conf.card)}>
+                            <div className={cn('flex-1 rounded-lg border border-l-4 p-3.5 min-w-0 shadow-sm', conf.card)}>
                               <div className="flex items-start justify-between gap-2 mb-1.5">
                                 <span className="text-sm font-semibold text-foreground leading-tight">{ev.title}</span>
                                 <span className={cn('text-[10px] font-medium rounded px-1.5 py-0.5 flex-shrink-0 capitalize', conf.iconColor)}>
@@ -1240,7 +1240,7 @@ export function ProposalEditor() {
       <Dialog open={sectionDialogOpen} onOpenChange={setSectionDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Adicionar Seccao</DialogTitle>
+            <DialogTitle>Adicionar secção</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <Input
@@ -1261,7 +1261,7 @@ export function ProposalEditor() {
               Cancelar
             </Button>
             <Button onClick={handleAddSection} disabled={isAddingSection}>
-              {isAddingSection ? 'A criar...' : 'Criar Seccao'}
+              {isAddingSection ? 'A criar...' : 'Criar secção'}
             </Button>
           </DialogFooter>
         </DialogContent>
