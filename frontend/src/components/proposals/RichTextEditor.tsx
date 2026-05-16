@@ -20,10 +20,14 @@ export function RichTextEditor({ value, onChange, placeholder: _placeholder, cla
 
   // Update editor content when value prop changes (from outside)
   useEffect(() => {
-    if (editorRef.current && editorRef.current.innerHTML !== value) {
+    if (
+      editorRef.current &&
+      editorRef.current !== document.activeElement &&
+      editorRef.current.innerHTML !== (value || '')
+    ) {
       editorRef.current.innerHTML = value || '';
     }
-  }, []);
+  }, [value]);
 
   const handleInput = useCallback(() => {
     if (editorRef.current) {

@@ -62,10 +62,16 @@ export function QualityCheck() {
   const [approveError, setApproveError] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     if (id) {
-      selectProposal(id);
-      runQC(id);
+      (async () => {
+        await selectProposal(id);
+        if (!cancelled) await runQC(id);
+      })();
     }
+    return () => {
+      cancelled = true;
+    };
   }, [id, selectProposal, runQC]);
 
   const handleApprove = async () => {

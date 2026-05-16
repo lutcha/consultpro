@@ -195,6 +195,9 @@ class TestProposalViewSet:
                 format='json',
             )
         assert response.status_code == status.HTTP_201_CREATED
+        prompt = mock_service.generate_suggestion.call_args.kwargs['content']
+        assert 'Return clean HTML' in prompt
+        assert 'Do not return Markdown' in prompt
 
     def test_save_action(self, authenticated_client):
         client, user = authenticated_client

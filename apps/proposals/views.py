@@ -782,7 +782,8 @@ class ProposalViewSet(viewsets.ModelViewSet):
             f"Target section title: {section.title}\n"
             f"Target section type: {section.section_type}\n"
             f"Current section content:\n{current_content}\n\n"
-            "Write in the proposal language and return only the suggested section text."
+            "Write in the proposal language. Return clean HTML for a rich text editor "
+            "using paragraphs, headings, lists, and tables when useful. Do not return Markdown."
         )
         generated_content = service.generate_suggestion(
             section_type=section.title or section.section_type,

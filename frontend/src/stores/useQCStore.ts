@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import type { QCState, QCCheck } from '@/types';
 import {
+  apiGetProposal,
   apiGetQualityChecks,
   apiCreateQualityCheck,
   apiRunQualityCheck,
@@ -12,6 +13,7 @@ import {
   type ApiQualityCheck,
 } from '@/lib/api';
 import { useProposalStore } from './useProposalStore';
+import { mapApiProposal } from '@/lib/apiMappers';
 
 interface QCStoreState {
   qcState: QCState | null;
@@ -47,6 +49,7 @@ function buildQCCategories(proposalSections: { title: string; content: string; i
     (s.title.toLowerCase().includes('resumo') || s.title.toLowerCase().includes('executivo')) &&
     s.content.length > 100
   );
+  const allRequiredReady = hasExecutiveSummary && hasMethodology && hasTeam && hasBudget;
 
   // Compliance — based on required sections presence
   const complianceItems = [
@@ -74,7 +77,7 @@ function buildQCCategories(proposalSections: { title: string; content: string; i
       section: '',
     },
   ] as const;
-  const coherenceScore = Math.min(100, completionRate + 10);
+  const coherenceScore = Math.min(100, completionRate + (allRequiredReady ? 15 : 5));
   const coherenceStatus = coherenceScore >= 80 ? 'pass' : coherenceScore >= 60 ? 'warn' : 'fail';
 
   // Budget
@@ -96,7 +99,7 @@ function buildQCCategories(proposalSections: { title: string; content: string; i
       section: 'Equipa Técnica',
     },
   ] as const;
-  const attachmentsScore = hasTeam ? 90 : 50;
+  const attachmentsScore = hasTeam ? 100 : 50;
   const attachmentsStatus = hasTeam ? 'pass' : 'warn';
 
   return [
@@ -190,7 +193,12 @@ export const useQCStore = create<QCStoreState>((set, get) => ({
 
       // Build categories from current proposal store state
       const proposalStore = useProposalStore.getState();
-      const proposal = proposalStore.selectedProposal;
+      let proposal = proposalStore.selectedProposal;
+      if (!proposal || proposal.id !== proposalId) {
+        const freshProposal = mapApiProposal(await apiGetProposal(proposalId));
+        useProposalStore.setState({ selectedProposal: freshProposal });
+        proposal = freshProposal;
+      }
       const sections = proposal?.sections || [];
 
       const categories = buildQCCategories(sections);

@@ -11,6 +11,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { apiAISuggest } from '@/lib/api';
+import { markdownToEditorHtml } from '@/lib/contentFormat';
 
 interface AIAssistButtonProps {
   section: string;
@@ -79,7 +80,7 @@ export function AIAssistButton({
     try {
       const result = await apiAISuggest(proposalId, sectionId, action, currentContent);
       if (result.generated_content) {
-        onApply(result.generated_content);
+        onApply(markdownToEditorHtml(result.generated_content));
         setOpen(false);
       }
     } catch (err) {

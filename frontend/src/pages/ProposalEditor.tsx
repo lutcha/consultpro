@@ -30,6 +30,7 @@ import {
 } from '@/lib/api';
 import type { ProposalStatus } from '@/types';
 import { cn } from '@/lib/utils';
+import { markdownToEditorHtml, shouldNormalizeMarkdown } from '@/lib/contentFormat';
 
 // ── Pipeline config ────────────────────────────────────────────────────────
 
@@ -332,9 +333,18 @@ export function ProposalEditor() {
   useEffect(() => {
     if (selectedProposal && activeSectionId) {
       const section = selectedProposal.sections.find((s) => s.id === activeSectionId);
-      if (section) setEditorContent(section.content || '');
+      if (section) {
+        const shouldNormalize = shouldNormalizeMarkdown(section.content);
+        const normalizedContent = shouldNormalize
+          ? markdownToEditorHtml(section.content)
+          : section.content || '';
+        setEditorContent(normalizedContent);
+        if (shouldNormalize) {
+          updateSection(selectedProposal.id, activeSectionId, normalizedContent);
+        }
+      }
     }
-  }, [selectedProposal, activeSectionId]);
+  }, [selectedProposal, activeSectionId, updateSection]);
 
   const loadEvents = async (proposalId: string) => {
     setEventsLoading(true);
@@ -425,8 +435,9 @@ export function ProposalEditor() {
   };
 
   const handleAISuggestion = (generatedContent: string) => {
-    setEditorContent(generatedContent);
-    handleContentChange(generatedContent);
+    const normalizedContent = markdownToEditorHtml(generatedContent);
+    setEditorContent(normalizedContent);
+    handleContentChange(normalizedContent);
   };
 
   const handleExport = async (type: 'word' | 'pdf') => {
