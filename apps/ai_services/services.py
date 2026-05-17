@@ -1,5 +1,6 @@
 import json
 import logging
+import hashlib
 
 import openai
 from django.conf import settings
@@ -413,6 +414,8 @@ class OpenAIService(LLMService):
 class MockAIService(BaseAIService):
     """Mock AI service for development and testing."""
 
+    PROVIDER_NAME = 'mock'
+
     def analyze_document(self, text: str) -> dict:
         logger.info('MockAIService.analyze_document called (len=%s)', len(text))
         cos_analysis = {
@@ -650,6 +653,22 @@ class AIServiceFactory:
             'provider': getattr(service, 'PROVIDER_NAME', 'unknown'),
             'model': getattr(service, 'model', 'unknown') if hasattr(service, 'model') else 'n/a',
             'is_mock': isinstance(service, MockAIService),
+        }
+
+    @staticmethod
+    def estimate_token_count(text: str) -> int:
+        """Cheap deterministic estimate for governance logs without provider calls."""
+        return max(1, len(text or '') // 4)
+
+    @classmethod
+    def build_prompt_metadata(cls, text: str) -> dict:
+        provider_info = cls.get_provider_info()
+        normalized = (text or '').encode('utf-8')
+        return {
+            **provider_info,
+            'prompt_hash': hashlib.sha256(normalized).hexdigest(),
+            'prompt_chars': len(text or ''),
+            'estimated_prompt_tokens': cls.estimate_token_count(text or ''),
         }
 
     @classmethod

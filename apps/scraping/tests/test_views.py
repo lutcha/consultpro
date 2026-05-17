@@ -1,9 +1,11 @@
 from django.urls import reverse
 from django.utils import timezone
+from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.opportunities.models import Opportunity, Requirement
+from apps.opportunities.scoring import score_opportunity
 from apps.opportunities.tests.factories import UserFactory
 from apps.scraping.models import ScrapedOpportunity, ScrapingSource
 
@@ -64,6 +66,19 @@ class ScrapedOpportunityImportTests(APITestCase):
         self.assertEqual(opportunity.ai_extraction['scraped_opportunity_id'], scraped.id)
         self.assertEqual(opportunity.ai_extraction['deep_content_status'], 'completed')
         self.assertEqual(Requirement.objects.filter(opportunity=opportunity, extracted_by_ai=True).count(), 2)
+        self.assertTrue(response.data['score_queued'])
+
+    def test_import_scraped_opportunity_queues_post_import_scoring(self):
+        scraped = self._create_scraped_opportunity(external_id='score-001', external_url='https://example.org/tenders/score-001')
+        url = reverse('scraping:scraped-opportunity-import-opportunity', kwargs={'pk': scraped.pk})
+
+        with patch('apps.scraping.services.opportunity_importer.enrich_and_score_opportunity.delay') as mock_delay:
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(callbacks), 1)
+        mock_delay.assert_called_once_with(response.data['opportunity_id'])
 
     def test_import_scraped_opportunity_is_idempotent(self):
         scraped = self._create_scraped_opportunity()
@@ -77,6 +92,11 @@ class ScrapedOpportunityImportTests(APITestCase):
         self.assertFalse(second.data['created'])
         self.assertEqual(first.data['opportunity_id'], second.data['opportunity_id'])
         self.assertEqual(Opportunity.objects.filter(url_source=scraped.external_url).count(), 1)
+
+        opportunity = Opportunity.objects.get(pk=first.data['opportunity_id'])
+        score_opportunity(opportunity)
+        third = self.client.post(url)
+        self.assertFalse(third.data['score_queued'])
 
     def test_ready_to_import_filter_uses_eligibility_deadline_and_quality(self):
         ready = self._create_scraped_opportunity(

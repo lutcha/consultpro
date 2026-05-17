@@ -257,6 +257,16 @@ class AIServiceFactoryTests(TestCase):
             'is_mock': False,
         })
 
+    @override_settings(AI_PROVIDER='mock', AI_ALWAYS_MOCK=False)
+    def test_build_prompt_metadata(self):
+        metadata = AIServiceFactory.build_prompt_metadata('abcd' * 20)
+
+        self.assertEqual(metadata['provider'], 'mock')
+        self.assertTrue(metadata['is_mock'])
+        self.assertEqual(metadata['prompt_chars'], 80)
+        self.assertEqual(metadata['estimated_prompt_tokens'], 20)
+        self.assertEqual(len(metadata['prompt_hash']), 64)
+
 
 class LLMServiceTests(TestCase):
     @patch('apps.ai_services.services.openai.OpenAI')

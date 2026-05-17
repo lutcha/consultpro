@@ -7,11 +7,18 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.opportunities.models import Opportunity
-from apps.opportunities.tasks import _sync_ai_requirements
+from apps.opportunities.tasks import _sync_ai_requirements, enrich_and_score_opportunity
 
 from .enrichment import enrich_for_import
 
 logger = logging.getLogger(__name__)
+
+
+def _queue_post_import_scoring(opportunity: Opportunity) -> bool:
+    if opportunity.scores.filter(is_current=True).exists():
+        return False
+    transaction.on_commit(lambda: enrich_and_score_opportunity.delay(opportunity.id))
+    return True
 
 
 def _build_description(scraped_opp) -> str:
@@ -55,11 +62,13 @@ def import_scraped_opportunity(scraped_opp, user=None) -> dict:
     and by Opportunity.url_source.
     """
     if scraped_opp.imported_opportunity_id:
+        score_queued = _queue_post_import_scoring(scraped_opp.imported_opportunity)
         return {
             'opportunity_id': scraped_opp.imported_opportunity_id,
             'opportunity_url': f'/opportunities/{scraped_opp.imported_opportunity_id}',
             'status': 'imported',
             'created': False,
+            'score_queued': score_queued,
         }
 
     existing = Opportunity.objects.filter(url_source=scraped_opp.external_url).first()
@@ -69,11 +78,13 @@ def import_scraped_opportunity(scraped_opp, user=None) -> dict:
         scraped_opp.imported_by = user
         scraped_opp.imported_at = timezone.now()
         scraped_opp.save(update_fields=['status', 'imported_opportunity', 'imported_by', 'imported_at'])
+        score_queued = _queue_post_import_scoring(existing)
         return {
             'opportunity_id': existing.id,
             'opportunity_url': f'/opportunities/{existing.id}',
             'status': 'imported',
             'created': False,
+            'score_queued': score_queued,
         }
 
     enriched = enrich_for_import(scraped_opp)
@@ -105,6 +116,7 @@ def import_scraped_opportunity(scraped_opp, user=None) -> dict:
     scraped_opp.imported_by = user
     scraped_opp.imported_at = timezone.now()
     scraped_opp.save(update_fields=['status', 'imported_opportunity', 'imported_by', 'imported_at'])
+    score_queued = _queue_post_import_scoring(opportunity)
 
     logger.info(
         "Imported scraped opportunity %s into Opportunity %s",
@@ -117,4 +129,5 @@ def import_scraped_opportunity(scraped_opp, user=None) -> dict:
         'opportunity_url': f'/opportunities/{opportunity.id}',
         'status': 'imported',
         'created': True,
+        'score_queued': score_queued,
     }

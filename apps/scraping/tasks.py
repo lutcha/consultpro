@@ -393,6 +393,7 @@ def enrich_scraped_opportunity_with_ai(self, scraped_opportunity_id: int):
     try:
         from apps.ai_services.services import AIServiceFactory
         service = AIServiceFactory.get_service()
+        prompt_metadata = AIServiceFactory.build_prompt_metadata(full_text)
         result = service.analyze_document(full_text)
 
         summary = result.get('summary', '')
@@ -407,6 +408,12 @@ def enrich_scraped_opportunity_with_ai(self, scraped_opportunity_id: int):
             'ai_enriched_at': timezone.now().isoformat(),
             'ai_requirements_count': len(requirements),
             'ai_risks_count': len(risks),
+            'ai_provider': prompt_metadata['provider'],
+            'ai_model': prompt_metadata['model'],
+            'ai_is_mock': prompt_metadata['is_mock'],
+            'ai_prompt_hash': prompt_metadata['prompt_hash'],
+            'ai_prompt_chars': prompt_metadata['prompt_chars'],
+            'ai_estimated_prompt_tokens': prompt_metadata['estimated_prompt_tokens'],
         }
         opp.save(update_fields=['ai_summary', 'ai_extracted_requirements', 'transformation_flags'])
 
@@ -418,6 +425,9 @@ def enrich_scraped_opportunity_with_ai(self, scraped_opportunity_id: int):
             'status': 'completed',
             'requirements_count': len(requirements),
             'risks_count': len(risks),
+            'provider': prompt_metadata['provider'],
+            'model': prompt_metadata['model'],
+            'prompt_hash': prompt_metadata['prompt_hash'],
         }
 
     except Exception as exc:
