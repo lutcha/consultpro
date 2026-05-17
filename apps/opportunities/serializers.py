@@ -4,7 +4,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .constants import COUNTRY_CHOICES, SECTOR_CHOICES
-from .models import Opportunity, Requirement, Risk
+from .models import Opportunity, OpportunityScore, Requirement, Risk
 
 
 _SECTOR_ALIASES = {
@@ -68,6 +68,32 @@ class RiskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Risk
         fields = ['id', 'description', 'severity', 'mitigation']
+
+
+class OpportunityScoreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OpportunityScore
+        fields = [
+            'id',
+            'opportunity',
+            'strategic_fit',
+            'win_probability',
+            'margin',
+            'risk',
+            'resource',
+            'overall_score',
+            'confidence_score',
+            'ai_extracted_criteria',
+            'evaluation_weights',
+            'reasoning_trace',
+            'input_snapshot',
+            'provider',
+            'model',
+            'scoring_version',
+            'is_current',
+            'created_at',
+        ]
+        read_only_fields = fields
 
 
 class OpportunityListSerializer(serializers.ModelSerializer):

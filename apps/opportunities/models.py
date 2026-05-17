@@ -92,6 +92,40 @@ class Opportunity(models.Model):
         return self.title
 
 
+class OpportunityScore(models.Model):
+    opportunity = models.ForeignKey(
+        Opportunity,
+        on_delete=models.CASCADE,
+        related_name='scores',
+    )
+    strategic_fit = models.PositiveSmallIntegerField(default=0)
+    win_probability = models.PositiveSmallIntegerField(default=0)
+    margin = models.PositiveSmallIntegerField(default=0)
+    risk = models.PositiveSmallIntegerField(default=0)
+    resource = models.PositiveSmallIntegerField(default=0)
+    overall_score = models.PositiveSmallIntegerField(default=0)
+    confidence_score = models.DecimalField(max_digits=4, decimal_places=2, default=0)
+    ai_extracted_criteria = models.JSONField(default=dict, blank=True)
+    evaluation_weights = models.JSONField(default=dict, blank=True)
+    reasoning_trace = models.JSONField(default=list, blank=True)
+    input_snapshot = models.JSONField(default=dict, blank=True)
+    provider = models.CharField(max_length=50, default='deterministic')
+    model = models.CharField(max_length=100, blank=True)
+    scoring_version = models.CharField(max_length=40, default='opportunity_score_v1')
+    is_current = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['opportunity', 'is_current'], name='opportunity_score_current_idx'),
+            models.Index(fields=['scoring_version'], name='opportunity_score_version_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.opportunity_id} score {self.overall_score}'
+
+
 class Requirement(models.Model):
     CATEGORY_CHOICES = [
         ('functional', 'Funcionais'),

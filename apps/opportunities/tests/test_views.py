@@ -9,7 +9,8 @@ from rest_framework.test import APIClient, APITestCase
 
 from apps.core.permissions import IsConsultantOrManager
 
-from apps.opportunities.models import Opportunity, Requirement, Risk
+from apps.opportunities.models import Opportunity, OpportunityScore, Requirement, Risk
+from apps.opportunities.scoring import score_opportunity
 from apps.proposals.models import Proposal
 from apps.opportunities.tests.factories import (
     OpportunityFactory,
@@ -153,3 +154,46 @@ class OpportunityViewSetTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['results'][0]['id'], opp1.id)
         self.assertEqual(response.data['results'][1]['id'], opp2.id)
+
+    def test_score_action_creates_explainable_score(self):
+        opportunity = OpportunityFactory(
+            ai_summary='Resumo IA',
+            ai_extraction={'cos_analysis': {'team_requirements': ['Especialista M&A']}},
+            value=150000,
+        )
+        RequirementFactory(opportunity=opportunity, priority='mandatory')
+        RiskFactory(opportunity=opportunity, severity='high')
+
+        url = reverse('opportunity-score', kwargs={'pk': opportunity.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['opportunity'], opportunity.id)
+        self.assertIn('overall_score', response.data)
+        self.assertIn('reasoning_trace', response.data)
+        self.assertIn('confidence_score', response.data)
+        self.assertEqual(len(response.data['reasoning_trace']), 5)
+        self.assertTrue(OpportunityScore.objects.filter(opportunity=opportunity, is_current=True).exists())
+
+    def test_score_action_returns_current_score_without_refresh(self):
+        opportunity = OpportunityFactory()
+        score = score_opportunity(opportunity)
+        url = reverse('opportunity-score', kwargs={'pk': opportunity.pk})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['id'], score.id)
+        self.assertEqual(OpportunityScore.objects.filter(opportunity=opportunity).count(), 1)
+
+    def test_score_action_refresh_marks_previous_score_not_current(self):
+        opportunity = OpportunityFactory()
+        old_score = score_opportunity(opportunity)
+        url = reverse('opportunity-score', kwargs={'pk': opportunity.pk})
+
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        old_score.refresh_from_db()
+        self.assertFalse(old_score.is_current)
+        self.assertEqual(OpportunityScore.objects.filter(opportunity=opportunity, is_current=True).count(), 1)
