@@ -7,5 +7,4 @@ export { useOpportunityStore } from './useOpportunityStore';
 export { useProposalStore } from './useProposalStore';
 export { useQCStore } from './useQCStore';
 export { useCurriculumStore } from './useCurriculumStore';
-export { useScrapingStore } from './useScrapingStore';
 export { useTeamsStore } from './useTeamsStore';
