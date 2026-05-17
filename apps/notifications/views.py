@@ -21,7 +21,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Notification.objects.filter(user=self.request.user)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['patch', 'post'])
     def read(self, request, pk=None):
         notification = self.get_object()
         notification.read = True

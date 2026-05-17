@@ -31,12 +31,20 @@ class NotificationViewSetTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['title'], notification.title)
 
-    def test_mark_as_read_action(self):
+    def test_mark_as_read_action_accepts_patch(self):
+        notification = NotificationFactory(user=self.user, read=False)
+        url = reverse('notification-read', kwargs={'pk': notification.pk})
+        response = self.client.patch(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'marked as read')
+        notification.refresh_from_db()
+        self.assertTrue(notification.read)
+
+    def test_mark_as_read_action_keeps_post_compatibility(self):
         notification = NotificationFactory(user=self.user, read=False)
         url = reverse('notification-read', kwargs={'pk': notification.pk})
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['status'], 'marked as read')
         notification.refresh_from_db()
         self.assertTrue(notification.read)
 

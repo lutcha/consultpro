@@ -34,6 +34,7 @@ import {
   apiGetDashboardAlerts,
   apiGetDashboardActivity,
   apiGetDashboardFunnel,
+  apiMarkNotificationRead,
 } from '@/lib/api';
 import {
   mapApiDashboardStats,
@@ -94,8 +95,23 @@ export function Dashboard() {
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const handleResolveAlert = (_id: string) => {
-    // TODO: PATCH /api/notifications/{id}/read/ — wire when notifications endpoint is ready
+  const handleResolveAlert = async (id: string) => {
+    const alert = alerts.find((item) => item.id === id);
+    const notificationId = Number(id);
+
+    try {
+      if (Number.isFinite(notificationId)) {
+        await apiMarkNotificationRead(notificationId);
+      }
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+
+      if (alert?.action?.href) {
+        navigate(alert.action.href);
+      }
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+      setError('Nao foi possivel atualizar a notificacao. Tente novamente.');
+    }
   };
 
   // Computed metrics
