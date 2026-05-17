@@ -6,6 +6,7 @@ from celery import shared_task
 from django.utils import timezone
 
 from .models import Opportunity, Requirement, Risk
+from .scoring import score_opportunity
 
 logger = logging.getLogger(__name__)
 
@@ -300,3 +301,21 @@ def check_upcoming_deadlines():
     # TODO: Enviar notificacoes por email/push para os utilizadores atribuidos
     count = upcoming.count()
     return {'upcoming_deadlines_count': count}
+
+
+@shared_task
+def enrich_and_score_opportunity(opportunity_id: int):
+    try:
+        opportunity = Opportunity.objects.get(pk=opportunity_id)
+    except Opportunity.DoesNotExist:
+        logger.error("enrich_and_score_opportunity: Opportunity %s not found", opportunity_id)
+        return {'detail': 'Oportunidade nao encontrada.', 'opportunity_id': opportunity_id}
+
+    score = score_opportunity(opportunity)
+    return {
+        'detail': 'Scoring concluido.',
+        'opportunity_id': opportunity.id,
+        'score_id': score.id,
+        'overall_score': score.overall_score,
+        'scoring_version': score.scoring_version,
+    }

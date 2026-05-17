@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.utils import timezone
 
-from ..models import Opportunity, Requirement, Risk
+from ..models import Opportunity, OpportunityScore, Requirement, Risk
 from .factories import OpportunityFactory, RequirementFactory, RiskFactory, UserFactory
 
 
@@ -78,3 +78,20 @@ class RiskModelTests(TestCase):
     def test_mitigation_blank(self):
         risk = RiskFactory(mitigation='')
         self.assertEqual(risk.mitigation, '')
+
+
+class OpportunityScoreModelTests(TestCase):
+    def test_str_representation(self):
+        opportunity = OpportunityFactory()
+        score = OpportunityScore.objects.create(
+            opportunity=opportunity,
+            overall_score=72,
+            reasoning_trace=[{'component': 'risk', 'score': 72, 'reason': 'Test'}],
+        )
+        self.assertEqual(str(score), f'{opportunity.id} score 72')
+
+    def test_related_opportunity(self):
+        opportunity = OpportunityFactory()
+        score = OpportunityScore.objects.create(opportunity=opportunity, overall_score=65)
+        self.assertIn(score, opportunity.scores.all())
+        self.assertTrue(score.is_current)

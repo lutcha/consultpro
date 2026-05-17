@@ -11,9 +11,11 @@ from apps.core.permissions import IsConsultantOrManager
 
 from .filters import OpportunityFilter
 from .models import Opportunity, Requirement, Risk
+from .scoring import score_opportunity
 from .serializers import (
     OpportunityDetailSerializer,
     OpportunityListSerializer,
+    OpportunityScoreSerializer,
     RequirementSerializer,
     RiskSerializer,
 )
@@ -145,3 +147,15 @@ class OpportunityViewSet(viewsets.ModelViewSet):
         queryset = opportunity.risks.all()
         serializer = RiskSerializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get', 'post'])
+    def score(self, request, pk=None):
+        opportunity = self.get_object()
+        refresh = request.method == 'POST' or str(request.query_params.get('refresh', '')).lower() == 'true'
+
+        current_score = opportunity.scores.filter(is_current=True).first()
+        if refresh or current_score is None:
+            current_score = score_opportunity(opportunity)
+
+        serializer = OpportunityScoreSerializer(current_score)
+        return Response(serializer.data, status=status.HTTP_200_OK)
