@@ -21,12 +21,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AIAssistButton } from '@/components/proposals/AIAssistButton';
 import { RichTextEditor } from '@/components/proposals/RichTextEditor';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { useProposalStore } from '@/stores';
+import { useProposalStore, useQCStore } from '@/stores';
 import {
   apiDownloadProposalWord, apiDownloadProposalPdf, apiUploadProposalLogo,
   apiGetProposalEvents, apiCreateProposalEvent, apiTransitionProposalStatus, apiGetProposalTeamMatch,
-  apiGetProposalSectionGap, type ApiProposalEvent, type ApiProposalSectionGap,
-  type ApiProposalTeamMatch,
+  apiGetProposalSectionGap, apiGetQualityChecks, type ApiProposalEvent, type ApiProposalSectionGap,
+  type ApiProposalTeamMatch, type ApiQualityCheck,
 } from '@/lib/api';
 import type { ProposalStatus } from '@/types';
 import { cn } from '@/lib/utils';
@@ -267,6 +267,7 @@ export function ProposalEditor() {
   const navigate = useNavigate();
   const { selectedProposal, isLoading: proposalLoading, selectProposal, updateSection, addSection, removeSection, reorderSections, updateStatus, autoSaveStatus } =
     useProposalStore();
+  const { qcState, isRunning: qcRunning, runQC } = useQCStore();
   const [activeSectionId, setActiveSectionId] = useState<string>('');
   const [editorContent, setEditorContent] = useState('');
   const [isExporting, setIsExporting] = useState<'word' | 'pdf' | null>(null);
@@ -318,6 +319,9 @@ export function ProposalEditor() {
   const [teamMatch, setTeamMatch] = useState<ApiProposalTeamMatch | null>(null);
   const [teamMatchLoading, setTeamMatchLoading] = useState(false);
   const [teamMatchError, setTeamMatchError] = useState('');
+  const [qualityCheck, setQualityCheck] = useState<ApiQualityCheck | null>(null);
+  const [qualityCheckLoading, setQualityCheckLoading] = useState(false);
+  const [qualityCheckError, setQualityCheckError] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('all');
   const [eventPeriodFilter, setEventPeriodFilter] = useState('all');
   const [qcMinScore, setQcMinScore] = useState(() => readQCSettings().minScore);
@@ -327,6 +331,7 @@ export function ProposalEditor() {
       selectProposal(id);
       loadEvents(id);
       loadTeamMatch(id);
+      loadQualityCheck(id);
     }
   }, [id, selectProposal]);
 
@@ -385,6 +390,34 @@ export function ProposalEditor() {
       setTeamMatchError(err instanceof Error ? err.message : 'Erro ao carregar score da equipa.');
     } finally {
       setTeamMatchLoading(false);
+    }
+  };
+
+  const loadQualityCheck = async (proposalId: string) => {
+    setQualityCheckLoading(true);
+    setQualityCheckError('');
+    try {
+      const data = await apiGetQualityChecks(proposalId);
+      setQualityCheck(data.results[0] || null);
+    } catch (err) {
+      setQualityCheck(null);
+      setQualityCheckError(err instanceof Error ? err.message : 'Erro ao carregar QC.');
+    } finally {
+      setQualityCheckLoading(false);
+    }
+  };
+
+  const refreshQualityCheck = async () => {
+    if (!id) return;
+    setQualityCheckError('');
+    try {
+      if (activeSectionId) {
+        await updateSection(id, activeSectionId, editorContent);
+      }
+      await runQC(id);
+      await loadQualityCheck(id);
+    } catch (err) {
+      setQualityCheckError(err instanceof Error ? err.message : 'Erro ao atualizar QC.');
     }
   };
 
@@ -624,6 +657,10 @@ export function ProposalEditor() {
 
   const activeSection = selectedProposal?.sections.find((s) => s.id === activeSectionId);
   const currentStatus = selectedProposal?.status || 'draft';
+  const liveQCState = qcState?.proposalId === id ? qcState : null;
+  const qcScore = liveQCState?.overallScore ?? qualityCheck?.overall_score ?? 0;
+  const qcStatus = liveQCState?.status ?? qualityCheck?.status ?? 'pending';
+  const qcMeetsThreshold = qcStatus === 'completed' && qcScore >= qcMinScore;
   const hasPendingTeamValidation = Boolean(
     teamMatch && (teamMatch.team_size === 0 || teamMatch.scored_members < teamMatch.team_size)
   );
@@ -1083,6 +1120,62 @@ export function ProposalEditor() {
                 {stageContext && (
                   <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{stageContext.hint}</p>
                 )}
+              </div>
+
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Quality Check
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'text-[10px]',
+                        qcMeetsThreshold
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      )}
+                    >
+                      {qcStatus === 'completed' ? 'Completo' : qcStatus === 'running' ? 'Em curso' : 'Pendente'}
+                    </Badge>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={refreshQualityCheck}
+                    disabled={qcRunning || qualityCheckLoading}
+                  >
+                    <RefreshCw className={cn('h-3 w-3 mr-1', (qcRunning || qualityCheckLoading) && 'animate-spin')} />
+                    Atualizar QC
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Score QC</span>
+                    <span className="font-semibold">{qcScore}/100</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn('h-full rounded-full', qcMeetsThreshold ? 'bg-emerald-500' : 'bg-amber-500')}
+                      style={{ width: `${Math.max(0, Math.min(100, qcScore))}%` }}
+                    />
+                  </div>
+                  {qualityCheckError && (
+                    <p className="text-xs text-destructive">{qualityCheckError}</p>
+                  )}
+                  {!qualityCheckError && !qualityCheck && !liveQCState && (
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      QC ainda nao executado. Clique em Atualizar QC para calcular a pontuacao a partir das secoes atuais.
+                    </p>
+                  )}
+                  {!qualityCheckError && qcStatus === 'completed' && !qcMeetsThreshold && (
+                    <p className="text-[10px] text-amber-700 leading-relaxed">
+                      Score abaixo do limiar configurado de {qcMinScore}/100.
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="p-4 border-b border-border">
