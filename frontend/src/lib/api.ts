@@ -212,7 +212,7 @@ export async function apiGetUnreadNotificationCount(): Promise<{ unread_count: n
 
 export async function apiMarkNotificationRead(id: number): Promise<{ status: string }> {
   return apiRequest<{ status: string }>(`/notifications/${id}/read/`, {
-    method: 'POST',
+    method: 'PATCH',
   });
 }
 
