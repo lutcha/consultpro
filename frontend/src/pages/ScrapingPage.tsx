@@ -490,11 +490,9 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, o
   const dataSectors = Array.from(new Set(opportunities.map((o) => o.sector).filter(Boolean))) as string[];
   const dataCountries = Array.from(new Set(opportunities.map((o) => o.country).filter(Boolean))) as string[];
 
-  // Merge static known lists with data values; only show options that match at least one opportunity
-  const allSectors = Array.from(new Set([...dataSectors, ...KNOWN_SECTORS])).sort();
-  const allCountries = Array.from(new Set([...dataCountries, ...KNOWN_COUNTRIES])).sort();
-  const sectors = allSectors.filter((s) => opportunities.some((o) => o.sector === s));
-  const countries = allCountries.filter((c) => opportunities.some((o) => o.country === c));
+  // Show all known sectors/countries plus any extra values from data (no filtering by match count)
+  const sectors = Array.from(new Set([...KNOWN_SECTORS, ...dataSectors])).sort();
+  const countries = Array.from(new Set([...KNOWN_COUNTRIES, ...dataCountries])).sort();
 
   const filtered = opportunities.filter((o) => {
     const title = o.title || '';
