@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import type { Opportunity, OpportunityStatus } from '@/types';
 import {
+  type ApiOpportunityQueryParams,
   apiGetOpportunities,
   apiGetOpportunity,
   apiUpdateOpportunityStatus,
@@ -26,7 +27,7 @@ interface OpportunityState {
   updateStatus: (id: string, status: OpportunityStatus) => Promise<void>;
   addOpportunity: (opportunity: Opportunity) => void;
   updateOpportunity: (id: string, updates: Partial<Opportunity>) => void;
-  fetchOpportunities: () => Promise<void>;
+  fetchOpportunities: (params?: ApiOpportunityQueryParams) => Promise<void>;
 }
 
 export const useOpportunityStore = create<OpportunityState>((set, _get) => ({
@@ -91,10 +92,10 @@ export const useOpportunityStore = create<OpportunityState>((set, _get) => ({
     }));
   },
 
-  fetchOpportunities: async () => {
+  fetchOpportunities: async (params = {}) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await apiGetOpportunities();
+      const response = await apiGetOpportunities(params);
       const opportunities = response.results.map(mapApiOpportunityListItem);
       set({ opportunities, isLoading: false });
     } catch (error) {

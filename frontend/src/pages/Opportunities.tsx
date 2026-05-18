@@ -2,7 +2,7 @@
 // OPPORTUNITIES LIST PAGE
 // ============================================
 
-import { useEffect } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -12,10 +12,29 @@ import {
   Eye,
   FileText,
   Calendar,
+  Bookmark,
+  Save,
+  RotateCcw,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -35,18 +54,155 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { useOpportunityStore } from '@/stores';
 import { formatDate, formatCurrency, getDaysUntil, cn } from '@/lib/utils';
+import { useDebounce } from '@/hooks/useDebounce';
+import {
+  type ApiFirmProfile,
+  type ApiOpportunityQueryParams,
+  type ApiSavedFilter,
+  apiCreateSavedFilter,
+  apiGetCurrentFirmProfile,
+  apiGetSavedFilters,
+} from '@/lib/api';
+
+const PROFILE_DEFAULT_VIEW = '__profile_defaults__';
+
+type OpportunityFilterState = {
+  search: string;
+  sector: string;
+  country: string;
+  region: string;
+  minScore: string;
+};
+
+type OpportunitySavedViewPayload = {
+  filters?: Partial<OpportunityFilterState>;
+};
+
+const emptyFilters: OpportunityFilterState = {
+  search: '',
+  sector: '',
+  country: '',
+  region: '',
+  minScore: '',
+};
 
 function humanizeSector(code: string): string {
   return code.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function formatList(values: string[]): string {
+  if (values.length === 0) return 'sem defaults';
+  return values.map((value) => value.toUpperCase()).join(', ');
+}
+
+function toQueryParams(filters: OpportunityFilterState): ApiOpportunityQueryParams {
+  return {
+    search: filters.search.trim(),
+    sector: filters.sector.trim(),
+    country: filters.country.trim(),
+    region: filters.region.trim(),
+    min_score: filters.minScore.trim(),
+  };
+}
+
+function readSavedViewPayload(payload: Record<string, unknown>): Partial<OpportunityFilterState> {
+  const candidate = payload as OpportunitySavedViewPayload;
+  return candidate.filters ?? {};
+}
+
 export function Opportunities() {
   const navigate = useNavigate();
   const { opportunities, isLoading, fetchOpportunities } = useOpportunityStore();
+  const [filters, setFilters] = useState<OpportunityFilterState>(emptyFilters);
+  const [firmProfile, setFirmProfile] = useState<ApiFirmProfile | null>(null);
+  const [savedFilters, setSavedFilters] = useState<ApiSavedFilter[]>([]);
+  const [selectedSavedFilterId, setSelectedSavedFilterId] = useState(PROFILE_DEFAULT_VIEW);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [savedFilterName, setSavedFilterName] = useState('');
+  const [isSavingFilter, setIsSavingFilter] = useState(false);
+  const debouncedSearch = useDebounce(filters.search, 350);
+
+  const activeFilters = useMemo(
+    () => ({
+      search: debouncedSearch,
+      sector: filters.sector,
+      country: filters.country,
+      region: filters.region,
+      minScore: filters.minScore,
+    }),
+    [debouncedSearch, filters.sector, filters.country, filters.region, filters.minScore]
+  );
 
   useEffect(() => {
-    fetchOpportunities();
-  }, [fetchOpportunities]);
+    fetchOpportunities(toQueryParams(activeFilters));
+  }, [activeFilters, fetchOpportunities]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadSavedViews() {
+      try {
+        const [profile, saved] = await Promise.all([
+          apiGetCurrentFirmProfile().catch(() => null),
+          apiGetSavedFilters('opportunities'),
+        ]);
+        if (!active) return;
+        setFirmProfile(profile);
+        setSavedFilters(saved.results);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Erro ao carregar vistas');
+      }
+    }
+    loadSavedViews();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const updateFilter = (key: keyof OpportunityFilterState, value: string) => {
+    setSelectedSavedFilterId(PROFILE_DEFAULT_VIEW);
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
+
+  const applySavedFilter = (id: string) => {
+    setSelectedSavedFilterId(id);
+    if (id === PROFILE_DEFAULT_VIEW) {
+      setFilters(emptyFilters);
+      return;
+    }
+    const savedFilter = savedFilters.find((item) => String(item.id) === id);
+    if (!savedFilter) return;
+    setFilters({ ...emptyFilters, ...readSavedViewPayload(savedFilter.payload) });
+  };
+
+  const clearFilters = () => {
+    setSelectedSavedFilterId(PROFILE_DEFAULT_VIEW);
+    setFilters(emptyFilters);
+  };
+
+  const handleSaveFilter = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = savedFilterName.trim();
+    if (!name) {
+      toast.error('Nome obrigatorio');
+      return;
+    }
+    setIsSavingFilter(true);
+    try {
+      const saved = await apiCreateSavedFilter({
+        name,
+        payload: { filters },
+      });
+      setSavedFilters((current) => [...current, saved].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedSavedFilterId(String(saved.id));
+      setSavedFilterName('');
+      setSaveDialogOpen(false);
+      toast.success('Vista guardada');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao guardar vista');
+    } finally {
+      setIsSavingFilter(false);
+    }
+  };
 
   const getDeadlineColor = (deadline: Date) => {
     const days = getDaysUntil(deadline);
@@ -55,7 +211,7 @@ export function Opportunities() {
     return 'text-foreground';
   };
 
-  if (isLoading) {
+  if (isLoading && opportunities.length === 0) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -89,18 +245,73 @@ export function Opportunities() {
       {/* Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
+          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_170px_130px_120px_130px_110px_auto]">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Pesquisar oportunidades..."
                 className="pl-10"
+                value={filters.search}
+                onChange={(event) => updateFilter('search', event.target.value)}
               />
             </div>
-            <Button variant="outline">
-              <Filter className="h-4 w-4 mr-2" />
-              Filtrar
-            </Button>
+            <Select value={selectedSavedFilterId} onValueChange={applySavedFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Saved Views" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PROFILE_DEFAULT_VIEW}>Perfil padrao</SelectItem>
+                {savedFilters.map((savedFilter) => (
+                  <SelectItem key={savedFilter.id} value={String(savedFilter.id)}>
+                    {savedFilter.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="Setor"
+              value={filters.sector}
+              onChange={(event) => updateFilter('sector', event.target.value)}
+            />
+            <Input
+              placeholder="Pais"
+              value={filters.country}
+              onChange={(event) => updateFilter('country', event.target.value)}
+            />
+            <Input
+              placeholder="Regiao"
+              value={filters.region}
+              onChange={(event) => updateFilter('region', event.target.value)}
+            />
+            <Input
+              placeholder="Score min."
+              inputMode="numeric"
+              value={filters.minScore}
+              onChange={(event) => updateFilter('minScore', event.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" type="button" onClick={() => setSaveDialogOpen(true)}>
+                <Save className="h-4 w-4 mr-2" />
+                Guardar
+              </Button>
+              <Button variant="ghost" size="icon" type="button" onClick={clearFilters} title="Limpar filtros">
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          {firmProfile && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="secondary" className="gap-1">
+                <Bookmark className="h-3 w-3" />
+                {firmProfile.name}
+              </Badge>
+              <span>Setores: {formatList(firmProfile.target_sectors)}</span>
+              <span>Geografias: {formatList(firmProfile.geographies)}</span>
+            </div>
+          )}
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <Filter className="h-3 w-3" />
+            <span>{opportunities.length} oportunidades nesta vista</span>
           </div>
         </CardContent>
       </Card>
@@ -262,6 +473,34 @@ export function Opportunities() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Guardar vista</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveFilter} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="saved-view-name">Nome</Label>
+              <Input
+                id="saved-view-name"
+                value={savedFilterName}
+                onChange={(event) => setSavedFilterName(event.target.value)}
+                placeholder="Ex: Prioridade energia West Africa"
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSaveDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSavingFilter}>
+                {isSavingFilter ? 'A guardar...' : 'Guardar'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

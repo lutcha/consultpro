@@ -284,12 +284,90 @@ export interface ApiOpportunityListItem {
   created_at: string;
 }
 
-export async function apiGetOpportunities(): Promise<
-  PaginatedResponse<ApiOpportunityListItem>
-> {
+export interface ApiOpportunityQueryParams {
+  search?: string;
+  status?: string;
+  sector?: string;
+  country?: string;
+  region?: string;
+  min_score?: string | number;
+  apply_profile_defaults?: boolean;
+}
+
+export interface ApiFirmProfile {
+  id: number;
+  name: string;
+  target_sectors: string[];
+  geographies: string[];
+  scoring_weights_override: Record<string, unknown>;
+  is_default: boolean;
+  updated_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiSavedFilter {
+  id: number;
+  owner: number;
+  name: string;
+  view_type: string;
+  payload: Record<string, unknown>;
+  is_shared: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+function buildQueryString(params: object): string {
+  const query = new URLSearchParams();
+  Object.entries(params as Record<string, unknown>).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    query.set(key, String(value));
+  });
+  const serialized = query.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+export async function apiGetOpportunities(
+  params: ApiOpportunityQueryParams = {}
+): Promise<PaginatedResponse<ApiOpportunityListItem>> {
   return apiRequest<PaginatedResponse<ApiOpportunityListItem>>(
-    '/opportunities/'
+    `/opportunities/${buildQueryString(params)}`
   );
+}
+
+export async function apiGetCurrentFirmProfile(): Promise<ApiFirmProfile | null> {
+  try {
+    return await apiRequest<ApiFirmProfile>('/opportunities/firm-profiles/current/');
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('404')) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function apiGetSavedFilters(
+  viewType = 'opportunities'
+): Promise<PaginatedResponse<ApiSavedFilter>> {
+  return apiRequest<PaginatedResponse<ApiSavedFilter>>(
+    `/opportunities/saved-filters/${buildQueryString({ view_type: viewType })}`
+  );
+}
+
+export async function apiCreateSavedFilter(data: {
+  name: string;
+  view_type?: string;
+  payload: Record<string, unknown>;
+  is_shared?: boolean;
+}): Promise<ApiSavedFilter> {
+  return apiRequest<ApiSavedFilter>('/opportunities/saved-filters/', {
+    method: 'POST',
+    body: JSON.stringify({
+      view_type: 'opportunities',
+      is_shared: false,
+      ...data,
+    }),
+  });
 }
 
 export async function apiGetOpportunity(
