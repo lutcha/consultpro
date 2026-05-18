@@ -185,6 +185,17 @@ class OpportunityViewSet(viewsets.ModelViewSet):
         serializer = OpportunityScoreSerializer(current_score)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['get'])
+    def suggestions(self, request, pk=None):
+        from apps.partners.matching import build_opportunity_suggestions
+
+        opportunity = self.get_object()
+        try:
+            limit = max(1, min(int(request.query_params.get('limit', 5)), 20))
+        except (TypeError, ValueError):
+            limit = 5
+        return Response(build_opportunity_suggestions(opportunity, limit=limit))
+
 
 class FirmProfileViewSet(viewsets.ModelViewSet):
     queryset = FirmProfile.objects.all()

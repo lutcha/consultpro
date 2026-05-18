@@ -11,6 +11,7 @@ from apps.core.permissions import IsConsultantOrManager
 
 from apps.opportunities.models import FirmProfile, Opportunity, OpportunityScore, Requirement, Risk, SavedFilter
 from apps.opportunities.scoring import score_opportunity
+from apps.partners.tests.factories import PartnerProfileFactory
 from apps.proposals.models import Proposal
 from apps.opportunities.tests.factories import (
     OpportunityFactory,
@@ -231,6 +232,36 @@ class OpportunityViewSetTests(APITestCase):
         old_score.refresh_from_db()
         self.assertFalse(old_score.is_current)
         self.assertEqual(OpportunityScore.objects.filter(opportunity=opportunity, is_current=True).count(), 1)
+
+    def test_suggestions_action_returns_partner_and_consultant_matches(self):
+        opportunity = OpportunityFactory(sector='ict', country='cv')
+        partner = PartnerProfileFactory(
+            name='ICT Delivery Partner',
+            sectors=['ict'],
+            geographies=['cv'],
+            capabilities=['delivery'],
+            trust_score=70,
+        )
+        consultant = UserFactory(
+            first_name='Joana',
+            last_name='Lopes',
+            role='consultant',
+            availability='available',
+            skills=['ict'],
+            languages=['pt'],
+            location='cv',
+            years_experience=6,
+        )
+
+        url = reverse('opportunity-suggestions', kwargs={'pk': opportunity.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['opportunity'], opportunity.id)
+        self.assertEqual(response.data['partners'][0]['id'], partner.id)
+        self.assertEqual(response.data['consultants'][0]['id'], consultant.id)
+        self.assertIn('reasoning_trace', response.data['partners'][0])
+        self.assertIn('confidence_score', response.data['consultants'][0])
 
 
 class FirmProfileViewSetTests(APITestCase):
