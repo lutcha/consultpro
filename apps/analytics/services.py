@@ -475,7 +475,7 @@ def compute_procurement_trends(
 ) -> dict:
     descriptive = compute_descriptive_metrics(country=country, sector=sector)
     signals = detect_market_signals(country=country, sector=sector, descriptive=descriptive)
-    predictive = {}
+    predictive = None
     if include_forecast:
         predictive = get_or_compute_predictive_metric(country=country, sector=sector, horizon=horizon)
 

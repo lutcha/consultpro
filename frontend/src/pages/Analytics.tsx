@@ -115,12 +115,12 @@ export function Analytics() {
     .map(([status, days]) => ({ status: STATUS_LABELS[status] || status, days }))
     .sort((a, b) => b.days - a.days);
 
-  const forecastChartData = predictive
+  const forecastChartData = predictive?.point_estimates
     ? predictive.point_estimates.map((pt, i) => ({
         month: pt.month,
         tenders: pt.tenders,
-        lower: predictive.confidence_intervals[i]?.lower ?? pt.tenders,
-        upper: predictive.confidence_intervals[i]?.upper ?? pt.tenders,
+        lower: predictive!.confidence_intervals[i]?.lower ?? pt.tenders,
+        upper: predictive!.confidence_intervals[i]?.upper ?? pt.tenders,
       }))
     : [];
 
