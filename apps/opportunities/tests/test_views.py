@@ -9,7 +9,7 @@ from rest_framework.test import APIClient, APITestCase
 
 from apps.core.permissions import IsConsultantOrManager
 
-from apps.opportunities.models import Opportunity, OpportunityScore, Requirement, Risk
+from apps.opportunities.models import FirmProfile, Opportunity, OpportunityScore, Requirement, Risk, SavedFilter
 from apps.opportunities.scoring import score_opportunity
 from apps.proposals.models import Proposal
 from apps.opportunities.tests.factories import (
@@ -137,6 +137,40 @@ class OpportunityViewSetTests(APITestCase):
         self.assertEqual(len(response.data['results']), 1)
         self.assertEqual(response.data['results'][0]['status'], 'new')
 
+    def test_firm_profile_defaults_apply_when_no_explicit_geo_filters(self):
+        matching = OpportunityFactory(sector='ict', country='cv')
+        OpportunityFactory(sector='health', country='sn')
+        FirmProfile.objects.create(
+            name='CV ICT',
+            target_sectors=['ict'],
+            geographies=['cv'],
+            is_default=True,
+        )
+
+        url = reverse('opportunity-list')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item['id'] for item in response.data['results']}
+        self.assertEqual(ids, {matching.id})
+
+    def test_explicit_filter_overrides_firm_profile_defaults(self):
+        OpportunityFactory(sector='ict', country='cv')
+        explicit = OpportunityFactory(sector='health', country='sn')
+        FirmProfile.objects.create(
+            name='CV ICT',
+            target_sectors=['ict'],
+            geographies=['cv'],
+            is_default=True,
+        )
+
+        url = reverse('opportunity-list')
+        response = self.client.get(url, {'sector': 'health'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item['id'] for item in response.data['results']}
+        self.assertEqual(ids, {explicit.id})
+
     def test_search_by_title(self):
         OpportunityFactory(title='Unique Search Title')
         OpportunityFactory(title='Another Title')
@@ -197,3 +231,83 @@ class OpportunityViewSetTests(APITestCase):
         old_score.refresh_from_db()
         self.assertFalse(old_score.is_current)
         self.assertEqual(OpportunityScore.objects.filter(opportunity=opportunity, is_current=True).count(), 1)
+
+
+class FirmProfileViewSetTests(APITestCase):
+    def setUp(self):
+        self.user = UserFactory(role='manager')
+        self.client.force_authenticate(user=self.user)
+
+    def test_current_returns_default_profile(self):
+        profile = FirmProfile.objects.create(name='Default', target_sectors=['ict'])
+
+        url = reverse('firm-profile-current')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['id'], profile.id)
+        self.assertEqual(response.data['target_sectors'], ['ict'])
+
+    def test_create_sets_updated_by(self):
+        url = reverse('firm-profile-list')
+        response = self.client.post(
+            url,
+            {
+                'name': 'West Africa',
+                'target_sectors': ['ict'],
+                'geographies': ['cv', 'sn'],
+                'scoring_weights_override': {'strategic_fit': 30},
+                'is_default': True,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        profile = FirmProfile.objects.get(pk=response.data['id'])
+        self.assertEqual(profile.updated_by, self.user)
+
+
+class SavedFilterViewSetTests(APITestCase):
+    def setUp(self):
+        self.user = UserFactory(role='consultant')
+        self.other = UserFactory(role='consultant')
+        self.client.force_authenticate(user=self.user)
+
+    def test_create_saved_filter_sets_owner(self):
+        url = reverse('saved-filter-list')
+        response = self.client.post(
+            url,
+            {
+                'name': 'CV ICT',
+                'view_type': 'opportunities',
+                'payload': {'country': 'cv', 'sector': 'ict'},
+                'is_shared': False,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        saved_filter = SavedFilter.objects.get(pk=response.data['id'])
+        self.assertEqual(saved_filter.owner, self.user)
+
+    def test_list_returns_owned_and_shared_filters_only(self):
+        owned = SavedFilter.objects.create(owner=self.user, name='Mine', payload={'country': 'cv'})
+        shared = SavedFilter.objects.create(owner=self.other, name='Shared', payload={}, is_shared=True)
+        SavedFilter.objects.create(owner=self.other, name='Private', payload={}, is_shared=False)
+
+        url = reverse('saved-filter-list')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item['id'] for item in response.data['results']}
+        self.assertEqual(ids, {owned.id, shared.id})
+
+    def test_shared_filter_is_read_only_for_non_owner(self):
+        shared = SavedFilter.objects.create(owner=self.other, name='Shared', payload={}, is_shared=True)
+
+        url = reverse('saved-filter-detail', kwargs={'pk': shared.pk})
+        response = self.client.patch(url, {'name': 'Changed'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        shared.refresh_from_db()
+        self.assertEqual(shared.name, 'Shared')

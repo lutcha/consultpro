@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Opportunity, OpportunityScore, Requirement, Risk
+from .models import FirmProfile, Opportunity, OpportunityScore, Requirement, Risk, SavedFilter
 
 
 @admin.register(Opportunity)
@@ -61,6 +61,22 @@ class OpportunityScoreAdmin(admin.ModelAdmin):
         'created_at',
     ]
     ordering = ['-created_at']
+
+
+@admin.register(FirmProfile)
+class FirmProfileAdmin(admin.ModelAdmin):
+    list_display = ['name', 'is_default', 'updated_by', 'updated_at']
+    list_filter = ['is_default']
+    search_fields = ['name']
+    ordering = ['-is_default', '-updated_at']
+
+
+@admin.register(SavedFilter)
+class SavedFilterAdmin(admin.ModelAdmin):
+    list_display = ['name', 'view_type', 'owner', 'is_shared', 'updated_at']
+    list_filter = ['view_type', 'is_shared']
+    search_fields = ['name', 'owner__email', 'owner__username']
+    ordering = ['view_type', 'name']
 
 
 @admin.register(Risk)

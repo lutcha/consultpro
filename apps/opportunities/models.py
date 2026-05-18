@@ -126,6 +126,66 @@ class OpportunityScore(models.Model):
         return f'{self.opportunity_id} score {self.overall_score}'
 
 
+class FirmProfile(models.Model):
+    name = models.CharField(max_length=200, default='Default firm profile')
+    target_sectors = models.JSONField(default=list, blank=True)
+    geographies = models.JSONField(default=list, blank=True)
+    scoring_weights_override = models.JSONField(default=dict, blank=True)
+    is_default = models.BooleanField(default=True, db_index=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='updated_firm_profiles',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_default', '-updated_at']
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_default:
+            FirmProfile.objects.exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
+
+    def __str__(self):
+        return self.name
+
+
+class SavedFilter(models.Model):
+    VIEW_TYPE_CHOICES = [
+        ('opportunities', 'Opportunities'),
+        ('scraping', 'Scraping'),
+        ('proposals', 'Proposals'),
+    ]
+
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='saved_filters',
+    )
+    name = models.CharField(max_length=120)
+    view_type = models.CharField(max_length=40, choices=VIEW_TYPE_CHOICES, default='opportunities')
+    payload = models.JSONField(default=dict, blank=True)
+    is_shared = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['view_type', 'name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['owner', 'view_type', 'name'],
+                name='unique_saved_filter_per_owner_view_name',
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.view_type})'
+
+
 class Requirement(models.Model):
     CATEGORY_CHOICES = [
         ('functional', 'Funcionais'),
