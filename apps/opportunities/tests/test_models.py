@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.utils import timezone
 
-from ..models import Opportunity, OpportunityScore, Requirement, Risk
+from ..models import FirmProfile, Opportunity, OpportunityScore, Requirement, Risk, SavedFilter
 from .factories import OpportunityFactory, RequirementFactory, RiskFactory, UserFactory
 
 
@@ -95,3 +95,30 @@ class OpportunityScoreModelTests(TestCase):
         score = OpportunityScore.objects.create(opportunity=opportunity, overall_score=65)
         self.assertIn(score, opportunity.scores.all())
         self.assertTrue(score.is_current)
+
+
+class FirmProfileModelTests(TestCase):
+    def test_default_profile_is_singleton_by_flag(self):
+        first = FirmProfile.objects.create(name='First', is_default=True)
+        second = FirmProfile.objects.create(name='Second', is_default=True)
+
+        first.refresh_from_db()
+        self.assertFalse(first.is_default)
+        self.assertTrue(second.is_default)
+
+    def test_str_representation(self):
+        profile = FirmProfile.objects.create(name='West Africa')
+        self.assertEqual(str(profile), 'West Africa')
+
+
+class SavedFilterModelTests(TestCase):
+    def test_str_representation(self):
+        owner = UserFactory()
+        saved_filter = SavedFilter.objects.create(
+            owner=owner,
+            name='Pipeline CV',
+            view_type='opportunities',
+            payload={'country': 'cv'},
+        )
+
+        self.assertEqual(str(saved_filter), 'Pipeline CV (opportunities)')

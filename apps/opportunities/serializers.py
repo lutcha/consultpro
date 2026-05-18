@@ -4,7 +4,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .constants import COUNTRY_CHOICES, SECTOR_CHOICES
-from .models import Opportunity, OpportunityScore, Requirement, Risk
+from .models import FirmProfile, Opportunity, OpportunityScore, Requirement, Risk, SavedFilter
 
 
 _SECTOR_ALIASES = {
@@ -94,6 +94,39 @@ class OpportunityScoreSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = fields
+
+
+class FirmProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FirmProfile
+        fields = [
+            'id',
+            'name',
+            'target_sectors',
+            'geographies',
+            'scoring_weights_override',
+            'is_default',
+            'updated_by',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['updated_by', 'created_at', 'updated_at']
+
+
+class SavedFilterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavedFilter
+        fields = [
+            'id',
+            'owner',
+            'name',
+            'view_type',
+            'payload',
+            'is_shared',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['owner', 'created_at', 'updated_at']
 
 
 class OpportunityListSerializer(serializers.ModelSerializer):

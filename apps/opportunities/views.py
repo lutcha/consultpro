@@ -1,23 +1,26 @@
 import logging
 
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 
 from apps.core.permissions import IsConsultantOrManager
 
 from .filters import OpportunityFilter
-from .models import Opportunity, Requirement, Risk
+from .models import FirmProfile, Opportunity, Requirement, Risk, SavedFilter
 from .scoring import score_opportunity
 from .serializers import (
     OpportunityDetailSerializer,
+    FirmProfileSerializer,
     OpportunityListSerializer,
     OpportunityScoreSerializer,
     RequirementSerializer,
     RiskSerializer,
+    SavedFilterSerializer,
 )
 
 
@@ -32,6 +35,28 @@ class OpportunityViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'description', 'client']
     ordering_fields = ['deadline', 'created_at', 'value']
     ordering = ['-created_at']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return self._apply_profile_defaults(queryset)
+
+    def _apply_profile_defaults(self, queryset):
+        if self.action != 'list':
+            return queryset
+        params = self.request.query_params
+        if str(params.get('apply_profile_defaults', 'true')).lower() in {'false', '0', 'no'}:
+            return queryset
+        if any(params.get(key) for key in ['sector', 'country', 'region']):
+            return queryset
+
+        profile = FirmProfile.objects.filter(is_default=True).first()
+        if not profile:
+            return queryset
+        if profile.target_sectors:
+            queryset = queryset.filter(sector__in=profile.target_sectors)
+        if profile.geographies:
+            queryset = queryset.filter(country__in=profile.geographies)
+        return queryset
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -159,3 +184,50 @@ class OpportunityViewSet(viewsets.ModelViewSet):
 
         serializer = OpportunityScoreSerializer(current_score)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class FirmProfileViewSet(viewsets.ModelViewSet):
+    queryset = FirmProfile.objects.all()
+    serializer_class = FirmProfileSerializer
+    permission_classes = [IsConsultantOrManager]
+
+    def perform_create(self, serializer):
+        serializer.save(updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        profile = FirmProfile.objects.filter(is_default=True).first()
+        if profile is None:
+            return Response({'detail': 'Nenhum perfil configurado.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(profile)
+        return Response(serializer.data)
+
+
+class SavedFilterViewSet(viewsets.ModelViewSet):
+    serializer_class = SavedFilterSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['view_type', 'is_shared']
+    search_fields = ['name']
+    ordering_fields = ['name', 'updated_at', 'created_at']
+    ordering = ['view_type', 'name']
+
+    def get_queryset(self):
+        user = self.request.user
+        return SavedFilter.objects.filter(owner=user) | SavedFilter.objects.filter(is_shared=True)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        if serializer.instance.owner_id != self.request.user.id:
+            raise PermissionDenied('Apenas o owner pode alterar este filtro.')
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.owner_id != self.request.user.id:
+            raise PermissionDenied('Apenas o owner pode apagar este filtro.')
+        instance.delete()
