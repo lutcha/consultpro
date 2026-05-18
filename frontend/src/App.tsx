@@ -24,6 +24,7 @@ import {
   ScrapingPage,
   TeamsPage,
   CurriculumPage,
+  Analytics,
 } from '@/pages';
 
 // Protected Route wrapper
@@ -146,6 +147,18 @@ function App() {
           }
         >
           <Route index element={<ScrapingPage />} />
+        </Route>
+
+        {/* Analytics */}
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Analytics />} />
         </Route>
 
         {/* Settings */}

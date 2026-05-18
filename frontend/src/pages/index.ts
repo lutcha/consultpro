@@ -21,3 +21,4 @@ export { NewProject } from './NewProject';
 export { Consultants } from './Consultants';
 export { CurriculumPage } from './CurriculumPage';
 export { ScrapingPage } from './ScrapingPage';
+export { Analytics } from './Analytics';

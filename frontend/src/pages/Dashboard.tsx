@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { ProposalTable } from '@/components/dashboard/ProposalTable';
 import { AlertBanner } from '@/components/dashboard/AlertBanner';
@@ -34,7 +35,6 @@ import {
   apiGetDashboardAlerts,
   apiGetDashboardActivity,
   apiGetDashboardFunnel,
-  apiMarkNotificationRead,
 } from '@/lib/api';
 import {
   mapApiDashboardStats,
@@ -59,6 +59,7 @@ export function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   useEffect(() => {
     fetchOpportunities();
@@ -95,23 +96,8 @@ export function Dashboard() {
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const handleResolveAlert = async (id: string) => {
-    const alert = alerts.find((item) => item.id === id);
-    const notificationId = Number(id);
-
-    try {
-      if (Number.isFinite(notificationId)) {
-        await apiMarkNotificationRead(notificationId);
-      }
-      setAlerts((prev) => prev.filter((a) => a.id !== id));
-
-      if (alert?.action?.href) {
-        navigate(alert.action.href);
-      }
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-      setError('Nao foi possivel atualizar a notificacao. Tente novamente.');
-    }
+  const handleResolveAlert = (_id: string) => {
+    // TODO: PATCH /api/notifications/{id}/read/ — wire when notifications endpoint is ready
   };
 
   // Computed metrics
@@ -191,7 +177,7 @@ export function Dashboard() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => navigate('/opportunities')}
+            onClick={() => setCalendarOpen(true)}
           >
             <Calendar className="h-4 w-4 mr-2" />
             Ver Calendario
@@ -541,6 +527,47 @@ export function Dashboard() {
         funnel={funnel}
         user={user}
       />
+
+      <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Prazos de Oportunidades
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+            {(stats?.deadlineItems ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                Sem prazos próximos nos próximos 30 dias.
+              </p>
+            ) : (
+              [...(stats?.deadlineItems ?? [])]
+                .sort((a, b) => a.daysLeft - b.daysLeft)
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => { setCalendarOpen(false); navigate(`/opportunities/${item.id}`); }}
+                  >
+                    <div className="flex-1 min-w-0 mr-3">
+                      <p className="text-sm font-medium truncate">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">{item.client}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {item.deadline instanceof Date
+                          ? item.deadline.toLocaleDateString('pt-PT')
+                          : String(item.deadline)}
+                      </p>
+                    </div>
+                    <Badge variant={item.daysLeft <= 3 ? 'destructive' : item.daysLeft <= 7 ? 'default' : 'secondary'}>
+                      {item.daysLeft === 0 ? 'Hoje!' : item.daysLeft === 1 ? 'Amanhã' : `${item.daysLeft} dias`}
+                    </Badge>
+                  </div>
+                ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

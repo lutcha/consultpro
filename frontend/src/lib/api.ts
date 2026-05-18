@@ -964,6 +964,102 @@ export async function apiGetDashboardFunnel(): Promise<ApiFunnelResponse> {
 }
 
 // ============================================
+// ANALYTICS
+// ============================================
+
+export interface ApiAnalyticsWinRateRow {
+  sector?: string;
+  country?: string;
+  won: number;
+  lost: number;
+  total_decided: number;
+  win_rate: number;
+}
+
+export interface ApiAnalyticsPipelineItem {
+  id: number;
+  title: string;
+  status: string;
+  value: number;
+  currency: string;
+  probability: number;
+  weighted_value: number;
+  score_source: string;
+}
+
+export interface ApiAnalyticsForecastPoint {
+  month: string;
+  tenders: number;
+}
+
+export interface ApiAnalyticsForecastInterval {
+  month: string;
+  lower: number;
+  upper: number;
+}
+
+export interface ApiAnalyticsTrends {
+  meta: {
+    country: string;
+    sector: string;
+    horizon_months: number;
+    include_forecast: boolean;
+    generated_at: string;
+  };
+  win_rate_by_sector: ApiAnalyticsWinRateRow[];
+  win_rate_by_country: ApiAnalyticsWinRateRow[];
+  weighted_pipeline: {
+    total_value: number;
+    weighted_value: number;
+    currency: string;
+    count: number;
+    items: ApiAnalyticsPipelineItem[];
+  };
+  avg_stage_duration_days: Record<string, number>;
+  opportunity_status_counts: Record<string, number>;
+  proposal_outcomes: { won: number; lost: number; total_decided: number; win_rate: number };
+  descriptive: {
+    demand_velocity: number;
+    budget_concentration_index: number;
+    seasonality_score: number;
+    competitive_density: number;
+    avg_lead_time_days: number;
+    median_lead_time_days: number;
+  };
+  predictive: {
+    method: string;
+    point_estimates: ApiAnalyticsForecastPoint[];
+    confidence_intervals: ApiAnalyticsForecastInterval[];
+    model_diagnostics: {
+      confidence_score: number;
+      history_months: number;
+      non_zero_months: number;
+      recent_3m_average: number;
+      monthly_trend: number;
+    };
+    reasoning_trace: string[];
+    warnings: string[];
+    recommendations: string[];
+  } | null;
+  signals: Array<{ type: string; severity: string; message: string; created_at: string }>;
+}
+
+export async function apiGetAnalyticsTrends(params?: {
+  country?: string;
+  sector?: string;
+  horizon?: number;
+  include_forecast?: boolean;
+}): Promise<ApiAnalyticsTrends> {
+  const query = new URLSearchParams();
+  if (params?.country) query.set('country', params.country);
+  if (params?.sector) query.set('sector', params.sector);
+  if (params?.horizon) query.set('horizon', String(params.horizon));
+  if (params?.include_forecast) query.set('include_forecast', 'true');
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return apiRequest<ApiAnalyticsTrends>(`/analytics/trends/${qs}`);
+}
+
+// ============================================
 // PROJECTS
 // ============================================
 

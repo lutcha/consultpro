@@ -46,15 +46,6 @@ type ScrapingStats = {
   ready_to_import?: number;
 };
 
-type ImportReadySummary = {
-  imported_count: number;
-  skipped_count: number;
-  failed_count: number;
-  processed_count: number;
-  skipped: Array<{ id: number; title: string; reasons: string[] }>;
-  failed: Array<{ id: number; title: string; reason: string }>;
-};
-
 function toDate(value: string | null | undefined): Date | undefined {
   return value ? new Date(value) : undefined;
 }
@@ -104,8 +95,6 @@ function mapOpportunity(opp: ApiScrapedOpportunity): ScrapedOpportunity {
     importedOpportunityId: opp.imported_opportunity ? String(opp.imported_opportunity) : undefined,
     cvEligible: Boolean(opp.cv_eligible),
     dataQualityScore: score !== undefined && score <= 1 ? Math.round(score * 100) : score,
-    readyToImport: opp.ready_to_import === undefined ? undefined : Boolean(opp.ready_to_import),
-    importReadinessReasons: opp.import_readiness_reasons || [],
     sourceName: opp.source_name,
   };
 }
@@ -156,35 +145,7 @@ function formatScraperKind(kind: string): string {
 }
 
 function isReadyToImport(opp: ScrapedOpportunity): boolean {
-  if (opp.readyToImport !== undefined) return opp.readyToImport;
   return opp.status === 'new' && Boolean(opp.cvEligible) && !opp.importedOpportunityId && dataQualityScore(opp) >= 45;
-}
-
-function readinessReasonLabel(reason: string): string {
-  const labels: Record<string, string> = {
-    status_not_new: 'Estado nao e novo',
-    not_cv_eligible: 'Fora do foco Cabo Verde/Lusofono',
-    already_imported: 'Ja importada',
-    deadline_expired: 'Prazo expirado',
-    low_data_quality: 'Qualidade abaixo do minimo',
-    import_limit_reached: 'Limite de importacao atingido',
-  };
-  return labels[reason] || reason.replace(/_/g, ' ');
-}
-
-function ImportReadinessBadge({ opportunity }: { opportunity: ScrapedOpportunity }) {
-  const ready = isReadyToImport(opportunity);
-  if (ready) {
-    return <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">Pronta</span>;
-  }
-  if (opportunity.status !== 'new') return null;
-  const reasons = opportunity.importReadinessReasons || [];
-  const label = reasons.length > 0 ? reasons.map(readinessReasonLabel).join(' - ') : 'Nao pronta';
-  return (
-    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-slate-100 text-slate-700" title={label}>
-      Nao pronta
-    </span>
-  );
 }
 
 // ============================================
@@ -472,7 +433,6 @@ interface OpportunitiesTabProps {
   opportunities: ScrapedOpportunity[];
   busyOpportunityIds: Set<string>;
   importingReady: boolean;
-  importReadySummary: ImportReadySummary | null;
   onImport: (id: string) => void;
   onImportReady: () => void;
   onIgnore: (id: string) => void;
@@ -498,7 +458,28 @@ function DataQualityBadge({ score }: { score: number }) {
   return <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${cls}`}>{label} ({score}%)</span>;
 }
 
-function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, importReadySummary, onImport, onImportReady, onIgnore }: OpportunitiesTabProps) {
+const KNOWN_SECTORS = [
+  'Agriculture', 'Education', 'Energy', 'Environment', 'Finance',
+  'Governance', 'Health', 'Infrastructure', 'Rural Development',
+  'Security', 'Social Protection', 'Technology', 'Trade',
+  'Urban Development', 'Water & Sanitation',
+];
+
+const KNOWN_COUNTRIES = [
+  'Angola', 'Benin', 'Botswana', 'Burkina Faso', 'Burundi',
+  'Cabo Verde', 'Cameroon', 'Chad', 'Comoros', 'Congo',
+  "Côte d'Ivoire", 'DRC', 'Djibouti', 'Egypt', 'Equatorial Guinea',
+  'Eritrea', 'Eswatini', 'Ethiopia', 'Gabon', 'Gambia',
+  'Ghana', 'Guinea', 'Guinea-Bissau', 'Kenya', 'Lesotho',
+  'Liberia', 'Libya', 'Madagascar', 'Malawi', 'Mali',
+  'Mauritania', 'Mauritius', 'Morocco', 'Mozambique', 'Namibia',
+  'Niger', 'Nigeria', 'Rwanda', 'Sao Tome and Principe', 'Senegal',
+  'Seychelles', 'Sierra Leone', 'Somalia', 'South Africa', 'South Sudan',
+  'Sudan', 'Tanzania', 'Togo', 'Tunisia', 'Uganda',
+  'Zambia', 'Zimbabwe',
+];
+
+function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, onImport, onImportReady, onIgnore }: OpportunitiesTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [sectorFilter, setSectorFilter] = useState<string>('');
@@ -506,8 +487,14 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, i
   const [expanded, setExpanded] = useState<string | null>(null);
   const [qualityMin, setQualityMin] = useState<number>(0);
 
-  const sectors = Array.from(new Set(opportunities.map((o) => o.sector).filter(Boolean))) as string[];
-  const countries = Array.from(new Set(opportunities.map((o) => o.country).filter(Boolean))) as string[];
+  const dataSectors = Array.from(new Set(opportunities.map((o) => o.sector).filter(Boolean))) as string[];
+  const dataCountries = Array.from(new Set(opportunities.map((o) => o.country).filter(Boolean))) as string[];
+
+  // Merge static known lists with data values; only show options that match at least one opportunity
+  const allSectors = Array.from(new Set([...dataSectors, ...KNOWN_SECTORS])).sort();
+  const allCountries = Array.from(new Set([...dataCountries, ...KNOWN_COUNTRIES])).sort();
+  const sectors = allSectors.filter((s) => opportunities.some((o) => o.sector === s));
+  const countries = allCountries.filter((c) => opportunities.some((o) => o.country === c));
 
   const filtered = opportunities.filter((o) => {
     const title = o.title || '';
@@ -558,7 +545,7 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, i
           </select>
           <Button size="sm" className="h-9" onClick={onImportReady} disabled={importingReady || readyCount === 0}>
             <ArrowRight className="h-4 w-4 mr-1" />
-            {importingReady ? 'A importar...' : `Importar prontas (${readyCount})`}
+            {importingReady ? 'A importar...' : `Importar elegiveis (${readyCount})`}
           </Button>
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -570,33 +557,6 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, i
           )}
         </div>
       </div>
-
-      {importReadySummary && (
-        <div className="rounded-lg border bg-emerald-50/60 p-3">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <span className="font-medium text-emerald-900">
-              Importacao concluida
-            </span>
-            <span>{importReadySummary.imported_count} importadas</span>
-            <span>{importReadySummary.skipped_count} ignoradas</span>
-            <span>{importReadySummary.failed_count} falhadas</span>
-          </div>
-          {(importReadySummary.skipped.length > 0 || importReadySummary.failed.length > 0) && (
-            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-              {importReadySummary.skipped.slice(0, 3).map((item) => (
-                <p key={`skipped-${item.id}`}>
-                  {item.title}: {item.reasons.map(readinessReasonLabel).join(' - ')}
-                </p>
-              ))}
-              {importReadySummary.failed.slice(0, 3).map((item) => (
-                <p key={`failed-${item.id}`}>
-                  {item.title}: {item.reason}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="space-y-2">
         {filtered.map((opp) => {
@@ -614,7 +574,7 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, i
                       <div className="flex items-center gap-1.5 shrink-0">
                         <OpportunityStatusBadge status={opp.status} />
                         <DataQualityBadge score={quality} />
-                        <ImportReadinessBadge opportunity={opp} />
+                        {isReadyToImport(opp) && <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">Pronta</span>}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
@@ -674,21 +634,6 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, i
                   <div className="mt-3 pt-3 border-t space-y-2">
                     {opp.description && opp.description.length > 30 && (
                       <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">{opp.description}</p>
-                    )}
-                    {opp.importReadinessReasons && opp.importReadinessReasons.length > 0 && opp.status === 'new' && (
-                      <div className="p-3 bg-slate-50 rounded-lg border">
-                        <div className="flex items-center gap-2 mb-1">
-                          <AlertTriangle className="h-4 w-4 text-slate-600" />
-                          <span className="text-sm font-medium text-slate-900">Criterios de importacao</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {opp.importReadinessReasons.map((reason) => (
-                            <span key={reason} className="text-xs px-2 py-0.5 rounded-full bg-white border text-slate-700">
-                              {readinessReasonLabel(reason)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
                     )}
                     {opp.aiSummary && (
                       <div className="p-3 bg-blue-50/50 rounded-lg">
@@ -790,7 +735,6 @@ export function ScrapingPage() {
   const [busyOpportunityIds, setBusyOpportunityIds] = useState<Set<string>>(new Set());
   const [savingSource, setSavingSource] = useState(false);
   const [importingReady, setImportingReady] = useState(false);
-  const [importReadySummary, setImportReadySummary] = useState<ImportReadySummary | null>(null);
 
   const refreshSources = useCallback(async () => {
     const response = await apiGetScrapingSources();
@@ -906,7 +850,6 @@ export function ScrapingPage() {
   const handleImportOpportunity = async (id: string) => {
     setBusyOpportunityIds((prev) => new Set(prev).add(id));
     setError(null);
-    setImportReadySummary(null);
     try {
       const response = await apiImportScrapedOpportunity(Number(id));
       setOpportunities((prev) =>
@@ -953,28 +896,11 @@ export function ScrapingPage() {
   };
 
   const handleImportReadyOpportunities = async () => {
-    const readyIds = opportunities.filter(isReadyToImport).map((opp) => Number(opp.id));
-    const readyCount = readyIds.length;
-    if (readyCount === 0) {
-      toast.info('Nao ha oportunidades prontas para importar');
-      return;
-    }
-    const importCount = Math.min(readyCount, 50);
-    const confirmed = window.confirm(`Importar ${importCount} oportunidades prontas para o modulo Oportunidades?`);
-    if (!confirmed) return;
-
     setImportingReady(true);
     setError(null);
-    setImportReadySummary(null);
     try {
-      const response = await apiImportReadyScrapedOpportunities(importCount, readyIds.slice(0, importCount));
-      setImportReadySummary(response);
-      const parts = [
-        `${response.imported_count} importadas`,
-        `${response.skipped_count} ignoradas`,
-        `${response.failed_count} falhadas`,
-      ];
-      toast.success(parts.join(' - '));
+      const response = await apiImportReadyScrapedOpportunities(50);
+      toast.success(`${response.imported_count} oportunidades importadas`);
       await refreshAll();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao importar oportunidades elegiveis';
@@ -1031,7 +957,6 @@ export function ScrapingPage() {
                 opportunities={opportunities}
                 busyOpportunityIds={busyOpportunityIds}
                 importingReady={importingReady}
-                importReadySummary={importReadySummary}
                 onImport={handleImportOpportunity}
                 onImportReady={handleImportReadyOpportunities}
                 onIgnore={handleIgnoreOpportunity}

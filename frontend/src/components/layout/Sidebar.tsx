@@ -14,6 +14,7 @@ import {
   UserCheck,
   Globe,
   FileBadge,
+  BarChart2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -54,6 +55,11 @@ const navigationItems = [
     name: 'Equipas',
     href: '/teams',
     icon: Users,
+  },
+  {
+    name: 'Analytics',
+    href: '/analytics',
+    icon: BarChart2,
   },
   {
     name: 'Fontes',
