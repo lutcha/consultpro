@@ -582,14 +582,11 @@ export interface ApiProposalSectionGap {
     title: string;
     section_type: string;
   };
+  score: number;
+  covered_count: number;
+  total_count: number;
   items: ApiProposalSectionGapItem[];
-  summary: {
-    covered: number;
-    partial: number;
-    missing: number;
-    total: number;
-    completion_pct: number;
-  };
+  suggestions: string[];
 }
 
 export interface ApiTeamMember {
