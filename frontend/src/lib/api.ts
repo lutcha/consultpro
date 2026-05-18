@@ -18,9 +18,36 @@ export function clearTokens() {
   localStorage.removeItem('refresh_token');
 }
 
+function getRefreshToken(): string | null {
+  return localStorage.getItem('refresh_token');
+}
+
+// Single in-flight refresh promise — prevents parallel refresh races
+let _refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = (async () => {
+    const refresh = getRefreshToken();
+    if (!refresh) throw new Error('No refresh token');
+    const res = await fetch(`${API_BASE}/auth/token/refresh/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh }),
+    });
+    if (!res.ok) throw new Error('Refresh failed');
+    const data = await res.json();
+    // Backend rotates refresh tokens — update both
+    setTokens(data.access, data.refresh ?? refresh);
+    return data.access as string;
+  })().finally(() => { _refreshPromise = null; });
+  return _refreshPromise;
+}
+
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  _retry = true,
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   const token = getToken();
@@ -32,25 +59,54 @@ async function apiRequest<T>(
   if (!isFormData && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
-
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401 && _retry) {
+    try {
+      const newToken = await refreshAccessToken();
+      const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
+      const retry = await fetch(url, { ...options, headers: retryHeaders });
+      if (retry.status === 401) {
+        clearTokens();
+        window.location.href = '/login';
+        throw new Error('Sessão expirada. Por favor inicia sessão novamente.');
+      }
+      if (!retry.ok) {
+        const errData = await retry.json().catch(() => ({}));
+        const fieldErrs = Object.entries(errData)
+          .filter(([, v]) => Array.isArray(v))
+          .map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`)
+          .join(' | ');
+        throw new Error(errData.detail || errData.message || fieldErrs || `API Error: ${retry.status}`);
+      }
+      if (retry.status === 204) return {} as T;
+      return retry.json() as Promise<T>;
+    } catch (refreshErr) {
+      clearTokens();
+      window.location.href = '/login';
+      throw new Error('Sessão expirada. Por favor inicia sessão novamente.');
+    }
+  }
 
   if (response.status === 401) {
     clearTokens();
-    throw new Error('Unauthorized');
+    window.location.href = '/login';
+    throw new Error('Sessão expirada. Por favor inicia sessão novamente.');
   }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    // DRF returns field-level errors as { field: ["msg", ...], ... }
+    const fieldErrors = Object.entries(errorData)
+      .filter(([, v]) => Array.isArray(v))
+      .map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`)
+      .join(' | ');
     throw new Error(
-      errorData.detail || errorData.message || `API Error: ${response.status}`
+      errorData.detail || errorData.message || fieldErrors || `API Error: ${response.status}`
     );
   }
 
@@ -150,6 +206,39 @@ export async function apiCreateUser(data: {
 
 export async function apiPatchUser(id: number, data: { role?: string; availability?: string }): Promise<ApiUser> {
   return apiRequest<ApiUser>(`/users/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export interface ApiUserDetail extends ApiUser {
+  first_name: string;
+  last_name: string;
+  bio: string;
+  phone: string;
+  location: string;
+  years_experience: number;
+}
+
+export async function apiUpdateUser(
+  id: number,
+  data: Partial<{
+    first_name: string;
+    last_name: string;
+    email: string;
+    username: string;
+    role: string;
+    availability: string;
+    skills: string[];
+    languages: string[];
+    bio: string;
+    phone: string;
+    location: string;
+    years_experience: number;
+  }>
+): Promise<ApiUserDetail> {
+  return apiRequest<ApiUserDetail>(`/users/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function apiDeleteUser(id: number): Promise<void> {
+  return apiRequest<void>(`/users/${id}/`, { method: 'DELETE' });
 }
 
 export async function apiUpdateMe(data: Partial<MeResponse>): Promise<MeResponse> {
@@ -493,12 +582,14 @@ export interface ApiProposalSectionGap {
     title: string;
     section_type: string;
   };
-  score: number;
-  covered_count: number;
-  partial_count: number;
-  total_count: number;
   items: ApiProposalSectionGapItem[];
-  suggestions: string[];
+  summary: {
+    covered: number;
+    partial: number;
+    missing: number;
+    total: number;
+    completion_pct: number;
+  };
 }
 
 export interface ApiTeamMember {
@@ -593,6 +684,15 @@ export async function apiCreateProposalSection(
   });
 }
 
+export async function apiGetProposalSectionGap(
+  proposalId: string,
+  sectionId: string
+): Promise<ApiProposalSectionGap> {
+  return apiRequest<ApiProposalSectionGap>(
+    `/proposals/${proposalId}/section_gap/?section_id=${sectionId}`
+  );
+}
+
 export async function apiDeleteProposalSection(
   proposalId: string,
   sectionId: string
@@ -610,15 +710,6 @@ export async function apiReorderProposalSections(
     method: 'POST',
     body: JSON.stringify({ section_ids: sectionIds.map((id) => parseInt(id, 10)) }),
   });
-}
-
-export async function apiGetProposalSectionGap(
-  proposalId: string,
-  sectionId: string
-): Promise<ApiProposalSectionGap> {
-  return apiRequest<ApiProposalSectionGap>(
-    `/proposals/${proposalId}/section_gap/?section_id=${sectionId}`
-  );
 }
 
 export async function apiDownloadProposalWord(proposalId: string): Promise<Blob> {
