@@ -98,6 +98,102 @@ class ProposalStatusHistory(models.Model):
         return f"{self.proposal} -> {self.status}"
 
 
+class PursuitGate(models.Model):
+    GATE_TYPE_CHOICES = [
+        ('strategic_fit', 'Strategic fit'),
+        ('commercial_viability', 'Commercial viability'),
+        ('delivery_capacity', 'Delivery capacity'),
+        ('partner_approval', 'Partner approval'),
+    ]
+    REQUIRED_ROLE_CHOICES = [
+        ('consultant', 'Consultant'),
+        ('manager', 'Manager'),
+        ('admin', 'Partner/Admin'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('waived', 'Waived'),
+    ]
+
+    proposal = models.ForeignKey(
+        Proposal,
+        on_delete=models.CASCADE,
+        related_name='pursuit_gates',
+    )
+    gate_type = models.CharField(max_length=40, choices=GATE_TYPE_CHOICES)
+    required_role = models.CharField(max_length=20, choices=REQUIRED_ROLE_CHOICES)
+    is_required = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    rationale = models.TextField(blank=True)
+    evidence = models.JSONField(default=dict, blank=True)
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_pursuit_gates',
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['proposal', 'gate_type'],
+                name='unique_pursuit_gate_per_proposal_type',
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.proposal_id} {self.gate_type} {self.status}'
+
+
+class GateAuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('created', 'Created'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('waived', 'Waived'),
+    ]
+
+    proposal = models.ForeignKey(
+        Proposal,
+        on_delete=models.CASCADE,
+        related_name='gate_audit_logs',
+    )
+    gate = models.ForeignKey(
+        PursuitGate,
+        on_delete=models.CASCADE,
+        related_name='audit_logs',
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pursuit_gate_audit_logs',
+    )
+    from_status = models.CharField(max_length=20, blank=True)
+    to_status = models.CharField(max_length=20)
+    note = models.TextField(blank=True)
+    snapshot = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError('Gate audit logs are append-only.')
+
+    def __str__(self):
+        return f'{self.proposal_id} {self.gate.gate_type} {self.action}'
+
+
 class ProposalEvent(models.Model):
     EVENT_TYPE_CHOICES = [
         ('submission', 'Submissao'),

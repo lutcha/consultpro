@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 from apps.projects.models import Project
 from apps.curriculum.models import Curriculum
 from apps.proposals.document_generator import generate_proposal_docx, generate_proposal_pdf
-from apps.proposals.models import Budget, Proposal, ProposalEvent
+from apps.proposals.models import Budget, GateAuditLog, Proposal, ProposalEvent, PursuitGate
 from apps.proposals.views import ensure_default_sections
 from apps.quality_checks.models import QualityCheck
 from apps.proposals.tests.factories import (
@@ -395,6 +395,116 @@ class TestProposalViewSet:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         proposal.refresh_from_db()
         assert proposal.status == 'draft'
+
+    def test_pursuit_gates_endpoint_creates_default_governance_gates(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(
+            created_by=user,
+            status='draft',
+            opportunity=OpportunityFactory(value=1000),
+        )
+        url = reverse('proposal-pursuit-gates', kwargs={'pk': proposal.pk})
+
+        response = client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['is_ready'] is False
+        assert len(response.data['gates']) == 3
+        assert PursuitGate.objects.filter(proposal=proposal).count() == 3
+        assert GateAuditLog.objects.filter(proposal=proposal, action='created').count() == 3
+
+    def test_pursuit_governance_blocks_draft_to_review_until_required_gates_pass(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='draft')
+        url = reverse('proposal-transition-status', kwargs={'pk': proposal.pk})
+
+        response = client.post(url, {'status': 'in_review'}, format='json')
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert 'Pursuit governance gates are not ready' in response.data['detail']
+        proposal.refresh_from_db()
+        assert proposal.status == 'draft'
+
+    def test_pursuit_gate_approvals_allow_draft_to_review(self, api_client):
+        consultant = UserFactory(role='consultant')
+        manager = UserFactory(role='manager')
+        proposal = ProposalFactory(
+            created_by=consultant,
+            status='draft',
+            opportunity=OpportunityFactory(value=1000),
+        )
+        gates_url = reverse('proposal-pursuit-gates', kwargs={'pk': proposal.pk})
+        transition_url = reverse('proposal-transition-status', kwargs={'pk': proposal.pk})
+
+        api_client.force_authenticate(user=consultant)
+        response = api_client.post(
+            gates_url,
+            {'gate_type': 'strategic_fit', 'decision': 'approved', 'note': 'Aligned with strategy.'},
+            format='json',
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+        api_client.force_authenticate(user=manager)
+        for gate_type in ('commercial_viability', 'delivery_capacity'):
+            response = api_client.post(
+                gates_url,
+                {'gate_type': gate_type, 'decision': 'approved', 'note': 'Approved by manager.'},
+                format='json',
+            )
+            assert response.status_code == status.HTTP_200_OK
+
+        response = api_client.post(transition_url, {'status': 'in_review'}, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        proposal.refresh_from_db()
+        assert proposal.status == 'in_review'
+        assert GateAuditLog.objects.filter(proposal=proposal, action='approved').count() == 3
+
+    def test_consultant_cannot_approve_manager_pursuit_gate(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='draft')
+        url = reverse('proposal-pursuit-gates', kwargs={'pk': proposal.pk})
+
+        response = client.post(
+            url,
+            {'gate_type': 'commercial_viability', 'decision': 'approved'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert 'User role cannot decide' in response.data['detail']
+
+    def test_high_value_pursuit_requires_partner_approval(self, api_client):
+        consultant = UserFactory(role='consultant')
+        manager = UserFactory(role='manager')
+        admin = UserFactory(role='admin')
+        proposal = ProposalFactory(
+            created_by=consultant,
+            status='draft',
+            opportunity=OpportunityFactory(value=750000),
+        )
+        gates_url = reverse('proposal-pursuit-gates', kwargs={'pk': proposal.pk})
+        transition_url = reverse('proposal-transition-status', kwargs={'pk': proposal.pk})
+
+        api_client.force_authenticate(user=consultant)
+        api_client.post(gates_url, {'gate_type': 'strategic_fit', 'decision': 'approved'}, format='json')
+        api_client.force_authenticate(user=manager)
+        api_client.post(gates_url, {'gate_type': 'commercial_viability', 'decision': 'approved'}, format='json')
+        api_client.post(gates_url, {'gate_type': 'delivery_capacity', 'decision': 'approved'}, format='json')
+
+        response = api_client.post(transition_url, {'status': 'in_review'}, format='json')
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert 'partner_approval' in response.data['detail']
+
+        api_client.force_authenticate(user=admin)
+        response = api_client.post(
+            gates_url,
+            {'gate_type': 'partner_approval', 'decision': 'approved'},
+            format='json',
+        )
+        assert response.status_code == status.HTTP_200_OK
+        response = api_client.post(transition_url, {'status': 'in_review'}, format='json')
+        assert response.status_code == status.HTTP_200_OK
 
     def test_transition_status_to_submitted_requires_complete_sections(self, authenticated_client):
         client, user = authenticated_client
