@@ -304,12 +304,23 @@ def check_upcoming_deadlines():
 
 
 @shared_task
-def enrich_and_score_opportunity(opportunity_id: int):
+def enrich_and_score_opportunity(opportunity_id: int, force_refresh: bool = False):
     try:
         opportunity = Opportunity.objects.get(pk=opportunity_id)
     except Opportunity.DoesNotExist:
         logger.error("enrich_and_score_opportunity: Opportunity %s not found", opportunity_id)
         return {'detail': 'Oportunidade nao encontrada.', 'opportunity_id': opportunity_id}
+
+    current_score = opportunity.scores.filter(is_current=True).first()
+    if current_score and not force_refresh:
+        return {
+            'detail': 'Scoring existente reutilizado.',
+            'opportunity_id': opportunity.id,
+            'score_id': current_score.id,
+            'overall_score': current_score.overall_score,
+            'scoring_version': current_score.scoring_version,
+            'created': False,
+        }
 
     score = score_opportunity(opportunity)
     return {
@@ -318,4 +329,5 @@ def enrich_and_score_opportunity(opportunity_id: int):
         'score_id': score.id,
         'overall_score': score.overall_score,
         'scoring_version': score.scoring_version,
+        'created': True,
     }
