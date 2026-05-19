@@ -9,6 +9,8 @@ from .models import (
     ProposalEvent,
     ProposalSection,
     ProposalTeamMember,
+    PursuitGate,
+    GateAuditLog,
 )
 
 
@@ -35,6 +37,20 @@ class ProposalEventAdmin(admin.ModelAdmin):
     list_display = ('proposal', 'event_type', 'title', 'occurred_at', 'created_by')
     list_filter = ('event_type', 'occurred_at')
     search_fields = ('proposal__title', 'title', 'notes')
+
+
+@admin.register(PursuitGate)
+class PursuitGateAdmin(admin.ModelAdmin):
+    list_display = ('proposal', 'gate_type', 'required_role', 'is_required', 'status', 'approved_by')
+    list_filter = ('gate_type', 'required_role', 'is_required', 'status')
+    search_fields = ('proposal__title', 'rationale')
+
+
+@admin.register(GateAuditLog)
+class GateAuditLogAdmin(admin.ModelAdmin):
+    list_display = ('proposal', 'gate', 'action', 'actor', 'from_status', 'to_status', 'created_at')
+    list_filter = ('action', 'to_status', 'created_at')
+    search_fields = ('proposal__title', 'note')
 
 
 @admin.register(Comment)

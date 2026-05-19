@@ -28,6 +28,8 @@ from .models import (
     ProposalSection,
     ProposalStatusHistory,
     ProposalTeamMember,
+    GateAuditLog,
+    PursuitGate,
 )
 from .serializers import (
     AISuggestionSerializer,
@@ -39,6 +41,7 @@ from .serializers import (
     ProposalListSerializer,
     ProposalSectionSerializer,
     ProposalTeamMemberSerializer,
+    PursuitGateSerializer,
 )
 
 DEFAULT_PROPOSAL_SECTIONS = [
@@ -482,6 +485,25 @@ ALLOWED_PROPOSAL_TRANSITIONS = {
     'project_initiation': {'won'},
 }
 
+DEFAULT_PURSUIT_GATES = [
+    {
+        'gate_type': 'strategic_fit',
+        'required_role': 'consultant',
+        'is_required': True,
+    },
+    {
+        'gate_type': 'commercial_viability',
+        'required_role': 'manager',
+        'is_required': True,
+    },
+    {
+        'gate_type': 'delivery_capacity',
+        'required_role': 'manager',
+        'is_required': True,
+    },
+]
+HIGH_VALUE_PARTNER_APPROVAL_THRESHOLD = 500000
+
 
 def _qc_min_score_from_request(request):
     raw_value = request.data.get('qc_min_score')
@@ -518,6 +540,135 @@ def _proposal_qc_block_reason(proposal, min_score=None):
     )
 
 
+def _proposal_requires_partner_approval(proposal):
+    return (proposal.opportunity.value or 0) >= HIGH_VALUE_PARTNER_APPROVAL_THRESHOLD
+
+
+def _gate_snapshot(gate):
+    return {
+        'gate_type': gate.gate_type,
+        'required_role': gate.required_role,
+        'is_required': gate.is_required,
+        'status': gate.status,
+        'rationale': gate.rationale,
+        'evidence': gate.evidence,
+    }
+
+
+def ensure_default_pursuit_gates(proposal):
+    gate_specs = list(DEFAULT_PURSUIT_GATES)
+    if _proposal_requires_partner_approval(proposal):
+        gate_specs.append(
+            {
+                'gate_type': 'partner_approval',
+                'required_role': 'admin',
+                'is_required': True,
+            }
+        )
+
+    for spec in gate_specs:
+        gate, created = PursuitGate.objects.get_or_create(
+            proposal=proposal,
+            gate_type=spec['gate_type'],
+            defaults={
+                'required_role': spec['required_role'],
+                'is_required': spec['is_required'],
+            },
+        )
+        if created:
+            GateAuditLog.objects.create(
+                proposal=proposal,
+                gate=gate,
+                action='created',
+                from_status='',
+                to_status=gate.status,
+                snapshot=_gate_snapshot(gate),
+            )
+
+
+def _user_can_decide_gate(user, gate):
+    if user.is_staff or user.is_superuser or user.role == 'admin':
+        return True
+    if gate.required_role == 'consultant':
+        return user.role in ('consultant', 'manager')
+    if gate.required_role == 'manager':
+        return user.role == 'manager'
+    return False
+
+
+def _pursuit_governance_summary(proposal):
+    ensure_default_pursuit_gates(proposal)
+    gates = proposal.pursuit_gates.prefetch_related('audit_logs').select_related('approved_by')
+    required_gates = [gate for gate in gates if gate.is_required]
+    rejected = [gate for gate in required_gates if gate.status == 'rejected']
+    pending = [
+        gate
+        for gate in required_gates
+        if gate.status not in ('approved', 'waived', 'rejected')
+    ]
+    return {
+        'is_ready': not rejected and not pending,
+        'blocked_by': [
+            {
+                'gate_type': gate.gate_type,
+                'status': gate.status,
+                'required_role': gate.required_role,
+            }
+            for gate in rejected + pending
+        ],
+        'gates': gates,
+    }
+
+
+def _pursuit_governance_block_reason(proposal):
+    summary = _pursuit_governance_summary(proposal)
+    if summary['is_ready']:
+        return None
+    gate_labels = ', '.join(
+        f"{item['gate_type']} ({item['status']}, {item['required_role']})"
+        for item in summary['blocked_by']
+    )
+    return f'Pursuit governance gates are not ready: {gate_labels}.'
+
+
+def _decide_pursuit_gate(gate, decision, user, note='', evidence=None):
+    if decision not in ('approved', 'rejected', 'waived'):
+        raise ValueError('Invalid pursuit gate decision.')
+    if decision == 'waived' and not (user.is_staff or user.is_superuser or user.role in ('manager', 'admin')):
+        raise PermissionError('Only managers or admins can waive pursuit gates.')
+    if not _user_can_decide_gate(user, gate):
+        raise PermissionError('User role cannot decide this pursuit gate.')
+
+    previous_status = gate.status
+    gate.status = decision
+    gate.rationale = note or gate.rationale
+    if evidence is not None:
+        gate.evidence = evidence
+    gate.approved_by = user if decision in ('approved', 'waived') else None
+    gate.approved_at = timezone.now() if decision in ('approved', 'waived') else None
+    gate.save(
+        update_fields=[
+            'status',
+            'rationale',
+            'evidence',
+            'approved_by',
+            'approved_at',
+            'updated_at',
+        ]
+    )
+    GateAuditLog.objects.create(
+        proposal=gate.proposal,
+        gate=gate,
+        action=decision,
+        actor=user,
+        from_status=previous_status,
+        to_status=gate.status,
+        note=note,
+        snapshot=_gate_snapshot(gate),
+    )
+    return gate
+
+
 def _validate_proposal_transition(proposal, status_value, qc_min_score=None):
     valid_statuses = {choice[0] for choice in Proposal.STATUS_CHOICES}
     if status_value not in valid_statuses:
@@ -525,6 +676,11 @@ def _validate_proposal_transition(proposal, status_value, qc_min_score=None):
 
     if status_value not in ALLOWED_PROPOSAL_TRANSITIONS.get(proposal.status, set()):
         raise ValueError('Invalid proposal status transition.')
+
+    if proposal.status == 'draft' and status_value == 'in_review':
+        pursuit_block_reason = _pursuit_governance_block_reason(proposal)
+        if pursuit_block_reason:
+            raise PermissionError(pursuit_block_reason)
 
     if status_value == 'submitted':
         is_ready, error_payload = _validate_submission_readiness(proposal)
@@ -624,6 +780,41 @@ class ProposalViewSet(viewsets.ModelViewSet):
         ensure_default_sections(proposal)
         serializer = self.get_serializer(proposal)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get', 'post'])
+    def pursuit_gates(self, request, pk=None):
+        proposal = self.get_object()
+        summary = _pursuit_governance_summary(proposal)
+
+        if request.method == 'POST':
+            gate_type = request.data.get('gate_type')
+            decision = request.data.get('decision')
+            try:
+                gate = proposal.pursuit_gates.get(gate_type=gate_type)
+                _decide_pursuit_gate(
+                    gate,
+                    decision,
+                    request.user,
+                    note=request.data.get('note', ''),
+                    evidence=request.data.get('evidence'),
+                )
+            except PursuitGate.DoesNotExist:
+                return Response({'detail': 'Pursuit gate not found.'}, status=status.HTTP_404_NOT_FOUND)
+            except PermissionError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+            except ValueError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            summary = _pursuit_governance_summary(proposal)
+
+        serializer = PursuitGateSerializer(summary['gates'], many=True)
+        return Response(
+            {
+                'proposal_id': proposal.id,
+                'is_ready': summary['is_ready'],
+                'blocked_by': summary['blocked_by'],
+                'gates': serializer.data,
+            }
+        )
 
     @action(detail=True, methods=['get'])
     def sections(self, request, pk=None):

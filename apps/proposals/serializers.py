@@ -10,6 +10,8 @@ from .models import (
     ProposalEvent,
     ProposalSection,
     ProposalTeamMember,
+    GateAuditLog,
+    PursuitGate,
 )
 
 
@@ -84,6 +86,63 @@ class ProposalEventSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.attachment.url)
         return obj.attachment.url
+
+
+class GateAuditLogSerializer(serializers.ModelSerializer):
+    actor_detail = UserMiniSerializer(source='actor', read_only=True)
+
+    class Meta:
+        model = GateAuditLog
+        fields = [
+            'id',
+            'gate',
+            'action',
+            'actor',
+            'actor_detail',
+            'from_status',
+            'to_status',
+            'note',
+            'snapshot',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class PursuitGateSerializer(serializers.ModelSerializer):
+    approved_by_detail = UserMiniSerializer(source='approved_by', read_only=True)
+    audit_logs = GateAuditLogSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PursuitGate
+        fields = [
+            'id',
+            'proposal',
+            'gate_type',
+            'required_role',
+            'is_required',
+            'status',
+            'rationale',
+            'evidence',
+            'approved_by',
+            'approved_by_detail',
+            'approved_at',
+            'created_at',
+            'updated_at',
+            'audit_logs',
+        ]
+        read_only_fields = [
+            'id',
+            'proposal',
+            'gate_type',
+            'required_role',
+            'is_required',
+            'status',
+            'approved_by',
+            'approved_at',
+            'created_at',
+            'updated_at',
+            'audit_logs',
+        ]
 
 
 class ProposalTeamMemberSerializer(serializers.ModelSerializer):
