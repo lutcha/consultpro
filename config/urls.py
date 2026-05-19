@@ -44,6 +44,7 @@ urlpatterns = [
     path('api/partners/', include('apps.partners.urls')),
     path('api/analytics/', include('apps.analytics.urls')),
     path('api/compliance/', include('apps.compliance.urls')),
+    path('api/issue-tree/', include('apps.issue_tree.urls')),
 
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
