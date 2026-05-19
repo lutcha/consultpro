@@ -845,12 +845,82 @@ export interface ApiProposalTeamMatch {
   items: ApiProposalTeamMatchItem[];
 }
 
+export interface ApiComplianceMatrixRow {
+  id: number;
+  matrix: number;
+  requirement_key: string;
+  requirement_text: string;
+  requirement_category: string;
+  priority: 'mandatory' | 'desirable' | 'optional';
+  status: 'missing' | 'partial' | 'covered' | 'waived';
+  proposal_section: number | null;
+  proposal_section_title: string | null;
+  evidence_text: string;
+  evidence_link: string;
+  source_type: string;
+  source_reference: string;
+  source_trace: Array<Record<string, unknown>>;
+  confidence_score: string;
+  ai_metadata: Record<string, unknown>;
+  human_override: boolean;
+  human_override_note: string;
+  order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiComplianceMatrix {
+  id: number;
+  opportunity: number;
+  opportunity_title: string;
+  status: string;
+  generation_version: string;
+  source_trace: Array<Record<string, unknown>>;
+  ai_metadata: Record<string, unknown>;
+  confidence_score: string;
+  human_override_count: number;
+  generated_by: number | null;
+  created_at: string;
+  updated_at: string;
+  rows: ApiComplianceMatrixRow[];
+}
+
 export async function apiGetProposalEvents(proposalId: string): Promise<ApiProposalEvent[]> {
   return apiRequest<ApiProposalEvent[]>(`/proposals/${proposalId}/events/`);
 }
 
 export async function apiGetProposalTeamMatch(proposalId: string): Promise<ApiProposalTeamMatch> {
   return apiRequest<ApiProposalTeamMatch>(`/proposals/${proposalId}/team_match/`);
+}
+
+export async function apiGetComplianceMatrices(
+  opportunityId: string | number
+): Promise<PaginatedResponse<ApiComplianceMatrix>> {
+  return apiRequest<PaginatedResponse<ApiComplianceMatrix>>(
+    `/compliance/matrices/${buildQueryString({ opportunity: opportunityId })}`
+  );
+}
+
+export async function apiGenerateComplianceMatrix(
+  opportunityId: string | number
+): Promise<ApiComplianceMatrix> {
+  return apiRequest<ApiComplianceMatrix>('/compliance/matrices/generate/', {
+    method: 'POST',
+    body: JSON.stringify({ opportunity_id: Number(opportunityId) }),
+  });
+}
+
+export async function apiUpdateComplianceMatrixRow(
+  rowId: number,
+  data: Partial<Pick<
+    ApiComplianceMatrixRow,
+    'status' | 'proposal_section' | 'evidence_text' | 'evidence_link' | 'human_override_note'
+  >>
+): Promise<ApiComplianceMatrixRow> {
+  return apiRequest<ApiComplianceMatrixRow>(`/compliance/rows/${rowId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
 }
 
 export async function apiCreateProposalEvent(
