@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/ai/', include('apps.ai_services.urls')),
     path('api/partners/', include('apps.partners.urls')),
     path('api/analytics/', include('apps.analytics.urls')),
+    path('api/compliance/', include('apps.compliance.urls')),
 
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
