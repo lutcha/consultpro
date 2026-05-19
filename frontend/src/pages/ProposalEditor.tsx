@@ -26,7 +26,9 @@ import {
   apiDownloadProposalWord, apiDownloadProposalPdf, apiUploadProposalLogo,
   apiGetProposalEvents, apiCreateProposalEvent, apiTransitionProposalStatus, apiGetProposalTeamMatch,
   apiGetProposalSectionGap, apiGetQualityChecks, type ApiProposalEvent, type ApiProposalSectionGap,
-  type ApiProposalTeamMatch, type ApiQualityCheck,
+  apiGetComplianceMatrices, apiGenerateComplianceMatrix, apiUpdateComplianceMatrixRow,
+  type ApiProposalTeamMatch, type ApiQualityCheck, type ApiComplianceMatrix,
+  type ApiComplianceMatrixRow,
 } from '@/lib/api';
 import type { ProposalStatus } from '@/types';
 import { cn } from '@/lib/utils';
@@ -249,6 +251,26 @@ const GAP_STATUS_STYLES: Record<string, string> = {
   missing: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300',
 };
 
+const COMPLIANCE_STATUS_LABELS: Record<ApiComplianceMatrixRow['status'], string> = {
+  covered: 'Coberto',
+  partial: 'Parcial',
+  missing: 'Em falta',
+  waived: 'Dispensado',
+};
+
+const COMPLIANCE_STATUS_STYLES: Record<ApiComplianceMatrixRow['status'], string> = {
+  covered: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300',
+  partial: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300',
+  missing: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300',
+  waived: 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/60 dark:text-slate-300',
+};
+
+const COMPLIANCE_PRIORITY_LABELS: Record<ApiComplianceMatrixRow['priority'], string> = {
+  mandatory: 'Obrigatório',
+  desirable: 'Desejável',
+  optional: 'Opcional',
+};
+
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, '&amp;')
@@ -291,7 +313,7 @@ export function ProposalEditor() {
   const [mobilePipelineOpen, setMobilePipelineOpen] = useState(false);
 
   // Right panel tab state (own state to avoid Radix Tabs flex issues)
-  const [rightTab, setRightTab] = useState<'pipeline' | 'events'>('pipeline');
+  const [rightTab, setRightTab] = useState<'pipeline' | 'compliance' | 'events'>('pipeline');
 
   // Pipeline state
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -322,6 +344,10 @@ export function ProposalEditor() {
   const [qualityCheck, setQualityCheck] = useState<ApiQualityCheck | null>(null);
   const [qualityCheckLoading, setQualityCheckLoading] = useState(false);
   const [qualityCheckError, setQualityCheckError] = useState('');
+  const [complianceMatrix, setComplianceMatrix] = useState<ApiComplianceMatrix | null>(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+  const [complianceError, setComplianceError] = useState('');
+  const [complianceUpdatingRowId, setComplianceUpdatingRowId] = useState<number | null>(null);
   const [eventTypeFilter, setEventTypeFilter] = useState('all');
   const [eventPeriodFilter, setEventPeriodFilter] = useState('all');
   const [qcMinScore, setQcMinScore] = useState(() => readQCSettings().minScore);
@@ -334,6 +360,12 @@ export function ProposalEditor() {
       loadQualityCheck(id);
     }
   }, [id, selectProposal]);
+
+  useEffect(() => {
+    if (selectedProposal?.opportunityId) {
+      loadComplianceMatrix(selectedProposal.opportunityId);
+    }
+  }, [selectedProposal?.opportunityId]);
 
   useEffect(() => {
     writeQCSettings({ minScore: qcMinScore });
@@ -404,6 +436,56 @@ export function ProposalEditor() {
       setQualityCheckError(err instanceof Error ? err.message : 'Erro ao carregar QC.');
     } finally {
       setQualityCheckLoading(false);
+    }
+  };
+
+  const loadComplianceMatrix = async (opportunityId: string | number) => {
+    setComplianceLoading(true);
+    setComplianceError('');
+    try {
+      const data = await apiGetComplianceMatrices(opportunityId);
+      setComplianceMatrix(data.results[0] || null);
+    } catch (err) {
+      setComplianceMatrix(null);
+      setComplianceError(err instanceof Error ? err.message : 'Erro ao carregar matriz de conformidade.');
+    } finally {
+      setComplianceLoading(false);
+    }
+  };
+
+  const generateComplianceMatrix = async () => {
+    if (!selectedProposal?.opportunityId) return;
+    setComplianceLoading(true);
+    setComplianceError('');
+    try {
+      const matrix = await apiGenerateComplianceMatrix(selectedProposal.opportunityId);
+      setComplianceMatrix(matrix);
+    } catch (err) {
+      setComplianceError(err instanceof Error ? err.message : 'Erro ao gerar matriz de conformidade.');
+    } finally {
+      setComplianceLoading(false);
+    }
+  };
+
+  const updateComplianceRow = async (
+    row: ApiComplianceMatrixRow,
+    data: Partial<Pick<ApiComplianceMatrixRow, 'status' | 'proposal_section' | 'evidence_text' | 'human_override_note'>>
+  ) => {
+    if (!complianceMatrix) return;
+    setComplianceUpdatingRowId(row.id);
+    setComplianceError('');
+    try {
+      const updated = await apiUpdateComplianceMatrixRow(row.id, data);
+      const nextRows = complianceMatrix.rows.map((item) => (item.id === updated.id ? updated : item));
+      setComplianceMatrix({
+        ...complianceMatrix,
+        human_override_count: nextRows.filter((item) => item.human_override).length,
+        rows: nextRows,
+      });
+    } catch (err) {
+      setComplianceError(err instanceof Error ? err.message : 'Erro ao atualizar requisito.');
+    } finally {
+      setComplianceUpdatingRowId(null);
     }
   };
 
@@ -676,6 +758,15 @@ export function ProposalEditor() {
     const since = Date.now() - days * 24 * 60 * 60 * 1000;
     return new Date(ev.occurred_at).getTime() >= since;
   });
+  const complianceRows = complianceMatrix?.rows || [];
+  const mandatoryComplianceRows = complianceRows.filter((row) => row.priority === 'mandatory');
+  const coveredComplianceRows = complianceRows.filter((row) => row.status === 'covered' || row.status === 'waived');
+  const complianceCoverage = complianceRows.length > 0
+    ? Math.round((coveredComplianceRows.length / complianceRows.length) * 100)
+    : 0;
+  const mandatoryOpenCount = mandatoryComplianceRows.filter(
+    (row) => row.status === 'missing' || row.status === 'partial'
+  ).length;
 
   // Preview HTML
   const previewHtml = selectedProposal
@@ -1084,6 +1175,22 @@ export function ProposalEditor() {
             <button
               className={cn(
                 'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2 flex items-center justify-center gap-1.5',
+                rightTab === 'compliance'
+                  ? 'border-primary text-primary bg-primary/5'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              )}
+              onClick={() => setRightTab('compliance')}
+            >
+              Compliance
+              {mandatoryOpenCount > 0 && (
+                <span className="bg-amber-100 text-amber-700 rounded-full text-[10px] px-1.5 py-0 leading-5 font-bold">
+                  {mandatoryOpenCount}
+                </span>
+              )}
+            </button>
+            <button
+              className={cn(
+                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2 flex items-center justify-center gap-1.5',
                 rightTab === 'events'
                   ? 'border-primary text-primary bg-primary/5'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -1438,6 +1545,203 @@ export function ProposalEditor() {
           )}
 
           {/* ── EVENTS PANEL ── */}
+          {rightTab === 'compliance' && (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3 flex-shrink-0 bg-muted/20">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold">Matriz de Conformidade</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {complianceLoading
+                      ? 'A carregar...'
+                      : complianceMatrix
+                        ? `${coveredComplianceRows.length}/${complianceRows.length} requisitos cobertos`
+                        : 'Ainda sem matriz gerada'}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant={complianceMatrix ? 'outline' : 'default'}
+                  className="h-7 px-3 text-xs gap-1 flex-shrink-0"
+                  onClick={generateComplianceMatrix}
+                  disabled={complianceLoading || !selectedProposal?.opportunityId}
+                >
+                  <RefreshCw className={cn('h-3 w-3', complianceLoading && 'animate-spin')} />
+                  {complianceMatrix ? 'Regenerar' : 'Gerar'}
+                </Button>
+              </div>
+
+              {complianceMatrix && (
+                <div className="px-4 py-3 border-b border-border">
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <span className="text-muted-foreground">Cobertura geral</span>
+                    <span className="font-semibold">{complianceCoverage}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn('h-full rounded-full', mandatoryOpenCount > 0 ? 'bg-amber-500' : 'bg-emerald-500')}
+                      style={{ width: `${Math.max(0, Math.min(100, complianceCoverage))}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Badge variant="outline" className="text-[10px]">
+                      {complianceMatrix.generation_version}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {Number(complianceMatrix.confidence_score || 0).toFixed(2)} confiança
+                    </Badge>
+                    {complianceMatrix.human_override_count > 0 && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {complianceMatrix.human_override_count} overrides
+                      </Badge>
+                    )}
+                  </div>
+                  {mandatoryOpenCount > 0 && (
+                    <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                      Existem {mandatoryOpenCount} requisitos obrigatórios ainda em falta/parciais. Isto orienta a proposta, mas não altera os gates de QC.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {complianceError && (
+                <div className="mx-4 mt-3 flex items-start gap-2 rounded border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <span>{complianceError}</span>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-auto">
+                {complianceLoading && !complianceMatrix && (
+                  <div className="p-4 space-y-3">
+                    {[1, 2, 3].map((item) => (
+                      <div key={item} className="h-24 bg-muted rounded-lg animate-pulse" />
+                    ))}
+                  </div>
+                )}
+
+                {!complianceLoading && !complianceMatrix && (
+                  <div className="flex flex-col items-center justify-center py-12 px-5 text-center">
+                    <div className="h-12 w-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                      <FileCheck className="h-6 w-6 text-muted-foreground/60" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">Sem matriz ainda</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Gere uma matriz a partir dos requisitos estruturados da oportunidade e depois ligue cada requisito às secções da proposta.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 h-8 text-xs"
+                      onClick={generateComplianceMatrix}
+                      disabled={!selectedProposal?.opportunityId}
+                    >
+                      <FileCheck className="h-3.5 w-3.5 mr-1.5" />
+                      Gerar Matriz
+                    </Button>
+                  </div>
+                )}
+
+                {complianceMatrix && complianceRows.length === 0 && (
+                  <div className="px-5 py-10 text-center">
+                    <p className="text-sm font-medium text-foreground">Sem requisitos estruturados</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      A oportunidade ainda não tem requisitos extraídos para montar a matriz.
+                    </p>
+                  </div>
+                )}
+
+                {complianceMatrix && complianceRows.length > 0 && (
+                  <div className="p-4 space-y-3">
+                    {complianceRows.map((row) => {
+                      const isUpdating = complianceUpdatingRowId === row.id;
+                      const linkedToActiveSection = row.proposal_section === Number(activeSectionId);
+                      return (
+                        <div key={row.id} className="rounded-lg border border-border bg-background p-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                <Badge variant="outline" className={cn('text-[10px]', COMPLIANCE_STATUS_STYLES[row.status])}>
+                                  {COMPLIANCE_STATUS_LABELS[row.status]}
+                                </Badge>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {COMPLIANCE_PRIORITY_LABELS[row.priority]}
+                                </Badge>
+                              </div>
+                              <p className="text-xs font-medium leading-snug">{row.requirement_text}</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Select
+                              value={row.status}
+                              onValueChange={(value) =>
+                                updateComplianceRow(row, {
+                                  status: value as ApiComplianceMatrixRow['status'],
+                                  human_override_note: 'Atualizado no editor da proposta.',
+                                })
+                              }
+                              disabled={isUpdating}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Estado" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="missing">Em falta</SelectItem>
+                                <SelectItem value="partial">Parcial</SelectItem>
+                                <SelectItem value="covered">Coberto</SelectItem>
+                                <SelectItem value="waived">Dispensado</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+                              <p className="text-[10px] text-muted-foreground">
+                                Secção ligada:{' '}
+                                <span className="font-medium text-foreground">
+                                  {row.proposal_section_title || 'Nenhuma'}
+                                </span>
+                              </p>
+                              {row.evidence_text && (
+                                <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
+                                  Evidência: {row.evidence_text}
+                                </p>
+                              )}
+                            </div>
+
+                            <Button
+                              variant={linkedToActiveSection ? 'default' : 'outline'}
+                              size="sm"
+                              className="h-8 w-full justify-start text-xs"
+                              disabled={!activeSectionId || isUpdating}
+                              onClick={() =>
+                                updateComplianceRow(row, {
+                                  proposal_section: Number(activeSectionId),
+                                  status: row.status === 'missing' ? 'partial' : row.status,
+                                  evidence_text: activeSection?.title
+                                    ? `Ligado à secção "${activeSection.title}".`
+                                    : row.evidence_text,
+                                  human_override_note: 'Ligado manualmente à secção ativa no editor.',
+                                })
+                              }
+                            >
+                              <Paperclip className="h-3.5 w-3.5 mr-1.5" />
+                              {linkedToActiveSection ? 'Ligado à secção ativa' : 'Ligar à secção ativa'}
+                            </Button>
+
+                            <div className="flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+                              <span>{row.requirement_category}</span>
+                              {row.source_reference && <span>• {row.source_reference}</span>}
+                              {row.human_override && <span>• override humano</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {rightTab === 'events' && (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Events header */}
