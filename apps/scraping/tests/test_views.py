@@ -133,6 +133,25 @@ class ScrapedOpportunityImportTests(APITestCase):
         self.assertEqual(ids, {ready.id})
         self.assertTrue(response.data['results'][0]['ready_to_import'])
 
+    def test_list_prioritizes_higher_quality_opportunities(self):
+        low_quality = self._create_scraped_opportunity(
+            external_id='rank-low',
+            external_url='https://example.org/tenders/rank-low',
+            data_quality_score='0.30',
+        )
+        high_quality = self._create_scraped_opportunity(
+            external_id='rank-high',
+            external_url='https://example.org/tenders/rank-high',
+            data_quality_score='0.95',
+        )
+
+        url = reverse('scraping:scraped-opportunity-list')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [item['id'] for item in response.data['results']]
+        self.assertLess(ids.index(high_quality.id), ids.index(low_quality.id))
+
     def test_import_ready_imports_only_ready_records(self):
         ready = self._create_scraped_opportunity(
             external_id='ready-import',
