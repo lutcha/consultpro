@@ -7,6 +7,7 @@ Usage:
 """
 from django.core.management.base import BaseCommand
 from apps.scraping.models import ScrapingSource
+from apps.scraping.requested_procurement_sources import REQUESTED_PROCUREMENT_SOURCES
 
 
 DEFAULT_SOURCES = [
@@ -1587,6 +1588,8 @@ DEFAULT_SOURCES = [
                  'keywords': ['bolsa', 'financiamento', 'mobilidade', 'formação', 'edital']}},
 ]
 
+DEFAULT_SOURCES.extend(REQUESTED_PROCUREMENT_SOURCES)
+
 
 class Command(BaseCommand):
     help = 'Initialize scraping sources for Cabo Verde and Africa consultancy opportunities'
@@ -1625,6 +1628,8 @@ class Command(BaseCommand):
                     'scraper_class': src_data['scraper_class'],
                     'scraper_config': src_data.get('scraper_config', {}),
                     'filters': src_data.get('filters', {}),
+                    'verify_ssl': src_data.get('verify_ssl', True),
+                    'respect_robots_txt': src_data.get('respect_robots_txt', True),
                 }
             )
             if created:
