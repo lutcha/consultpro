@@ -2,8 +2,8 @@ import re
 from collections import Counter
 from decimal import Decimal
 
-from django.utils import timezone
 from django.db.models import Q
+from django.utils import timezone
 
 from apps.curriculum.models import Curriculum
 from apps.projects.models import Project
@@ -20,6 +20,18 @@ STOPWORDS = {
 
 SUPPORTED_INDEX_SOURCES = ('proposals', 'projects', 'curriculum')
 SUPPORTED_INDEX_SOURCE_CHOICES = ('all', *SUPPORTED_INDEX_SOURCES)
+ASSET_TYPE_WEIGHTS = {
+    'proposal': Decimal('2.0'),
+    'proposal_section': Decimal('1.5'),
+    'project': Decimal('1.25'),
+    'case': Decimal('1.25'),
+    'template': Decimal('1.0'),
+    'cv': Decimal('0.75'),
+    'consultant_profile': Decimal('0.75'),
+    'pricing': Decimal('0.5'),
+    'other': Decimal('0'),
+}
+HIGH_VALUE_SOURCE_APPS = {'proposals', 'projects'}
 
 
 def tokenize(value):
@@ -43,7 +55,22 @@ def _text_score(query_tokens, asset):
     return score
 
 
-def _reasoning_trace(query_tokens, asset):
+def _context_score(asset, country='', sector='', source_app=''):
+    score = ASSET_TYPE_WEIGHTS.get(asset.asset_type, Decimal('0'))
+    if country and asset.country.lower() == country.lower():
+        score += Decimal('3')
+    if sector and asset.sector.lower() == sector.lower():
+        score += Decimal('3')
+    if source_app and asset.source_app.lower() == source_app.lower():
+        score += Decimal('2')
+    if asset.source_app in HIGH_VALUE_SOURCE_APPS:
+        score += Decimal('1')
+    if asset.updated_at and asset.updated_at >= timezone.now() - timezone.timedelta(days=90):
+        score += Decimal('0.5')
+    return score
+
+
+def _reasoning_trace(query_tokens, asset, country='', sector='', source_app=''):
     tokens = set(query_tokens)
     trace = []
     if tokens.intersection(tokenize(asset.title)):
@@ -54,12 +81,22 @@ def _reasoning_trace(query_tokens, asset):
         trace.append('content_match')
     if tokens.intersection(tokenize(' '.join(asset.tags or []))):
         trace.append('tag_match')
+    if country and asset.country.lower() == country.lower():
+        trace.append('country_match')
+    if sector and asset.sector.lower() == sector.lower():
+        trace.append('sector_match')
+    if source_app and asset.source_app.lower() == source_app.lower():
+        trace.append('source_app_match')
+    if asset.source_app in HIGH_VALUE_SOURCE_APPS:
+        trace.append('high_value_source')
+    if asset.updated_at and asset.updated_at >= timezone.now() - timezone.timedelta(days=90):
+        trace.append('recent_asset')
     if asset.source_app:
         trace.append(f'source:{asset.source_app}.{asset.source_model}')
     return trace or ['fallback_rank']
 
 
-def search_knowledge(query='', asset_type='', country='', sector='', limit=10):
+def search_knowledge(query='', asset_type='', country='', sector='', source_app='', limit=10):
     query_tokens = tokenize(query)
     queryset = KnowledgeAsset.objects.filter(status='active')
     if asset_type:
@@ -68,6 +105,8 @@ def search_knowledge(query='', asset_type='', country='', sector='', limit=10):
         queryset = queryset.filter(country__iexact=country)
     if sector:
         queryset = queryset.filter(sector__iexact=sector)
+    if source_app:
+        queryset = queryset.filter(source_app__iexact=source_app)
     if query_tokens:
         text_filter = Q()
         for token in query_tokens:
@@ -81,14 +120,22 @@ def search_knowledge(query='', asset_type='', country='', sector='', limit=10):
 
     ranked = []
     for asset in queryset[:250]:
-        score = _text_score(query_tokens, asset)
-        if query_tokens and score <= 0:
+        text_score = _text_score(query_tokens, asset)
+        context_score = _context_score(asset, country=country, sector=sector, source_app=source_app)
+        score = text_score + context_score
+        if query_tokens and text_score <= 0:
             continue
         ranked.append(
             {
                 'asset': asset,
                 'score': float(score),
-                'reasoning_trace': _reasoning_trace(query_tokens, asset),
+                'reasoning_trace': _reasoning_trace(
+                    query_tokens,
+                    asset,
+                    country=country,
+                    sector=sector,
+                    source_app=source_app,
+                ),
                 'search_mode': 'textual_fallback',
             }
         )

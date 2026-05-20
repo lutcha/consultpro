@@ -26,6 +26,58 @@ class KnowledgeServiceTests(TestCase):
         self.assertIn('title_match', results[0]['reasoning_trace'])
         self.assertEqual(results[0]['search_mode'], 'textual_fallback')
 
+    def test_search_knowledge_boosts_country_sector_and_high_value_sources(self):
+        weaker = KnowledgeAsset.objects.create(
+            asset_type='template',
+            title='WASH methodology template',
+            summary='Water sanitation approach',
+            content='Procurement and staffing plan',
+            country='Ghana',
+            sector='WASH',
+            source_app='manual',
+            source_model='Template',
+        )
+        stronger = KnowledgeAsset.objects.create(
+            asset_type='proposal',
+            title='WASH methodology proposal',
+            summary='Water sanitation approach',
+            content='Procurement and staffing plan',
+            country='Senegal',
+            sector='WASH',
+            source_app='proposals',
+            source_model='Proposal',
+        )
+
+        results = search_knowledge('wash methodology', country='Senegal', sector='WASH')
+
+        self.assertEqual(results[0]['asset'], stronger)
+        self.assertNotEqual(results[0]['asset'], weaker)
+        self.assertIn('country_match', results[0]['reasoning_trace'])
+        self.assertIn('sector_match', results[0]['reasoning_trace'])
+        self.assertIn('high_value_source', results[0]['reasoning_trace'])
+
+    def test_search_knowledge_filters_by_source_app(self):
+        KnowledgeAsset.objects.create(
+            asset_type='proposal',
+            title='Energy sector proposal',
+            content='Transmission planning',
+            source_app='proposals',
+            source_model='Proposal',
+        )
+        template = KnowledgeAsset.objects.create(
+            asset_type='template',
+            title='Energy sector template',
+            content='Transmission planning',
+            source_app='manual',
+            source_model='Template',
+        )
+
+        results = search_knowledge('energy planning', source_app='manual')
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['asset'], template)
+        self.assertIn('source_app_match', results[0]['reasoning_trace'])
+
     def test_index_knowledge_assets_is_idempotent_for_proposals(self):
         proposal = ProposalFactory()
         ProposalSectionFactory(proposal=proposal, title='Methodology', content='Climate adaptation methodology')

@@ -28,6 +28,31 @@ class KnowledgeViewTests(APITestCase):
         self.assertEqual(response.data['count'], 1)
         self.assertTrue(response.data['results'][0]['reasoning_trace'])
 
+    def test_search_endpoint_filters_by_source_app(self):
+        KnowledgeAsset.objects.create(
+            asset_type='proposal',
+            title='Education proposal',
+            content='Teacher training delivery model',
+            source_app='proposals',
+            source_model='Proposal',
+        )
+        KnowledgeAsset.objects.create(
+            asset_type='template',
+            title='Education template',
+            content='Teacher training delivery model',
+            source_app='manual',
+            source_model='Template',
+        )
+
+        response = self.client.get(
+            reverse('knowledge-asset-search'),
+            {'q': 'education training', 'source_app': 'manual'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['asset']['source_app'], 'manual')
+
     def test_index_endpoint_indexes_proposal_assets(self):
         proposal = ProposalFactory()
         ProposalSectionFactory(proposal=proposal, title='Workplan', content='Implementation plan')

@@ -19,12 +19,15 @@ class KnowledgeAssetViewSet(viewsets.ModelViewSet):
         asset_type = self.request.query_params.get('asset_type')
         country = self.request.query_params.get('country')
         sector = self.request.query_params.get('sector')
+        source_app = self.request.query_params.get('source_app')
         if asset_type:
             queryset = queryset.filter(asset_type=asset_type)
         if country:
             queryset = queryset.filter(country__iexact=country)
         if sector:
             queryset = queryset.filter(sector__iexact=sector)
+        if source_app:
+            queryset = queryset.filter(source_app__iexact=source_app)
         return queryset
 
     def perform_create(self, serializer):
@@ -37,6 +40,7 @@ class KnowledgeAssetViewSet(viewsets.ModelViewSet):
             asset_type=request.query_params.get('asset_type', ''),
             country=request.query_params.get('country', ''),
             sector=request.query_params.get('sector', ''),
+            source_app=request.query_params.get('source_app', ''),
             limit=int(request.query_params.get('limit', 10)),
         )
         serializer = KnowledgeSearchResultSerializer(results, many=True)
