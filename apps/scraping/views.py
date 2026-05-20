@@ -3,6 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.db.models import Case, IntegerField, Q, When
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.core.permissions import IsConsultantOrManager, IsManager
 from apps.scraping.filters import ScrapedOpportunityFilter
@@ -137,10 +139,24 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_class = ScrapedOpportunityFilter
     search_fields = ['title', 'organization', 'client', 'external_id']
     ordering_fields = ['deadline', 'scraped_at', 'value', 'data_quality_score']
-    ordering = ['-data_quality_score', 'deadline', '-scraped_at']
+    ordering = ['action_priority', '-data_quality_score', 'deadline', '-scraped_at']
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        now = timezone.now()
+        queryset = super().get_queryset().annotate(
+            action_priority=Case(
+                When(
+                    Q(status='new')
+                    & Q(imported_opportunity__isnull=True)
+                    & (Q(deadline__isnull=True) | Q(deadline__gte=now)),
+                    then=0,
+                ),
+                When(status='new', imported_opportunity__isnull=True, then=1),
+                When(status='imported', then=3),
+                default=2,
+                output_field=IntegerField(),
+            )
+        )
         if self.request.query_params.get('ready_to_import') in ('1', 'true', 'yes'):
             queryset = filter_ready_to_import(queryset)
         return queryset
