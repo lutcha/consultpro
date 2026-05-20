@@ -1,4 +1,6 @@
 from django.test import TestCase
+from django.utils import timezone
+from apps.users.models import UserInvitation
 from apps.users.tests.factories import UserFactory, CertificationFactory
 
 
@@ -26,3 +28,36 @@ class CertificationModelTest(TestCase):
         cert = CertificationFactory(user=user)
         self.assertEqual(cert.user, user)
         self.assertIn(cert, user.certifications.all())
+
+
+class UserInvitationModelTest(TestCase):
+    def setUp(self):
+        self.admin = UserFactory(role='admin')
+
+    def test_create_for_helper(self):
+        inv = UserInvitation.create_for(
+            email='invited@example.com',
+            role='consultant',
+            invited_by=self.admin,
+        )
+        self.assertEqual(inv.email, 'invited@example.com')
+        self.assertEqual(inv.role, 'consultant')
+        self.assertFalse(inv.is_used)
+        self.assertIsNotNone(inv.token)
+
+    def test_is_valid_fresh(self):
+        inv = UserInvitation.create_for('x@x.com', 'consultant', self.admin)
+        self.assertTrue(inv.is_valid)
+
+    def test_is_invalid_when_used(self):
+        inv = UserInvitation.create_for('x@x.com', 'consultant', self.admin)
+        inv.is_used = True
+        inv.save()
+        self.assertFalse(inv.is_valid)
+
+    def test_is_invalid_when_expired(self):
+        from datetime import timedelta
+        inv = UserInvitation.create_for('x@x.com', 'consultant', self.admin, days_valid=0)
+        inv.expires_at = timezone.now() - timedelta(seconds=1)
+        inv.save()
+        self.assertFalse(inv.is_valid)

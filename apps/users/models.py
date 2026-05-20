@@ -1,5 +1,9 @@
+import uuid
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 
 class User(AbstractUser):
@@ -29,6 +33,47 @@ class User(AbstractUser):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
+
+
+class UserInvitation(models.Model):
+    ROLE_CHOICES = User.ROLE_CHOICES
+
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    email = models.EmailField()
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='consultant')
+    invited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='sent_invitations',
+    )
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Invitation({self.email}, {self.role})"
+
+    @classmethod
+    def create_for(cls, email, role, invited_by, days_valid=7):
+        return cls.objects.create(
+            email=email,
+            role=role,
+            invited_by=invited_by,
+            expires_at=timezone.now() + timedelta(days=days_valid),
+        )
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_valid(self):
+        return not self.is_used and not self.is_expired
 
 
 class Certification(models.Model):
