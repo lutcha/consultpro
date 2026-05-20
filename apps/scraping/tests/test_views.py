@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 from apps.opportunities.models import Opportunity, Requirement
 from apps.opportunities.scoring import score_opportunity
 from apps.opportunities.tests.factories import UserFactory
-from apps.scraping.models import ScrapedOpportunity, ScrapingSource
+from apps.scraping.models import ScrapedOpportunity, ScrapingJob, ScrapingSource
 
 
 class ScrapedOpportunityImportTests(APITestCase):
@@ -179,3 +179,94 @@ class ScrapedOpportunityImportTests(APITestCase):
         self.assertFalse(item['ready_to_import'])
         self.assertIn('not_cv_eligible', item['import_readiness_reasons'])
         self.assertIn('low_data_quality', item['import_readiness_reasons'])
+
+
+class ScrapingSourceHealthTests(APITestCase):
+    def setUp(self):
+        self.user = UserFactory(role='manager')
+        self.client.force_authenticate(user=self.user)
+
+    def _create_source(self, **overrides):
+        data = {
+            'name': 'Health Source',
+            'organization': 'Health Org',
+            'url': 'https://example.org/health',
+            'status': 'active',
+            'success_rate': 80,
+        }
+        data.update(overrides)
+        return ScrapingSource.objects.create(**data)
+
+    def test_health_endpoint_marks_productive_source_as_healthy(self):
+        source = self._create_source()
+        ScrapingJob.objects.create(
+            source=source,
+            status='completed',
+            items_found=3,
+            items_new=2,
+            completed_at=timezone.now(),
+        )
+        ScrapedOpportunity.objects.create(
+            source=source,
+            external_id='health-001',
+            external_url='https://example.org/health/001',
+            title='Consultancy opportunity',
+            organization='Health Org',
+            status='new',
+        )
+
+        response = self.client.get(reverse('scraping:scraping-source-health'), {'search': 'Health Source'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item = response.data['results'][0]
+        self.assertEqual(item['health_status'], 'healthy')
+        self.assertTrue(item['production_ready'])
+        self.assertEqual(item['total_opportunities'], 1)
+        self.assertGreaterEqual(item['health_score'], 75)
+
+    def test_health_endpoint_explains_empty_and_failing_sources(self):
+        empty = self._create_source(name='Empty Source', url='https://example.org/empty')
+        failing = self._create_source(
+            name='Failing Source',
+            url='https://example.org/failing',
+            error_message='SSL failure',
+        )
+        ScrapingJob.objects.create(source=empty, status='completed', items_found=0)
+        ScrapingJob.objects.create(source=failing, status='failed', error_log='timeout')
+
+        response = self.client.get(reverse('scraping:scraping-source-health'), {'search': 'Source'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        by_name = {item['name']: item for item in response.data['results']}
+        self.assertEqual(by_name['Empty Source']['health_status'], 'empty')
+        self.assertEqual(by_name['Failing Source']['health_status'], 'failing')
+        self.assertIn('timeout', by_name['Failing Source']['health_reason'])
+
+    def test_health_endpoint_marks_subscription_sources_as_blocked(self):
+        self._create_source(
+            name='Subscription Source',
+            url='https://example.org/subscription',
+            scraper_config={'access': 'subscription'},
+            filters={'access': ['subscription']},
+        )
+
+        response = self.client.get(reverse('scraping:scraping-source-health'), {'search': 'Subscription Source'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item = response.data['results'][0]
+        self.assertEqual(item['health_status'], 'blocked')
+        self.assertFalse(item['production_ready'])
+        self.assertEqual(item['access'], 'subscription')
+
+    def test_health_endpoint_filters_by_health_status(self):
+        self._create_source(name='Paused Source', url='https://example.org/paused', status='paused')
+        self._create_source(name='Active Source', url='https://example.org/active')
+
+        response = self.client.get(
+            reverse('scraping:scraping-source-health'),
+            {'health_status': 'paused', 'search': 'Paused Source'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['name'], 'Paused Source')
