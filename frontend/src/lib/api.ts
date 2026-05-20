@@ -923,6 +923,53 @@ export async function apiUpdateComplianceMatrixRow(
   });
 }
 
+export interface ApiKnowledgeAsset {
+  id: number;
+  asset_type: string;
+  title: string;
+  summary: string;
+  content: string;
+  source_app: string;
+  source_model: string;
+  source_id: string | null;
+  source_url: string;
+  metadata: Record<string, unknown>;
+  tags: string[];
+  country: string;
+  sector: string;
+  status: string;
+  indexed_at: string;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiKnowledgeSearchResult {
+  asset: ApiKnowledgeAsset;
+  score: number;
+  reasoning_trace: string[];
+  search_mode: string;
+}
+
+export interface ApiKnowledgeSearchResponse {
+  query: string;
+  search_mode: string;
+  count: number;
+  results: ApiKnowledgeSearchResult[];
+}
+
+export async function apiSearchKnowledge(params: {
+  q?: string;
+  asset_type?: string;
+  country?: string;
+  sector?: string;
+  limit?: number;
+}): Promise<ApiKnowledgeSearchResponse> {
+  return apiRequest<ApiKnowledgeSearchResponse>(
+    `/knowledge/assets/search/${buildQueryString(params)}`
+  );
+}
+
 export async function apiCreateProposalEvent(
   proposalId: string,
   data: {

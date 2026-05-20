@@ -9,7 +9,7 @@ import {
   Upload, Building2, UserCircle, Plus, X, Eye, ChevronRight, Calendar,
   Paperclip, ExternalLink, ArrowRight, Send, Star, MessageSquare,
   RefreshCw, Trophy, CheckCircle2, Zap, Handshake, Clock, FileCheck,
-  AlertCircle, GitBranch, Flag, SlidersHorizontal,
+  AlertCircle, GitBranch, Flag, SlidersHorizontal, BookOpen, Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +28,7 @@ import {
   apiGetProposalSectionGap, apiGetQualityChecks, type ApiProposalEvent, type ApiProposalSectionGap,
   apiGetComplianceMatrices, apiGenerateComplianceMatrix, apiUpdateComplianceMatrixRow,
   type ApiProposalTeamMatch, type ApiQualityCheck, type ApiComplianceMatrix,
-  type ApiComplianceMatrixRow,
+  type ApiComplianceMatrixRow, apiSearchKnowledge, type ApiKnowledgeSearchResult,
 } from '@/lib/api';
 import type { ProposalStatus } from '@/types';
 import { cn } from '@/lib/utils';
@@ -313,7 +313,7 @@ export function ProposalEditor() {
   const [mobilePipelineOpen, setMobilePipelineOpen] = useState(false);
 
   // Right panel tab state (own state to avoid Radix Tabs flex issues)
-  const [rightTab, setRightTab] = useState<'pipeline' | 'compliance' | 'events'>('pipeline');
+  const [rightTab, setRightTab] = useState<'pipeline' | 'compliance' | 'knowledge' | 'events'>('pipeline');
 
   // Pipeline state
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -348,6 +348,10 @@ export function ProposalEditor() {
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [complianceError, setComplianceError] = useState('');
   const [complianceUpdatingRowId, setComplianceUpdatingRowId] = useState<number | null>(null);
+  const [knowledgeResults, setKnowledgeResults] = useState<ApiKnowledgeSearchResult[]>([]);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
+  const [knowledgeError, setKnowledgeError] = useState('');
+  const [knowledgeQuery, setKnowledgeQuery] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('all');
   const [eventPeriodFilter, setEventPeriodFilter] = useState('all');
   const [qcMinScore, setQcMinScore] = useState(() => readQCSettings().minScore);
@@ -488,6 +492,41 @@ export function ProposalEditor() {
       setComplianceUpdatingRowId(null);
     }
   };
+
+  const buildKnowledgeQuery = useCallback(() => {
+    const sectionTitle = selectedProposal?.sections.find((section) => section.id === activeSectionId)?.title || '';
+    const proposalTitle = selectedProposal?.title || '';
+    const plainContent = editorContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return [sectionTitle, proposalTitle, plainContent.split(' ').slice(0, 12).join(' ')]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+  }, [activeSectionId, editorContent, selectedProposal]);
+
+  const loadKnowledgeSuggestions = useCallback(async () => {
+    const query = buildKnowledgeQuery();
+    setKnowledgeQuery(query);
+    setKnowledgeError('');
+    if (!query) {
+      setKnowledgeResults([]);
+      return;
+    }
+    setKnowledgeLoading(true);
+    try {
+      const data = await apiSearchKnowledge({ q: query, limit: 6 });
+      setKnowledgeResults(data.results || []);
+    } catch (err) {
+      setKnowledgeResults([]);
+      setKnowledgeError(err instanceof Error ? err.message : 'Erro ao carregar sugestoes de conhecimento.');
+    } finally {
+      setKnowledgeLoading(false);
+    }
+  }, [buildKnowledgeQuery]);
+
+  useEffect(() => {
+    if (rightTab !== 'knowledge') return;
+    loadKnowledgeSuggestions();
+  }, [rightTab, activeSectionId, loadKnowledgeSuggestions]);
 
   const refreshQualityCheck = async () => {
     if (!id) return;
@@ -1191,6 +1230,22 @@ export function ProposalEditor() {
             <button
               className={cn(
                 'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2 flex items-center justify-center gap-1.5',
+                rightTab === 'knowledge'
+                  ? 'border-primary text-primary bg-primary/5'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              )}
+              onClick={() => setRightTab('knowledge')}
+            >
+              Sugestões
+              {knowledgeResults.length > 0 && (
+                <span className="bg-primary/15 text-primary rounded-full text-[10px] px-1.5 py-0 leading-5 font-bold">
+                  {knowledgeResults.length}
+                </span>
+              )}
+            </button>
+            <button
+              className={cn(
+                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2 flex items-center justify-center gap-1.5',
                 rightTab === 'events'
                   ? 'border-primary text-primary bg-primary/5'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -1733,6 +1788,156 @@ export function ProposalEditor() {
                               {row.human_override && <span>• override humano</span>}
                             </div>
                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {rightTab === 'knowledge' && (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3 flex-shrink-0 bg-muted/20">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold">Smart Suggestions</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {knowledgeLoading
+                      ? 'A pesquisar conhecimento...'
+                      : `${knowledgeResults.length} referencia${knowledgeResults.length !== 1 ? 's' : ''} encontrada${knowledgeResults.length !== 1 ? 's' : ''}`}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-3 text-xs gap-1 flex-shrink-0"
+                  onClick={loadKnowledgeSuggestions}
+                  disabled={knowledgeLoading}
+                >
+                  <RefreshCw className={cn('h-3 w-3', knowledgeLoading && 'animate-spin')} />
+                  Atualizar
+                </Button>
+              </div>
+
+              <div className="px-4 py-3 border-b border-border">
+                <div className="flex items-start gap-2 rounded border border-border bg-background p-2.5">
+                  <Search className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Consulta contextual
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-3">
+                      {knowledgeQuery || 'Abra uma seccao para pesquisar propostas, projetos, CVs e casos indexados.'}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[10px] text-muted-foreground leading-relaxed">
+                  Painel informativo. Estas sugestoes nao alteram QC, Compliance Matrix, Issue Tree ou o conteudo da proposta.
+                </p>
+              </div>
+
+              {knowledgeError && (
+                <div className="mx-4 mt-3 flex items-start gap-2 rounded border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <span>{knowledgeError}</span>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-auto">
+                {knowledgeLoading && knowledgeResults.length === 0 && (
+                  <div className="p-4 space-y-3">
+                    {[1, 2, 3].map((item) => (
+                      <div key={item} className="h-24 bg-muted rounded-lg animate-pulse" />
+                    ))}
+                  </div>
+                )}
+
+                {!knowledgeLoading && !knowledgeError && knowledgeResults.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 px-5 text-center">
+                    <div className="h-12 w-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                      <BookOpen className="h-6 w-6 text-muted-foreground/60" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">Sem sugestoes ainda</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      Indexe ativos de conhecimento ou ajuste a secao ativa para encontrar referencias relevantes.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 h-8 text-xs"
+                      onClick={loadKnowledgeSuggestions}
+                    >
+                      <Search className="h-3.5 w-3.5 mr-1.5" />
+                      Pesquisar novamente
+                    </Button>
+                  </div>
+                )}
+
+                {knowledgeResults.length > 0 && (
+                  <div className="p-4 space-y-3">
+                    {knowledgeResults.map((result) => {
+                      const asset = result.asset;
+                      const trace = result.reasoning_trace || [];
+                      return (
+                        <div key={asset.id} className="rounded-lg border border-border bg-background p-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                <Badge variant="outline" className="text-[10px]">
+                                  {asset.asset_type.replace(/_/g, ' ')}
+                                </Badge>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {Math.round(result.score)} pts
+                                </Badge>
+                              </div>
+                              <p className="text-xs font-semibold leading-snug">{asset.title}</p>
+                            </div>
+                          </div>
+
+                          {(asset.summary || asset.content) && (
+                            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+                              {asset.summary || asset.content.replace(/<[^>]*>/g, ' ')}
+                            </p>
+                          )}
+
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {asset.country && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {asset.country}
+                              </Badge>
+                            )}
+                            {asset.sector && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {asset.sector}
+                              </Badge>
+                            )}
+                            {asset.tags.slice(0, 3).map((tag) => (
+                              <Badge key={tag} variant="outline" className="text-[10px]">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          {trace.length > 0 && (
+                            <div className="mt-2 rounded border border-border bg-muted/20 px-2 py-1.5">
+                              <p className="text-[10px] text-muted-foreground line-clamp-2">
+                                Motivos: {trace.slice(0, 4).join(', ')}
+                              </p>
+                            </div>
+                          )}
+
+                          {asset.source_url && (
+                            <a
+                              href={asset.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Abrir origem
+                            </a>
+                          )}
                         </div>
                       );
                     })}
