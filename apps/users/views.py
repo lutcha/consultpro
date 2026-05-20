@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
+from smtplib import SMTPException
 from django.utils import timezone
 from rest_framework import viewsets, serializers, permissions, status
 from rest_framework.decorators import action
@@ -48,7 +49,7 @@ def _send_invitation_email(invitation, request):
         message=message,
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[invitation.email],
-        fail_silently=True,
+        fail_silently=False,
     )
 
 
@@ -103,7 +104,7 @@ def _send_welcome_email(user):
         message=message,
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
-        fail_silently=True,
+        fail_silently=False,
     )
 
 
@@ -258,7 +259,14 @@ class UserViewSet(viewsets.ModelViewSet):
             )
 
         invitation = UserInvitation.create_for(email=email, role=role, invited_by=request.user)
-        _send_invitation_email(invitation, request)
+        try:
+            _send_invitation_email(invitation, request)
+        except (SMTPException, OSError) as exc:
+            invitation.delete()
+            return Response(
+                {'detail': f'Convite criado mas falhou o envio do email: {exc}'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         return Response(UserInvitationSerializer(invitation).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'], url_path='invitations')

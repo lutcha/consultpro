@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.core.permissions import IsConsultantOrManager, IsManager
+from apps.scraping.filters import ScrapedOpportunityFilter
 from apps.scraping.services.readiness import filter_ready_to_import, get_import_readiness
 from apps.scraping.services.source_health import get_sources_health
 
@@ -133,10 +134,7 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsConsultantOrManager]
     pagination_class = _MediumPage
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = [
-        'source', 'status', 'country', 'sector',
-        'cv_eligible', 'language', 'data_quality_score'
-    ]
+    filterset_class = ScrapedOpportunityFilter
     search_fields = ['title', 'organization', 'client', 'external_id']
     ordering_fields = ['deadline', 'scraped_at', 'value', 'data_quality_score']
     ordering = ['-data_quality_score', 'deadline', '-scraped_at']
