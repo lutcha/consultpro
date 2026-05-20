@@ -200,12 +200,35 @@ export async function apiCreateUser(data: {
 }): Promise<ApiUser> {
   return apiRequest<ApiUser>('/users/', {
     method: 'POST',
+    body: JSON.stringify({ ...data, confirm_password: data.password }),
+  });
+}
+
+export async function apiInviteUser(data: {
+  email: string;
+  role: string;
+}): Promise<{ id: number; email: string; role: string; token: string }> {
+  return apiRequest<{ id: number; email: string; role: string; token: string }>('/users/invite/', {
+    method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function apiPatchUser(id: number, data: { role?: string; availability?: string }): Promise<ApiUser> {
-  return apiRequest<ApiUser>(`/users/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+export async function apiAcceptInvitation(data: {
+  token: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+  confirm_password: string;
+}): Promise<{ detail: string }> {
+  return apiRequest<{ detail: string }>('/users/accept-invitation/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiPatchUser(id: number, data: { role?: string; availability?: string; is_active?: boolean }): Promise<ApiUser> {
+  return apiRequest<ApiUser>(`/users/${id}/admin-update/`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
 export interface ApiUserDetail extends ApiUser {

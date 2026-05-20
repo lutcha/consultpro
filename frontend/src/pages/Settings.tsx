@@ -40,7 +40,8 @@ import {
   apiUpdateMe,
   apiGetUsers,
   apiPatchUser,
-  apiCreateUser,
+  apiInviteUser,
+  apiDeleteUser,
   apiChangePassword,
   apiGetNotificationPreferences,
   apiUpdateNotificationPreferences,
@@ -102,8 +103,9 @@ export function Settings() {
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [roleUpdating, setRoleUpdating] = useState<number | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
   const [inviteModal, setInviteModal] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ first_name: '', last_name: '', email: '', role: 'consultant', password: 'ConsultPro2026!' });
+  const [inviteForm, setInviteForm] = useState({ email: '', role: 'consultant' });
   const [inviteSaving, setInviteSaving] = useState(false);
 
   const [profile, setProfile] = useState({
@@ -332,24 +334,31 @@ export function Settings() {
   };
 
   const handleInvite = async () => {
-    if (!inviteForm.email || !inviteForm.first_name) { toast.error('Nome e email obrigatorios'); return; }
+    if (!inviteForm.email) { toast.error('Email obrigatório'); return; }
     setInviteSaving(true);
     try {
-      const newUser = await apiCreateUser({
-        email: inviteForm.email,
-        first_name: inviteForm.first_name,
-        last_name: inviteForm.last_name,
-        password: inviteForm.password,
-        role: inviteForm.role,
-      });
-      setUsers((prev) => [newUser, ...prev]);
+      await apiInviteUser({ email: inviteForm.email, role: inviteForm.role });
       setInviteModal(false);
-      setInviteForm({ first_name: '', last_name: '', email: '', role: 'consultant', password: 'ConsultPro2026!' });
-      toast.success(`Utilizador ${newUser.name} criado`);
+      setInviteForm({ email: '', role: 'consultant' });
+      toast.success(`Convite enviado para ${inviteForm.email}`);
     } catch {
-      toast.error('Erro ao criar utilizador');
+      toast.error('Erro ao enviar convite');
     } finally {
       setInviteSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: number, userName: string) => {
+    if (!confirm(`Tens a certeza que queres remover "${userName}"? Esta acção não pode ser desfeita.`)) return;
+    setDeletingUserId(userId);
+    try {
+      await apiDeleteUser(userId);
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      toast.success('Utilizador removido');
+    } catch {
+      toast.error('Erro ao remover utilizador');
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -617,6 +626,19 @@ export function Settings() {
                               </SelectContent>
                             </Select>
                           )}
+                          {String(u.id) !== user?.id && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteUser(u.id, u.name || u.email)}
+                              disabled={deletingUserId === u.id}
+                            >
+                              {deletingUserId === u.id
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -728,25 +750,24 @@ export function Settings() {
       </Dialog>
 
       {/* Invite User Modal */}
-      <Dialog open={inviteModal} onOpenChange={(v) => { if (!v) setInviteModal(false); }}>
+      <Dialog open={inviteModal} onOpenChange={(v) => { if (!v) { setInviteModal(false); setInviteForm({ email: '', role: 'consultant' }); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Convidar Utilizador</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Nome *</Label>
-                <Input value={inviteForm.first_name} onChange={(e) => setInviteForm(f => ({ ...f, first_name: e.target.value }))} placeholder="João" />
-              </div>
-              <div>
-                <Label>Apelido</Label>
-                <Input value={inviteForm.last_name} onChange={(e) => setInviteForm(f => ({ ...f, last_name: e.target.value }))} placeholder="Ferreira" />
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              O utilizador receberá um email com um link para ativar a sua conta e definir a sua password.
+            </p>
             <div>
               <Label>Email *</Label>
-              <Input type="email" value={inviteForm.email} onChange={(e) => setInviteForm(f => ({ ...f, email: e.target.value }))} placeholder="utilizador@consultpro.cv" />
+              <Input
+                type="email"
+                value={inviteForm.email}
+                onChange={(e) => setInviteForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="utilizador@consultpro.cv"
+                autoFocus
+              />
             </div>
             <div>
               <Label>Role</Label>
@@ -761,16 +782,11 @@ export function Settings() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Password inicial</Label>
-              <Input value={inviteForm.password} onChange={(e) => setInviteForm(f => ({ ...f, password: e.target.value }))} placeholder="password" />
-              <p className="text-xs text-muted-foreground mt-1">O utilizador deve alterar na primeira sessao.</p>
-            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setInviteModal(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setInviteModal(false); setInviteForm({ email: '', role: 'consultant' }); }}>Cancelar</Button>
             <Button onClick={handleInvite} disabled={inviteSaving}>
-              {inviteSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />A criar...</> : <><Plus className="h-4 w-4 mr-2" />Criar Utilizador</>}
+              {inviteSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />A enviar...</> : <><Plus className="h-4 w-4 mr-2" />Enviar Convite</>}
             </Button>
           </DialogFooter>
         </DialogContent>
