@@ -7,7 +7,7 @@ import {
   Globe, Play, Pause, Settings, Plus, Search, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Download, ArrowRight,
   Activity, Zap, Bot, ChevronDown, ChevronUp,
-  BarChart3, Layers, Eye, DollarSign, ExternalLink,
+  BarChart3, Layers, Eye, DollarSign, ExternalLink, Lock, ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import {
   apiCreateScrapingSource,
   apiGetScrapedOpportunities,
   apiGetScrapingJobs,
+  apiGetScrapingSourceHealth,
   apiGetScrapingSources,
   apiGetScrapingStats,
   apiIgnoreScrapedOpportunity,
@@ -31,6 +32,7 @@ import {
   type ApiScrapedOpportunity,
   type ApiScrapingJob,
   type ApiScrapingSource,
+  type ApiScrapingSourceHealth,
 } from '@/lib/api';
 import type { ScrapingSource, ScrapedOpportunity, ScrapingJob } from '@/types';
 
@@ -70,6 +72,29 @@ function mapSource(source: ApiScrapingSource): ScrapingSource {
     scraperKind: source.scraper_kind as ScrapingSource['scraperKind'],
     scraperClass: source.scraper_class,
   };
+}
+
+function mergeSourceHealth(sources: ScrapingSource[], healthRows: ApiScrapingSourceHealth[]): ScrapingSource[] {
+  const healthById = new Map(healthRows.map((row) => [String(row.id), row]));
+  return sources.map((source) => {
+    const health = healthById.get(source.id);
+    if (!health) return source;
+    return {
+      ...source,
+      healthStatus: health.health_status as ScrapingSource['healthStatus'],
+      healthScore: health.health_score,
+      healthReason: health.health_reason,
+      access: health.access,
+      productionReady: health.production_ready,
+      lastJobStatus: health.last_job_status,
+      itemsFoundLastRun: health.items_found_last_run,
+      itemsNewLastRun: health.items_new_last_run,
+      totalOpportunitiesCount: health.total_opportunities ?? source.totalOpportunitiesCount,
+      importedOpportunities: health.imported_opportunities,
+      lastOpportunityAt: toDate(health.last_opportunity_at),
+      errorMessage: health.last_error || source.errorMessage,
+    };
+  });
 }
 
 function mapOpportunity(opp: ApiScrapedOpportunity): ScrapedOpportunity {
@@ -144,6 +169,19 @@ function formatScraperKind(kind: string): string {
   return labels[kind] || kind;
 }
 
+function formatHealthStatus(status: string): string {
+  const labels: Record<string, string> = {
+    healthy: 'Saudaveis',
+    empty: 'Sem resultados',
+    failing: 'Com erro',
+    blocked: 'Bloqueadas',
+    paused: 'Pausadas',
+    disabled: 'Desativadas',
+    unknown: 'Sem diagnostico',
+  };
+  return labels[status] || status;
+}
+
 function isReadyToImport(opp: ScrapedOpportunity): boolean {
   return opp.status === 'new' && Boolean(opp.cvEligible) && !opp.importedOpportunityId && dataQualityScore(opp) >= 45;
 }
@@ -159,6 +197,25 @@ function SourceStatusBadge({ status }: { status: string }) {
     disabled: { label: 'Desativado', class: 'bg-slate-100 text-slate-500 border-slate-200', icon: AlertTriangle },
   };
   const cfg = configs[status] || configs.error;
+  const Icon = cfg.icon;
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${cfg.class}`}>
+      <Icon className="h-3 w-3" />{cfg.label}
+    </span>
+  );
+}
+
+function SourceHealthBadge({ status }: { status?: string }) {
+  const configs: Record<string, { label: string; class: string; icon: typeof CheckCircle2 }> = {
+    healthy: { label: 'Saudavel', class: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: ShieldCheck },
+    empty: { label: 'Sem resultados', class: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
+    failing: { label: 'Com erro', class: 'bg-red-100 text-red-700 border-red-200', icon: AlertTriangle },
+    blocked: { label: 'Bloqueada', class: 'bg-slate-100 text-slate-700 border-slate-200', icon: Lock },
+    paused: { label: 'Pausada', class: 'bg-slate-100 text-slate-700 border-slate-200', icon: Pause },
+    disabled: { label: 'Desativada', class: 'bg-slate-100 text-slate-500 border-slate-200', icon: AlertTriangle },
+    unknown: { label: 'Sem diagnostico', class: 'bg-blue-100 text-blue-700 border-blue-200', icon: Activity },
+  };
+  const cfg = configs[status || 'unknown'] || configs.unknown;
   const Icon = cfg.icon;
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${cfg.class}`}>
@@ -273,6 +330,7 @@ function SourcesTab({
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [kindFilter, setKindFilter] = useState('');
+  const [healthFilter, setHealthFilter] = useState('');
   const [editForm, setEditForm] = useState({
     name: '',
     url: '',
@@ -281,12 +339,19 @@ function SourcesTab({
   });
   const categories = Array.from(new Set(sources.map((s) => s.sourceCategory || s.sourceType).filter(Boolean))).sort();
   const kinds = Array.from(new Set(sources.map((s) => s.scraperKind || 'generic').filter(Boolean))).sort();
+  const healthOptions = Array.from(new Set(sources.map((s) => s.healthStatus || 'unknown'))).sort();
+  const healthCounts = sources.reduce<Record<string, number>>((acc, source) => {
+    const key = source.healthStatus || 'unknown';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
   const filtered = sources.filter((s) => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.organization.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = !categoryFilter || (s.sourceCategory || s.sourceType) === categoryFilter;
     const matchesKind = !kindFilter || (s.scraperKind || 'generic') === kindFilter;
-    return matchesSearch && matchesCategory && matchesKind;
+    const matchesHealth = !healthFilter || (s.healthStatus || 'unknown') === healthFilter;
+    return matchesSearch && matchesCategory && matchesKind && matchesHealth;
   });
   const groupedSources = filtered.reduce<Record<string, ScrapingSource[]>>((acc, source) => {
     const key = source.sourceCategory || source.sourceType || 'other';
@@ -308,6 +373,22 @@ function SourcesTab({
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+        {['healthy', 'empty', 'failing', 'blocked', 'paused', 'unknown'].map((status) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => setHealthFilter((current) => current === status ? '' : status)}
+            className={`flex items-center justify-between rounded-md border px-3 py-2 text-left text-xs transition-colors ${
+              healthFilter === status ? 'border-primary bg-primary/5 text-primary' : 'bg-background hover:bg-muted'
+            }`}
+          >
+            <SourceHealthBadge status={status} />
+            <span className="font-semibold">{healthCounts[status] || 0}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -320,6 +401,10 @@ function SourcesTab({
         <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
           <option value="">Todos tipos</option>
           {kinds.map((kind) => <option key={kind} value={kind}>{formatScraperKind(kind)}</option>)}
+        </select>
+        <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={healthFilter} onChange={(e) => setHealthFilter(e.target.value)}>
+          <option value="">Todos diagnosticos</option>
+          {healthOptions.map((health) => <option key={health} value={health}>{formatHealthStatus(health)}</option>)}
         </select>
         <Button size="sm" onClick={onAdd}><Plus className="h-4 w-4 mr-1" />Nova Fonte</Button>
       </div>
@@ -368,6 +453,7 @@ function SourcesTab({
                   <div className="flex items-center gap-2">
                     <h4 className="font-semibold text-sm">{source.name}</h4>
                     <SourceStatusBadge status={source.status} />
+                    <SourceHealthBadge status={source.healthStatus} />
                   </div>
                   <div className="flex items-center gap-1.5 mt-1">
                     <span className="text-xs px-2 py-0.5 rounded border bg-muted">{formatScraperKind(source.scraperKind || 'generic')}</span>
@@ -378,20 +464,51 @@ function SourcesTab({
                   </a>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-muted-foreground">{source.totalOpportunitiesCount}</p>
-                  <p className="text-xs text-muted-foreground">oportunidades</p>
+                  <p className={`text-lg font-bold ${
+                    (source.healthScore || 0) >= 75 ? 'text-emerald-600' :
+                    (source.healthScore || 0) >= 45 ? 'text-amber-600' :
+                    'text-red-600'
+                  }`}>{source.healthScore ?? source.successRate}%</p>
+                  <p className="text-xs text-muted-foreground">health</p>
                 </div>
               </div>
 
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Taxa de sucesso:</span>
-                <span className={`font-medium ${source.successRate >= 90 ? 'text-emerald-600' : source.successRate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>{source.successRate}%</span>
+                <span className="text-muted-foreground">Qualidade da fonte:</span>
+                <span className={`font-medium ${
+                  (source.healthScore || 0) >= 75 ? 'text-emerald-600' :
+                  (source.healthScore || 0) >= 45 ? 'text-amber-600' :
+                  'text-red-600'
+                }`}>{source.healthScore ?? source.successRate}/100</span>
               </div>
-              <Progress value={source.successRate} className="h-1.5" />
+              <Progress value={source.healthScore ?? source.successRate} className="h-1.5" />
+
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="rounded-md bg-muted p-2">
+                  <p className="font-semibold">{source.totalOpportunitiesCount}</p>
+                  <p className="text-muted-foreground">total</p>
+                </div>
+                <div className="rounded-md bg-muted p-2">
+                  <p className="font-semibold">{source.itemsNewLastRun ?? source.newOpportunitiesCount}</p>
+                  <p className="text-muted-foreground">novas</p>
+                </div>
+                <div className="rounded-md bg-muted p-2">
+                  <p className="font-semibold">{source.importedOpportunities ?? 0}</p>
+                  <p className="text-muted-foreground">importadas</p>
+                </div>
+              </div>
+
+              {source.healthReason && (
+                <div className="text-xs text-muted-foreground rounded-md border bg-muted/40 p-2">
+                  {source.healthReason}
+                </div>
+              )}
 
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 {source.lastScrapedAt ? `Ultimo scrape: ${source.lastScrapedAt.toLocaleDateString('pt-PT')}` : 'Nunca scrapeado'}
+                {source.productionReady && <span className="text-emerald-600 font-medium">Producao</span>}
+                {source.access && source.access !== 'public' && <span className="text-amber-700 font-medium">{source.access}</span>}
               </div>
 
               {source.errorMessage && (
@@ -734,22 +851,30 @@ export function ScrapingPage() {
   const [savingSource, setSavingSource] = useState(false);
   const [importingReady, setImportingReady] = useState(false);
 
-  const refreshSources = useCallback(async () => {
-    const response = await apiGetScrapingSources();
-    setSources(response.results.map(mapSource));
+  const loadSourcesWithHealth = useCallback(async () => {
+    const [sourcesResponse, healthResponse] = await Promise.all([
+      apiGetScrapingSources(),
+      apiGetScrapingSourceHealth(),
+    ]);
+    return mergeSourceHealth(sourcesResponse.results.map(mapSource), healthResponse.results);
   }, []);
+
+  const refreshSources = useCallback(async () => {
+    setSources(await loadSourcesWithHealth());
+  }, [loadSourcesWithHealth]);
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [sourcesResponse, opportunitiesResponse, jobsResponse, statsResponse] = await Promise.all([
+      const [sourcesResponse, healthResponse, opportunitiesResponse, jobsResponse, statsResponse] = await Promise.all([
         apiGetScrapingSources(),
+        apiGetScrapingSourceHealth(),
         apiGetScrapedOpportunities(),
         apiGetScrapingJobs(),
         apiGetScrapingStats(),
       ]);
-      setSources(sourcesResponse.results.map(mapSource));
+      setSources(mergeSourceHealth(sourcesResponse.results.map(mapSource), healthResponse.results));
       setOpportunities(opportunitiesResponse.results.map(mapOpportunity));
       setJobs(jobsResponse.results.map(mapJob));
       setStats(statsResponse);
