@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.core.permissions import IsConsultantOrManager, IsManager
 from apps.scraping.services.readiness import filter_ready_to_import, get_import_readiness
+from apps.scraping.services.source_health import get_sources_health
 
 
 class _LargePage(PageNumberPagination):
@@ -112,6 +113,18 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
             'ready_to_import': ready_to_import,
             'avg_quality_score': round(avg_quality, 2),
             'success_rate': avg_success_rate,
+        })
+
+    @action(detail=False, methods=['get'])
+    def health(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+        status_filter = request.query_params.get('health_status')
+        data = get_sources_health(queryset)
+        if status_filter:
+            data = [item for item in data if item['health_status'] == status_filter]
+        return Response({
+            'count': len(data),
+            'results': data,
         })
 
 
