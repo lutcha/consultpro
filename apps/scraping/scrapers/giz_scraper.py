@@ -27,20 +27,27 @@ class GIZScraper(BaseScraper):
     SECTOR_SELECTORS = ['.sector', '.category', '[class*="sector"]', '[class*="category"]']
 
     def fetch(self, url: Optional[str] = None, **kwargs) -> str:
-        target = url or self.config.get('url', self.DEFAULT_URL)
+        target = url or self.config.get('url') or self.source.url or self.DEFAULT_URL
+        if not self._check_robots_txt(target):
+            raise PermissionError(f"robots.txt disallows: {target}")
         response = self._http_get(target)
         return response.text
 
     def parse(self, raw_data: str) -> List[Dict[str, Any]]:
         soup = BeautifulSoup(raw_data or '', 'lxml')
-        articles = soup.find_all('article')
-        if len(articles) == 0:
+        items = soup.find_all('article')
+        if not items:
+            for selector in self.config.get('item_selectors', ['table tr', 'div.tender', 'div.notice', 'li']):
+                items = soup.select(selector)
+                if items:
+                    break
+        if len(items) == 0:
             logging.warning("GIZ: JS-heavy page detected — Playwright may be required")
             return []
 
         opportunities = []
         seen_ids = set()
-        for article in articles:
+        for article in items:
             try:
                 item = self._parse_article(article)
                 if item and item['external_id'] not in seen_ids:
@@ -63,9 +70,10 @@ class GIZScraper(BaseScraper):
             return None
 
         link_elem = title_elem if getattr(title_elem, 'name', None) == 'a' else article.select_one('a[href]')
-        detail_url = self.DEFAULT_URL
+        base_url = self.config.get('url') or self.source.url or self.BASE_URL
+        detail_url = base_url
         if link_elem and link_elem.get('href'):
-            detail_url = urljoin(self.BASE_URL, link_elem['href'])
+            detail_url = urljoin(base_url, link_elem['href'])
 
         country = self._extract_selector_text(article, self.COUNTRY_SELECTORS)
         sector = self._extract_selector_text(article, self.SECTOR_SELECTORS)
