@@ -6,7 +6,8 @@ from apps.core.permissions import IsConsultantOrManager
 
 from .models import KnowledgeAsset
 from .serializers import KnowledgeAssetSerializer, KnowledgeSearchResultSerializer
-from .services import index_knowledge_assets, search_knowledge
+from .services import SUPPORTED_INDEX_SOURCE_CHOICES, run_knowledge_reindex, search_knowledge
+from .tasks import index_knowledge_assets_task
 
 
 class KnowledgeAssetViewSet(viewsets.ModelViewSet):
@@ -51,7 +52,25 @@ class KnowledgeAssetViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def index(self, request):
         source = request.data.get('source', 'all')
-        if source not in ('all', 'proposals', 'projects', 'curriculum'):
+        async_requested = bool(request.data.get('async', False))
+        if source not in SUPPORTED_INDEX_SOURCE_CHOICES:
             return Response({'detail': 'Unsupported source.'}, status=status.HTTP_400_BAD_REQUEST)
-        assets = index_knowledge_assets(source=source)
-        return Response({'indexed': len(assets), 'source': source}, status=status.HTTP_200_OK)
+        if async_requested:
+            task = index_knowledge_assets_task.delay(source=source)
+            return Response(
+                {
+                    'queued': True,
+                    'task_id': task.id,
+                    'source': source,
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+        run = run_knowledge_reindex(source=source, triggered_by=request.user)
+        return Response(
+            {
+                'indexed': run.indexed_count,
+                'source': source,
+                'run': run.as_dict(),
+            },
+            status=status.HTTP_200_OK,
+        )

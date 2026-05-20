@@ -2,13 +2,14 @@ import re
 from collections import Counter
 from decimal import Decimal
 
+from django.utils import timezone
 from django.db.models import Q
 
 from apps.curriculum.models import Curriculum
 from apps.projects.models import Project
 from apps.proposals.models import Proposal, ProposalSection
 
-from .models import KnowledgeAsset
+from .models import KnowledgeAsset, KnowledgeIndexRun
 
 
 STOPWORDS = {
@@ -16,6 +17,9 @@ STOPWORDS = {
     'for', 'from', 'in', 'no', 'na', 'of', 'on', 'or', 'para', 'por', 'the', 'to',
     'with', 'com', 'que',
 }
+
+SUPPORTED_INDEX_SOURCES = ('proposals', 'projects', 'curriculum')
+SUPPORTED_INDEX_SOURCE_CHOICES = ('all', *SUPPORTED_INDEX_SOURCES)
 
 
 def tokenize(value):
@@ -196,3 +200,61 @@ def index_knowledge_assets(source='all'):
         for curriculum in Curriculum.objects.select_related('user'):
             created.append(upsert_asset_from_curriculum(curriculum))
     return created
+
+
+def _sources_for_index(source):
+    if source not in SUPPORTED_INDEX_SOURCE_CHOICES:
+        raise ValueError(f'Unsupported knowledge index source: {source}')
+    if source == 'all':
+        return SUPPORTED_INDEX_SOURCES
+    return (source,)
+
+
+def run_knowledge_reindex(source='all', triggered_by=None, celery_task_id=''):
+    run = KnowledgeIndexRun.objects.create(
+        source=source,
+        status='running',
+        celery_task_id=celery_task_id or '',
+        triggered_by=triggered_by if getattr(triggered_by, 'is_authenticated', False) else None,
+    )
+    stats = {'sources': {}}
+    errors = []
+    indexed_count = 0
+
+    try:
+        sources = _sources_for_index(source)
+    except ValueError as exc:
+        run.status = 'failed'
+        run.errors = [{'source': source, 'error': str(exc)}]
+        run.error_count = 1
+        run.completed_at = timezone.now()
+        run.save(update_fields=['status', 'errors', 'error_count', 'completed_at'])
+        raise
+
+    for source_name in sources:
+        try:
+            assets = index_knowledge_assets(source=source_name)
+            count = len(assets)
+            indexed_count += count
+            stats['sources'][source_name] = {'indexed': count}
+        except Exception as exc:  # pragma: no cover - defensive boundary for ops visibility
+            errors.append({'source': source_name, 'error': str(exc)})
+            stats['sources'][source_name] = {'indexed': 0, 'error': str(exc)}
+
+    run.indexed_count = indexed_count
+    run.error_count = len(errors)
+    run.stats = stats
+    run.errors = errors
+    run.status = 'completed' if not errors else 'partial' if indexed_count else 'failed'
+    run.completed_at = timezone.now()
+    run.save(
+        update_fields=[
+            'indexed_count',
+            'error_count',
+            'stats',
+            'errors',
+            'status',
+            'completed_at',
+        ]
+    )
+    return run

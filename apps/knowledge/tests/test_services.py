@@ -1,7 +1,7 @@
 from django.test import TestCase
 
-from apps.knowledge.models import KnowledgeAsset
-from apps.knowledge.services import index_knowledge_assets, search_knowledge
+from apps.knowledge.models import KnowledgeAsset, KnowledgeIndexRun
+from apps.knowledge.services import index_knowledge_assets, run_knowledge_reindex, search_knowledge
 from apps.proposals.tests.factories import ProposalFactory, ProposalSectionFactory
 
 
@@ -37,3 +37,15 @@ class KnowledgeServiceTests(TestCase):
         self.assertEqual(KnowledgeAsset.objects.count(), first_count)
         self.assertTrue(KnowledgeAsset.objects.filter(source_model='Proposal', source_id=str(proposal.id)).exists())
         self.assertTrue(KnowledgeAsset.objects.filter(source_model='ProposalSection').exists())
+
+    def test_run_knowledge_reindex_records_counts_and_source_stats(self):
+        proposal = ProposalFactory()
+        ProposalSectionFactory(proposal=proposal, title='Staffing', content='Senior experts and CVs')
+
+        run = run_knowledge_reindex(source='proposals')
+
+        self.assertEqual(run.status, 'completed')
+        self.assertEqual(run.error_count, 0)
+        self.assertGreaterEqual(run.indexed_count, 2)
+        self.assertEqual(run.stats['sources']['proposals']['indexed'], run.indexed_count)
+        self.assertEqual(KnowledgeIndexRun.objects.get(id=run.id).source, 'proposals')
