@@ -36,6 +36,8 @@ class KnowledgeViewTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(response.data['indexed'], 2)
+        self.assertEqual(response.data['run']['status'], 'completed')
+        self.assertEqual(response.data['run']['source'], 'proposals')
 
     def test_index_endpoint_rejects_unknown_source(self):
         response = self.client.post(reverse('knowledge-asset-index'), {'source': 'unknown'}, format='json')

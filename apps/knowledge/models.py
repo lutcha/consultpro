@@ -60,3 +60,59 @@ class KnowledgeAsset(models.Model):
 
     def __str__(self):
         return f'{self.asset_type}: {self.title}'
+
+
+class KnowledgeIndexRun(models.Model):
+    STATUS_CHOICES = [
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('partial', 'Partial'),
+        ('failed', 'Failed'),
+    ]
+    SOURCE_CHOICES = [
+        ('all', 'All'),
+        ('proposals', 'Proposals'),
+        ('projects', 'Projects'),
+        ('curriculum', 'Curriculum'),
+    ]
+
+    source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default='all', db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='running', db_index=True)
+    indexed_count = models.PositiveIntegerField(default=0)
+    error_count = models.PositiveIntegerField(default=0)
+    stats = models.JSONField(default=dict, blank=True)
+    errors = models.JSONField(default=list, blank=True)
+    celery_task_id = models.CharField(max_length=255, blank=True)
+    triggered_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='knowledge_index_runs',
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['source', 'status']),
+            models.Index(fields=['started_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.source} reindex {self.status} ({self.indexed_count})'
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'source': self.source,
+            'status': self.status,
+            'indexed_count': self.indexed_count,
+            'error_count': self.error_count,
+            'stats': self.stats,
+            'errors': self.errors,
+            'celery_task_id': self.celery_task_id,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+        }
