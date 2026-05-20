@@ -1,7 +1,8 @@
 from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from apps.users.models import User, Certification
+from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from apps.users.models import User, Certification, UserInvitation
 
 
 class CommaSeparatedWidget(forms.TextInput):
@@ -18,7 +19,8 @@ class CommaSeparatedWidget(forms.TextInput):
         return [item.strip() for item in raw.split(',') if item.strip()]
 
 
-class UserAdminForm(forms.ModelForm):
+class CustomUserCreationForm(UserCreationForm):
+    """Creation form that uses email as the primary identifier."""
     skills = forms.CharField(
         widget=CommaSeparatedWidget(attrs={'style': 'width:500px', 'placeholder': 'ex: Saúde Pública, Gestão de Projectos, M&E'}),
         required=False,
@@ -30,7 +32,44 @@ class UserAdminForm(forms.ModelForm):
         help_text='Separados por vírgula',
     )
 
-    class Meta:
+    class Meta(UserCreationForm.Meta):
+        model = User
+        fields = ('email', 'username', 'first_name', 'last_name', 'role', 'availability')
+
+    def clean_skills(self):
+        val = self.cleaned_data.get('skills', '')
+        if isinstance(val, list):
+            return val
+        return [s.strip() for s in val.split(',') if s.strip()]
+
+    def clean_languages(self):
+        val = self.cleaned_data.get('languages', '')
+        if isinstance(val, list):
+            return val
+        return [s.strip() for s in val.split(',') if s.strip()]
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.skills = self.cleaned_data.get('skills') or []
+        user.languages = self.cleaned_data.get('languages') or []
+        if commit:
+            user.save()
+        return user
+
+
+class UserAdminForm(UserChangeForm):
+    skills = forms.CharField(
+        widget=CommaSeparatedWidget(attrs={'style': 'width:500px', 'placeholder': 'ex: Saúde Pública, Gestão de Projectos, M&E'}),
+        required=False,
+        help_text='Separados por vírgula',
+    )
+    languages = forms.CharField(
+        widget=CommaSeparatedWidget(attrs={'style': 'width:500px', 'placeholder': 'ex: Português, Inglês, Francês'}),
+        required=False,
+        help_text='Separados por vírgula',
+    )
+
+    class Meta(UserChangeForm.Meta):
         model = User
         fields = '__all__'
 
@@ -48,8 +87,10 @@ class UserAdminForm(forms.ModelForm):
 
 
 @admin.register(User)
-class UserAdmin(admin.ModelAdmin):
+class UserAdmin(BaseUserAdmin):
+    add_form = CustomUserCreationForm
     form = UserAdminForm
+
     list_display = ['email', 'get_full_name', 'role', 'availability', 'is_active', 'date_joined']
     list_filter = ['role', 'availability', 'is_active', 'is_staff']
     search_fields = ['email', 'username', 'first_name', 'last_name']
@@ -75,25 +116,21 @@ class UserAdmin(admin.ModelAdmin):
 
     add_fieldsets = (
         ('Identificação', {
-            'fields': ('email', 'username', 'first_name', 'last_name', 'password1', 'password2')
+            'classes': ('wide',),
+            'fields': ('email', 'username', 'first_name', 'last_name', 'password1', 'password2'),
         }),
         ('Perfil', {
-            'fields': ('role', 'availability', 'skills', 'languages')
+            'fields': ('role', 'availability', 'skills', 'languages'),
         }),
     )
 
-    def get_fieldsets(self, request, obj=None):
-        if not obj:
-            return self.add_fieldsets
-        return self.fieldsets
 
-    def get_form(self, request, obj=None, **kwargs):
-        if not obj:
-            kwargs['fields'] = [
-                'email', 'username', 'first_name', 'last_name',
-                'password1', 'password2', 'role', 'availability', 'skills', 'languages'
-            ]
-        return super().get_form(request, obj, **kwargs)
+@admin.register(UserInvitation)
+class UserInvitationAdmin(admin.ModelAdmin):
+    list_display = ['email', 'role', 'invited_by', 'is_used', 'expires_at', 'created_at']
+    list_filter = ['role', 'is_used']
+    search_fields = ['email', 'invited_by__email']
+    readonly_fields = ['token', 'created_at', 'accepted_at']
 
 
 @admin.register(Certification)
