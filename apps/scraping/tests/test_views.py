@@ -152,6 +152,34 @@ class ScrapedOpportunityImportTests(APITestCase):
         ids = [item['id'] for item in response.data['results']]
         self.assertLess(ids.index(high_quality.id), ids.index(low_quality.id))
 
+    def test_list_prioritizes_actionable_records_before_imported_or_expired(self):
+        imported = self._create_scraped_opportunity(
+            external_id='rank-imported',
+            external_url='https://example.org/tenders/rank-imported',
+            status='imported',
+            data_quality_score='0.99',
+        )
+        expired = self._create_scraped_opportunity(
+            external_id='rank-expired',
+            external_url='https://example.org/tenders/rank-expired',
+            deadline=timezone.now() - timezone.timedelta(days=1),
+            data_quality_score='0.98',
+        )
+        actionable = self._create_scraped_opportunity(
+            external_id='rank-actionable',
+            external_url='https://example.org/tenders/rank-actionable',
+            deadline=timezone.now() + timezone.timedelta(days=20),
+            data_quality_score='0.60',
+        )
+
+        url = reverse('scraping:scraped-opportunity-list')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [item['id'] for item in response.data['results']]
+        self.assertLess(ids.index(actionable.id), ids.index(expired.id))
+        self.assertLess(ids.index(actionable.id), ids.index(imported.id))
+
     def test_import_ready_imports_only_ready_records(self):
         ready = self._create_scraped_opportunity(
             external_id='ready-import',
