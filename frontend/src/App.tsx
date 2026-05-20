@@ -25,6 +25,7 @@ import {
   TeamsPage,
   CurriculumPage,
   Analytics,
+  AcceptInvitation,
 } from '@/pages';
 
 // Protected Route wrapper
@@ -45,6 +46,7 @@ function App() {
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/accept-invitation/:token" element={<AcceptInvitation />} />
 
         {/* Protected Dashboard Routes */}
         <Route
