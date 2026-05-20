@@ -389,6 +389,16 @@ export interface ScrapingSource {
   sourceCategory?: string;
   scraperKind?: 'dedicated' | 'generic' | 'api' | 'rss';
   scraperClass?: string;
+  healthStatus?: 'healthy' | 'empty' | 'failing' | 'blocked' | 'paused' | 'disabled' | 'unknown';
+  healthScore?: number;
+  healthReason?: string;
+  access?: 'public' | 'restricted_login' | 'subscription' | string;
+  productionReady?: boolean;
+  lastJobStatus?: string | null;
+  itemsFoundLastRun?: number;
+  itemsNewLastRun?: number;
+  importedOpportunities?: number;
+  lastOpportunityAt?: Date;
 }
 
 export interface ScrapedOpportunity {

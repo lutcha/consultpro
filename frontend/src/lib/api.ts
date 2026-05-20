@@ -1899,6 +1899,31 @@ export interface ApiScrapingSource {
   scraper_class?: string;
 }
 
+export interface ApiScrapingSourceHealth {
+  id: number;
+  name: string;
+  organization: string;
+  url: string;
+  source_type: string;
+  status: string;
+  health_status: string;
+  health_score: number;
+  health_reason: string;
+  access: string;
+  scraper_class: string;
+  scrape_frequency: string;
+  last_scraped_at: string | null;
+  last_job_status: string | null;
+  last_job_at: string | null;
+  last_error: string;
+  items_found_last_run: number;
+  items_new_last_run: number;
+  total_opportunities: number;
+  imported_opportunities: number;
+  last_opportunity_at: string | null;
+  production_ready: boolean;
+}
+
 export interface ApiScrapedOpportunity {
   id: number;
   source: number;
@@ -1950,6 +1975,17 @@ export interface ApiScrapingAlert {
 
 export async function apiGetScrapingSources(): Promise<PaginatedResponse<ApiScrapingSource>> {
   return apiRequest<PaginatedResponse<ApiScrapingSource>>('/scraping/sources/');
+}
+
+export async function apiGetScrapingSourceHealth(params?: {
+  health_status?: string;
+  search?: string;
+}): Promise<{ count: number; results: ApiScrapingSourceHealth[] }> {
+  const query = new URLSearchParams();
+  if (params?.health_status) query.set('health_status', params.health_status);
+  if (params?.search) query.set('search', params.search);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return apiRequest<{ count: number; results: ApiScrapingSourceHealth[] }>(`/scraping/sources/health/${suffix}`);
 }
 
 export async function apiCreateScrapingSource(data: Partial<ApiScrapingSource>): Promise<ApiScrapingSource> {
