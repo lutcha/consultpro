@@ -24,6 +24,7 @@ from .scrapers.registry import get_scraper_class
 from .services.deadline_validator import DeadlineValidator
 from .services.cv_eligibility import CaboVerdeEligibilityValidator
 from .services.deduplication import SmartDeduplicator
+from .services.quality import assess_scraped_item, score_quality_adjustment
 
 logger = logging.getLogger(__name__)
 
@@ -200,13 +201,27 @@ def _process_single_item(raw_item, source, batch_id, stats, verify_ssl: bool = T
     """
     Process a single scraped item through the full validation pipeline.
     """
-    title = raw_item.get('title', '')
+    quality_assessment = assess_scraped_item(raw_item, source.name)
+    title = quality_assessment.title
+    raw_item = {
+        **raw_item,
+        'title': title,
+        'external_id': quality_assessment.external_id,
+    }
     description = raw_item.get('description', '')
-    external_id = raw_item.get('external_id', '')
+    external_id = quality_assessment.external_id
     external_url = raw_item.get('external_url', source.url)
 
     # === Phase 1: Raw data hashing for quick duplicate check ===
     content_hash = SmartDeduplicator.compute_content_hash(raw_item)
+
+    if not quality_assessment.valid:
+        _create_rejected_record(
+            source, external_id, external_url, title, raw_item,
+            content_hash, {'errors': [], 'warnings': []}, batch_id,
+            rejection_reason=quality_assessment.rejection_reason
+        )
+        return 'rejected'
 
     # Quick hash duplicate check
     existing_hash = ScrapedOpportunity.objects.filter(
@@ -276,6 +291,8 @@ def _process_single_item(raw_item, source, batch_id, stats, verify_ssl: bool = T
         'deadline_normalized': bool(normalized_deadline),
         'eligibility_evaluated': True,
         'content_hashed': True,
+        'title_quality_valid': quality_assessment.valid,
+        'quality_warnings': quality_assessment.warnings,
         'deep_content_status': deep_content.get('status', 'skipped'),
         'deep_content_length': deep_content.get('length', 0),
         'processed_at': timezone.now().isoformat(),
@@ -287,9 +304,10 @@ def _process_single_item(raw_item, source, batch_id, stats, verify_ssl: bool = T
 
     # Compute data quality score
     quality_score = _compute_quality_score(
-        {**raw_item, 'description': analysis_description},
+        {**raw_item, 'description': analysis_description, 'deep_content_text': deep_text},
         deadline_validation,
         eligibility,
+        quality_assessment,
     )
 
     # === Phase 6: Unified Upsert ===
@@ -618,7 +636,7 @@ def _create_rejected_record(source, external_id, external_url, title, raw_item,
     )
 
 
-def _compute_quality_score(raw_item, deadline_validation, eligibility) -> float:
+def _compute_quality_score(raw_item, deadline_validation, eligibility, quality_assessment=None) -> float:
     """Compute a 0.00-1.00 data quality score."""
     score = 1.0
 
@@ -645,6 +663,9 @@ def _compute_quality_score(raw_item, deadline_validation, eligibility) -> float:
         score -= 0.1
     elif desc_len < 300:
         score -= 0.05
+
+    if quality_assessment:
+        score += score_quality_adjustment(raw_item, quality_assessment)
 
     return round(max(0.0, min(1.0, score)), 2)
 

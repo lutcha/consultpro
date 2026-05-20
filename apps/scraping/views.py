@@ -139,7 +139,7 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
     ]
     search_fields = ['title', 'organization', 'client', 'external_id']
     ordering_fields = ['deadline', 'scraped_at', 'value', 'data_quality_score']
-    ordering = ['-scraped_at']
+    ordering = ['-data_quality_score', 'deadline', '-scraped_at']
 
     def get_queryset(self):
         queryset = super().get_queryset()
