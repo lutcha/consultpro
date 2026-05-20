@@ -2007,8 +2007,21 @@ export async function apiToggleScrapingSource(id: number): Promise<{ status: str
   });
 }
 
-export async function apiGetScrapedOpportunities(): Promise<PaginatedResponse<ApiScrapedOpportunity>> {
-  return apiRequest<PaginatedResponse<ApiScrapedOpportunity>>('/scraping/opportunities/');
+export async function apiGetScrapedOpportunities(params?: {
+  country?: string;
+  sector?: string;
+  status?: string;
+  page_size?: number;
+}): Promise<PaginatedResponse<ApiScrapedOpportunity>> {
+  const query = new URLSearchParams();
+  if (params?.country) query.set('country', params.country);
+  if (params?.sector) query.set('sector', params.sector);
+  if (params?.status) query.set('status', params.status);
+  if (params?.page_size) query.set('page_size', String(params.page_size));
+  const qs = query.toString();
+  return apiRequest<PaginatedResponse<ApiScrapedOpportunity>>(
+    qs ? `/scraping/opportunities/?${qs}` : '/scraping/opportunities/',
+  );
 }
 
 export async function apiImportScrapedOpportunity(id: number): Promise<{ opportunity_id: number; status: string }> {

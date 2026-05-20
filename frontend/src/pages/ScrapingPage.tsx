@@ -2,7 +2,7 @@
 // SCRAPING PAGE - Web Scraping / Fontes
 // ============================================
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Globe, Play, Pause, Settings, Plus, Search, RefreshCw,
   CheckCircle2, AlertTriangle, Clock, Download, ArrowRight,
@@ -550,6 +550,10 @@ interface OpportunitiesTabProps {
   opportunities: ScrapedOpportunity[];
   busyOpportunityIds: Set<string>;
   importingReady: boolean;
+  sectorFilter: string;
+  countryFilter: string;
+  onSectorChange: (v: string) => void;
+  onCountryChange: (v: string) => void;
   onImport: (id: string) => void;
   onImportReady: () => void;
   onIgnore: (id: string) => void;
@@ -596,18 +600,15 @@ const KNOWN_COUNTRIES = [
   'Zambia', 'Zimbabwe',
 ];
 
-function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, onImport, onImportReady, onIgnore }: OpportunitiesTabProps) {
+function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, sectorFilter, countryFilter, onSectorChange, onCountryChange, onImport, onImportReady, onIgnore }: OpportunitiesTabProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
-  const [sectorFilter, setSectorFilter] = useState<string>('');
-  const [countryFilter, setCountryFilter] = useState<string>('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [qualityMin, setQualityMin] = useState<number>(0);
 
   const dataSectors = Array.from(new Set(opportunities.map((o) => o.sector).filter(Boolean))) as string[];
   const dataCountries = Array.from(new Set(opportunities.map((o) => o.country).filter(Boolean))) as string[];
 
-  // Show all known sectors/countries plus any extra values from data (no filtering by match count)
   const sectors = Array.from(new Set([...KNOWN_SECTORS, ...dataSectors])).sort();
   const countries = Array.from(new Set([...KNOWN_COUNTRIES, ...dataCountries])).sort();
 
@@ -616,12 +617,10 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, o
     const matchesSearch = title.toLowerCase().includes(search.toLowerCase()) ||
       (o.organization || '').toLowerCase().includes(search.toLowerCase());
     const matchesStatus = !statusFilter || (statusFilter === 'ready' ? isReadyToImport(o) : o.status === statusFilter);
-    const matchesSector = !sectorFilter || o.sector === sectorFilter;
-    const matchesCountry = !countryFilter || o.country === countryFilter;
     const matchesQuality = qualityMin === 0 || dataQualityScore(o) >= qualityMin;
     // filter out navigation garbage (very short or very long titles that are not real opportunities)
     const titleOk = title.length >= 8 && title.length <= 400;
-    return matchesSearch && matchesStatus && matchesSector && matchesCountry && matchesQuality && titleOk;
+    return matchesSearch && matchesStatus && matchesQuality && titleOk;
   });
 
   const newCount = filtered.filter((o) => o.status === 'new').length;
@@ -645,11 +644,11 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, o
             <option value="expired">Expiradas</option>
             <option value="rejected">Rejeitadas</option>
           </select>
-          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={sectorFilter} onChange={(e) => setSectorFilter(e.target.value)}>
+          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={sectorFilter} onChange={(e) => onSectorChange(e.target.value)}>
             <option value="">Todos Sectores</option>
             {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={countryFilter} onChange={(e) => onCountryChange(e.target.value)}>
             <option value="">Todos Países</option>
             {countries.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -666,7 +665,7 @@ function OpportunitiesTab({ opportunities, busyOpportunityIds, importingReady, o
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{filtered.length} oportunidades {newCount > 0 && <span className="text-blue-600 font-medium">· {newCount} novas</span>}</span>
           {(statusFilter || sectorFilter || countryFilter || qualityMin > 0 || search) && (
-            <button className="text-primary hover:underline" onClick={() => { setStatusFilter(''); setSectorFilter(''); setCountryFilter(''); setQualityMin(0); setSearch(''); }}>
+            <button className="text-primary hover:underline" onClick={() => { setStatusFilter(''); onSectorChange(''); onCountryChange(''); setQualityMin(0); setSearch(''); }}>
               Limpar filtros
             </button>
           )}
@@ -850,6 +849,9 @@ export function ScrapingPage() {
   const [busyOpportunityIds, setBusyOpportunityIds] = useState<Set<string>>(new Set());
   const [savingSource, setSavingSource] = useState(false);
   const [importingReady, setImportingReady] = useState(false);
+  const [oppSectorFilter, setOppSectorFilter] = useState('');
+  const [oppCountryFilter, setOppCountryFilter] = useState('');
+  const isFirstOppLoad = useRef(true);
 
   const loadSourcesWithHealth = useCallback(async () => {
     const [sourcesResponse, healthResponse] = await Promise.all([
@@ -887,9 +889,30 @@ export function ScrapingPage() {
     }
   }, []);
 
+  const loadOpportunities = useCallback(async (country: string, sector: string) => {
+    try {
+      const params: { country?: string; sector?: string } = {};
+      if (country) params.country = country;
+      if (sector) params.sector = sector;
+      const response = await apiGetScrapedOpportunities(params);
+      setOpportunities(response.results.map(mapOpportunity));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao filtrar oportunidades';
+      toast.error(message);
+    }
+  }, []);
+
   useEffect(() => {
     refreshAll();
   }, [refreshAll]);
+
+  useEffect(() => {
+    if (isFirstOppLoad.current) {
+      isFirstOppLoad.current = false;
+      return;
+    }
+    loadOpportunities(oppCountryFilter, oppSectorFilter);
+  }, [oppCountryFilter, oppSectorFilter, loadOpportunities]);
 
   const handleAddSource = async (data: any) => {
     setError(null);
@@ -1080,6 +1103,10 @@ export function ScrapingPage() {
                 opportunities={opportunities}
                 busyOpportunityIds={busyOpportunityIds}
                 importingReady={importingReady}
+                sectorFilter={oppSectorFilter}
+                countryFilter={oppCountryFilter}
+                onSectorChange={setOppSectorFilter}
+                onCountryChange={setOppCountryFilter}
                 onImport={handleImportOpportunity}
                 onImportReady={handleImportReadyOpportunities}
                 onIgnore={handleIgnoreOpportunity}
