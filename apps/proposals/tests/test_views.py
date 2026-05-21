@@ -9,7 +9,15 @@ from rest_framework.test import APIClient
 from apps.projects.models import Project
 from apps.curriculum.models import Curriculum
 from apps.proposals.document_generator import generate_proposal_docx, generate_proposal_pdf
-from apps.proposals.models import Budget, GateAuditLog, Proposal, ProposalEvent, PursuitGate
+from apps.proposals.models import (
+    Budget,
+    GateAuditLog,
+    Proposal,
+    ProposalEvent,
+    ProposalExportRequest,
+    ProposalPostMortem,
+    PursuitGate,
+)
 from apps.proposals.views import ensure_default_sections
 from apps.quality_checks.models import QualityCheck
 from apps.proposals.tests.factories import (
@@ -604,6 +612,82 @@ class TestProposalViewSet:
         assert response.status_code == status.HTTP_200_OK
         proposal.budget.refresh_from_db()
         assert proposal.budget.total == 2000.00
+
+    def test_post_mortem_post_creates_outcome_and_updates_status(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='submitted')
+        url = reverse('proposal-post-mortem', kwargs={'pk': proposal.pk})
+
+        response = client.post(
+            url,
+            {
+                'outcome': 'lost',
+                'outcome_reason': 'Commercial score was below competitors.',
+                'client_feedback': 'Strong methodology but expensive.',
+                'lessons_learned': ['Recalibrate pricing earlier'],
+                'scoring_adjustments': {'margin': -5},
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        proposal.refresh_from_db()
+        assert proposal.status == 'lost'
+        assert proposal.opportunity.status == 'lost'
+        assert ProposalPostMortem.objects.filter(proposal=proposal, outcome='lost').exists()
+        assert response.data['sentiment'] == 'negative'
+
+    def test_post_mortem_get_returns_existing_record(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user)
+        ProposalPostMortem.objects.create(
+            proposal=proposal,
+            outcome='won',
+            outcome_reason='Best technical proposal.',
+            created_by=user,
+        )
+        url = reverse('proposal-post-mortem', kwargs={'pk': proposal.pk})
+
+        response = client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['outcome'] == 'won'
+
+    def test_export_requests_post_creates_completed_deterministic_summary(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='submitted')
+        ProposalSectionFactory(proposal=proposal, is_complete=True)
+        url = reverse('proposal-export-requests', kwargs={'pk': proposal.pk})
+
+        response = client.post(
+            url,
+            {'export_type': 'board_pack', 'parameters': {'audience': 'partners'}},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['status'] == 'completed'
+        assert response.data['executive_summary']
+        assert response.data['output_metadata']['generator'] == 'deterministic_v1'
+        assert ProposalExportRequest.objects.filter(proposal=proposal, export_type='board_pack').exists()
+
+    def test_export_requests_get_lists_existing_requests(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user)
+        ProposalExportRequest.objects.create(
+            proposal=proposal,
+            export_type='executive_summary',
+            status='completed',
+            requested_by=user,
+            executive_summary='Summary',
+        )
+        url = reverse('proposal-export-requests', kwargs={'pk': proposal.pk})
+
+        response = client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]['export_type'] == 'executive_summary'
 
     def test_team_match_returns_scores_and_missing_cv_flags(self, authenticated_client):
         client, user = authenticated_client

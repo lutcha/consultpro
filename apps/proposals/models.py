@@ -253,6 +253,89 @@ class ProposalEvent(models.Model):
         return f"{self.get_event_type_display()} - {self.proposal}"
 
 
+class ProposalPostMortem(models.Model):
+    OUTCOME_CHOICES = [
+        ('won', 'Won'),
+        ('lost', 'Lost'),
+        ('cancelled', 'Cancelled'),
+        ('no_decision', 'No decision'),
+    ]
+
+    proposal = models.OneToOneField(
+        Proposal,
+        on_delete=models.CASCADE,
+        related_name='post_mortem',
+    )
+    outcome = models.CharField(max_length=20, choices=OUTCOME_CHOICES)
+    outcome_reason = models.TextField(blank=True)
+    client_feedback = models.TextField(blank=True)
+    lessons_learned = models.JSONField(default=list, blank=True)
+    scoring_adjustments = models.JSONField(default=dict, blank=True)
+    sentiment = models.CharField(max_length=20, blank=True)
+    evidence = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='proposal_post_mortems',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f'{self.proposal_id} {self.outcome}'
+
+
+class ProposalExportRequest(models.Model):
+    EXPORT_TYPE_CHOICES = [
+        ('executive_summary', 'Executive summary'),
+        ('board_pack', 'Board pack'),
+        ('pdf', 'PDF'),
+        ('pptx', 'PPTX'),
+    ]
+    STATUS_CHOICES = [
+        ('queued', 'Queued'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    proposal = models.ForeignKey(
+        Proposal,
+        on_delete=models.CASCADE,
+        related_name='export_requests',
+    )
+    export_type = models.CharField(max_length=30, choices=EXPORT_TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
+    requested_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='proposal_export_requests',
+    )
+    parameters = models.JSONField(default=dict, blank=True)
+    executive_summary = models.TextField(blank=True)
+    output_metadata = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['proposal', 'status']),
+            models.Index(fields=['export_type', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.proposal_id} {self.export_type} {self.status}'
+
+
 class ProposalTeamMember(models.Model):
     proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='team_members_detail')
     user = models.ForeignKey(User, on_delete=models.CASCADE)

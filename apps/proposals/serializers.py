@@ -8,6 +8,8 @@ from .models import (
     Comment,
     Proposal,
     ProposalEvent,
+    ProposalExportRequest,
+    ProposalPostMortem,
     ProposalSection,
     ProposalTeamMember,
     GateAuditLog,
@@ -86,6 +88,61 @@ class ProposalEventSerializer(serializers.ModelSerializer):
         if request:
             return request.build_absolute_uri(obj.attachment.url)
         return obj.attachment.url
+
+
+class ProposalPostMortemSerializer(serializers.ModelSerializer):
+    created_by_detail = UserMiniSerializer(source='created_by', read_only=True)
+
+    class Meta:
+        model = ProposalPostMortem
+        fields = [
+            'id',
+            'proposal',
+            'outcome',
+            'outcome_reason',
+            'client_feedback',
+            'lessons_learned',
+            'scoring_adjustments',
+            'sentiment',
+            'evidence',
+            'created_by',
+            'created_by_detail',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'proposal', 'created_by', 'created_at', 'updated_at']
+
+
+class ProposalExportRequestSerializer(serializers.ModelSerializer):
+    requested_by_detail = UserMiniSerializer(source='requested_by', read_only=True)
+
+    class Meta:
+        model = ProposalExportRequest
+        fields = [
+            'id',
+            'proposal',
+            'export_type',
+            'status',
+            'requested_by',
+            'requested_by_detail',
+            'parameters',
+            'executive_summary',
+            'output_metadata',
+            'error_message',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'proposal',
+            'status',
+            'requested_by',
+            'executive_summary',
+            'output_metadata',
+            'error_message',
+            'created_at',
+            'updated_at',
+        ]
 
 
 class GateAuditLogSerializer(serializers.ModelSerializer):

@@ -7,6 +7,8 @@ from .models import (
     Comment,
     Proposal,
     ProposalEvent,
+    ProposalExportRequest,
+    ProposalPostMortem,
     ProposalSection,
     ProposalTeamMember,
     PursuitGate,
@@ -37,6 +39,20 @@ class ProposalEventAdmin(admin.ModelAdmin):
     list_display = ('proposal', 'event_type', 'title', 'occurred_at', 'created_by')
     list_filter = ('event_type', 'occurred_at')
     search_fields = ('proposal__title', 'title', 'notes')
+
+
+@admin.register(ProposalPostMortem)
+class ProposalPostMortemAdmin(admin.ModelAdmin):
+    list_display = ('proposal', 'outcome', 'sentiment', 'created_by', 'updated_at')
+    list_filter = ('outcome', 'sentiment', 'updated_at')
+    search_fields = ('proposal__title', 'outcome_reason', 'client_feedback')
+
+
+@admin.register(ProposalExportRequest)
+class ProposalExportRequestAdmin(admin.ModelAdmin):
+    list_display = ('proposal', 'export_type', 'status', 'requested_by', 'created_at')
+    list_filter = ('export_type', 'status', 'created_at')
+    search_fields = ('proposal__title', 'executive_summary', 'error_message')
 
 
 @admin.register(PursuitGate)
