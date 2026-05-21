@@ -88,6 +88,7 @@ class ScrapedOpportunityListSerializer(serializers.ModelSerializer):
     is_cv_eligible = serializers.BooleanField(source='cv_eligible', read_only=True)
     ready_to_import = serializers.SerializerMethodField()
     import_readiness_reasons = serializers.SerializerMethodField()
+    import_blockers = serializers.SerializerMethodField()
 
     class Meta:
         model = ScrapedOpportunity
@@ -117,6 +118,7 @@ class ScrapedOpportunityListSerializer(serializers.ModelSerializer):
             'data_quality_score',
             'ready_to_import',
             'import_readiness_reasons',
+            'import_blockers',
             'imported_opportunity',
             'scraped_at',
         ]
@@ -126,6 +128,9 @@ class ScrapedOpportunityListSerializer(serializers.ModelSerializer):
 
     def get_import_readiness_reasons(self, obj) -> list:
         return get_import_readiness(obj)['reasons']
+
+    def get_import_blockers(self, obj) -> list:
+        return get_import_readiness(obj)['blockers']
 
 
 class ScrapedOpportunityDetailSerializer(serializers.ModelSerializer):
