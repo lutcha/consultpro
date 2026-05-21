@@ -8,6 +8,14 @@ MIN_IMPORT_QUALITY_SCORE = Decimal('0.45')
 
 
 def get_import_readiness(scraped_opp):
+    """Return a deterministic, explainable import-readiness assessment.
+
+    The returned dict is the single source of truth for:
+    - serializer fields (list + detail)
+    - stats aggregation
+    - bulk import-ready endpoint
+    - queryset filters
+    """
     reasons = []
 
     if scraped_opp.status != 'new':
@@ -24,11 +32,15 @@ def get_import_readiness(scraped_opp):
     return {
         'ready': not reasons,
         'reasons': reasons,
+        'blockers': reasons,
+        'quality_score': str(scraped_opp.data_quality_score),
+        'threshold': str(MIN_IMPORT_QUALITY_SCORE),
         'minimum_quality_score': str(MIN_IMPORT_QUALITY_SCORE),
     }
 
 
 def filter_ready_to_import(queryset):
+    """ORM-level filter that mirrors every hard gate in get_import_readiness()."""
     return queryset.filter(
         status='new',
         cv_eligible=True,

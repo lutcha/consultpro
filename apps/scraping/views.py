@@ -157,8 +157,6 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
                 output_field=IntegerField(),
             )
         )
-        if self.request.query_params.get('ready_to_import') in ('1', 'true', 'yes'):
-            queryset = filter_ready_to_import(queryset)
         return queryset
 
     def get_serializer_class(self):
