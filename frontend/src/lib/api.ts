@@ -1096,6 +1096,99 @@ export async function apiApproveQualityCheck(
 }
 
 // ============================================
+// EXPORT REQUESTS
+// ============================================
+
+export interface ApiProposalExportRequest {
+  id: number;
+  proposal: number;
+  export_type: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  requested_by: number | null;
+  requested_by_detail: { id: number; username: string; full_name: string } | null;
+  parameters: Record<string, unknown>;
+  executive_summary: string;
+  output_metadata: Record<string, unknown>;
+  error_message: string;
+  task_id: string;
+  execution_attempts: number;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function apiGetProposalExportRequests(
+  proposalId: string
+): Promise<ApiProposalExportRequest[]> {
+  return apiRequest<ApiProposalExportRequest[]>(`/proposals/${proposalId}/export-requests/`);
+}
+
+export async function apiCreateProposalExportRequest(
+  proposalId: string,
+  data: { export_type: string; parameters?: Record<string, unknown> }
+): Promise<ApiProposalExportRequest> {
+  return apiRequest<ApiProposalExportRequest>(`/proposals/${proposalId}/export-requests/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function apiRetryProposalExportRequest(
+  proposalId: string,
+  exportRequestId: number
+): Promise<ApiProposalExportRequest> {
+  return apiRequest<ApiProposalExportRequest>(
+    `/proposals/${proposalId}/export-requests/${exportRequestId}/retry/`,
+    { method: 'POST' }
+  );
+}
+
+// ============================================
+// POST MORTEM
+// ============================================
+
+export interface ApiProposalPostMortem {
+  id: number;
+  proposal: number;
+  outcome: 'won' | 'lost' | 'cancelled' | 'no_decision';
+  outcome_reason: string;
+  client_feedback: string;
+  lessons_learned: string[];
+  scoring_adjustments: Record<string, unknown>;
+  sentiment: string;
+  evidence: Record<string, unknown>;
+  created_by: number | null;
+  created_by_detail: { id: number; username: string; full_name: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function apiGetProposalPostMortem(
+  proposalId: string
+): Promise<ApiProposalPostMortem> {
+  return apiRequest<ApiProposalPostMortem>(`/proposals/${proposalId}/post-mortem/`);
+}
+
+export async function apiCreateProposalPostMortem(
+  proposalId: string,
+  data: {
+    outcome: 'won' | 'lost' | 'cancelled' | 'no_decision';
+    outcome_reason?: string;
+    client_feedback?: string;
+    lessons_learned?: string[];
+    scoring_adjustments?: Record<string, unknown>;
+    sentiment?: string;
+    evidence?: Record<string, unknown>;
+  }
+): Promise<ApiProposalPostMortem> {
+  return apiRequest<ApiProposalPostMortem>(`/proposals/${proposalId}/post-mortem/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+// ============================================
 // DASHBOARD
 // ============================================
 

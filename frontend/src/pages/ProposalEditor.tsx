@@ -30,6 +30,8 @@ import {
   type ApiProposalTeamMatch, type ApiQualityCheck, type ApiComplianceMatrix,
   type ApiComplianceMatrixRow, apiSearchKnowledge, type ApiKnowledgeSearchResult,
 } from '@/lib/api';
+import { ExportRequestPanel } from '@/components/proposals/ExportRequestPanel';
+import { PostMortemPanel } from '@/components/proposals/PostMortemPanel';
 import type { ProposalStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { markdownToEditorHtml, shouldNormalizeMarkdown } from '@/lib/contentFormat';
@@ -313,7 +315,7 @@ export function ProposalEditor() {
   const [mobilePipelineOpen, setMobilePipelineOpen] = useState(false);
 
   // Right panel tab state (own state to avoid Radix Tabs flex issues)
-  const [rightTab, setRightTab] = useState<'pipeline' | 'compliance' | 'knowledge' | 'events'>('pipeline');
+  const [rightTab, setRightTab] = useState<'pipeline' | 'compliance' | 'knowledge' | 'events' | 'export' | 'postmortem'>('pipeline');
 
   // Pipeline state
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -1259,6 +1261,28 @@ export function ProposalEditor() {
                 </span>
               )}
             </button>
+            <button
+              className={cn(
+                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2',
+                rightTab === 'export'
+                  ? 'border-primary text-primary bg-primary/5'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              )}
+              onClick={() => setRightTab('export')}
+            >
+              Export
+            </button>
+            <button
+              className={cn(
+                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2',
+                rightTab === 'postmortem'
+                  ? 'border-primary text-primary bg-primary/5'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              )}
+              onClick={() => setRightTab('postmortem')}
+            >
+              Post-Mortem
+            </button>
           </div>
 
           {/* ── PIPELINE PANEL ── */}
@@ -2086,6 +2110,16 @@ export function ProposalEditor() {
                 )}
               </div>
             </div>
+          )}
+
+          {/* ── EXPORT PANEL ── */}
+          {rightTab === 'export' && id && (
+            <ExportRequestPanel proposalId={id} />
+          )}
+
+          {/* ── POST-MORTEM PANEL ── */}
+          {rightTab === 'postmortem' && id && (
+            <PostMortemPanel proposalId={id} />
           )}
         </div>
       </div>
