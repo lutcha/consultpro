@@ -1201,10 +1201,10 @@ export function ProposalEditor() {
         <div className="hidden lg:flex w-80 xl:w-96 flex-shrink-0 flex-col border-l border-border overflow-hidden bg-background">
 
           {/* Tab headers — custom, no Radix Tabs */}
-          <div className="flex flex-shrink-0 border-b border-border">
+          <div className="flex flex-shrink-0 overflow-x-auto border-b border-border scrollbar-none">
             <button
               className={cn(
-                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2',
+                'flex-none h-10 px-3 text-xs font-semibold tracking-wide whitespace-nowrap transition-all border-b-2',
                 rightTab === 'pipeline'
                   ? 'border-primary text-primary bg-primary/5'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -1215,7 +1215,7 @@ export function ProposalEditor() {
             </button>
             <button
               className={cn(
-                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2 flex items-center justify-center gap-1.5',
+                'flex-none h-10 px-3 text-xs font-semibold tracking-wide whitespace-nowrap transition-all border-b-2 flex items-center gap-1.5',
                 rightTab === 'compliance'
                   ? 'border-primary text-primary bg-primary/5'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -1231,7 +1231,7 @@ export function ProposalEditor() {
             </button>
             <button
               className={cn(
-                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2 flex items-center justify-center gap-1.5',
+                'flex-none h-10 px-3 text-xs font-semibold tracking-wide whitespace-nowrap transition-all border-b-2 flex items-center gap-1.5',
                 rightTab === 'knowledge'
                   ? 'border-primary text-primary bg-primary/5'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -1247,7 +1247,7 @@ export function ProposalEditor() {
             </button>
             <button
               className={cn(
-                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2 flex items-center justify-center gap-1.5',
+                'flex-none h-10 px-3 text-xs font-semibold tracking-wide whitespace-nowrap transition-all border-b-2 flex items-center gap-1.5',
                 rightTab === 'events'
                   ? 'border-primary text-primary bg-primary/5'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -1263,7 +1263,7 @@ export function ProposalEditor() {
             </button>
             <button
               className={cn(
-                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2',
+                'flex-none h-10 px-3 text-xs font-semibold tracking-wide whitespace-nowrap transition-all border-b-2',
                 rightTab === 'export'
                   ? 'border-primary text-primary bg-primary/5'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -1274,7 +1274,7 @@ export function ProposalEditor() {
             </button>
             <button
               className={cn(
-                'flex-1 h-10 text-xs font-semibold tracking-wide transition-all border-b-2',
+                'flex-none h-10 px-3 text-xs font-semibold tracking-wide whitespace-nowrap transition-all border-b-2',
                 rightTab === 'postmortem'
                   ? 'border-primary text-primary bg-primary/5'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
