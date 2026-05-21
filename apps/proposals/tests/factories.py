@@ -8,6 +8,8 @@ from apps.proposals.models import (
     BudgetItem,
     Comment,
     Proposal,
+    ProposalExportRequest,
+    ProposalPostMortem,
     ProposalSection,
     ProposalTeamMember,
 )
@@ -108,3 +110,31 @@ class BudgetItemFactory(factory.django.DjangoModelFactory):
     category = 'personnel'
     amount = 5000.00
     description = factory.Faker('sentence')
+
+
+class ProposalPostMortemFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ProposalPostMortem
+
+    proposal = factory.SubFactory(ProposalFactory)
+    outcome = 'lost'
+    outcome_reason = 'Pricing was not competitive.'
+    client_feedback = 'Technically strong, commercially expensive.'
+    lessons_learned = factory.LazyFunction(lambda: ['Review pricing assumptions'])
+    scoring_adjustments = factory.LazyFunction(lambda: {'margin': -5})
+    sentiment = 'negative'
+    evidence = factory.LazyFunction(dict)
+    created_by = factory.SubFactory(UserFactory)
+
+
+class ProposalExportRequestFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ProposalExportRequest
+
+    proposal = factory.SubFactory(ProposalFactory)
+    export_type = 'executive_summary'
+    status = 'completed'
+    requested_by = factory.SubFactory(UserFactory)
+    parameters = factory.LazyFunction(dict)
+    executive_summary = 'Executive summary'
+    output_metadata = factory.LazyFunction(lambda: {'generator': 'deterministic_v1'})

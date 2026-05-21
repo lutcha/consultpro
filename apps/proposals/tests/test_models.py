@@ -1,13 +1,15 @@
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from apps.proposals.models import AISuggestion, BudgetItem, Proposal, ProposalSection
+from apps.proposals.models import AISuggestion, BudgetItem, Proposal, ProposalExportRequest, ProposalSection
 from apps.proposals.tests.factories import (
     AISuggestionFactory,
     BudgetFactory,
     BudgetItemFactory,
     CommentFactory,
+    ProposalExportRequestFactory,
     ProposalFactory,
+    ProposalPostMortemFactory,
     ProposalSectionFactory,
     ProposalTeamMemberFactory,
 )
@@ -76,3 +78,18 @@ class TestBudgetItemModel:
         item = BudgetItemFactory()
         assert item.amount >= 0
         assert item.category in [c[0] for c in BudgetItem.CATEGORY_CHOICES]
+
+
+class TestProposalPostMortemModel:
+    def test_create_post_mortem(self):
+        post_mortem = ProposalPostMortemFactory()
+        assert post_mortem.proposal.post_mortem == post_mortem
+        assert post_mortem.outcome == 'lost'
+        assert post_mortem.lessons_learned
+
+
+class TestProposalExportRequestModel:
+    def test_create_export_request(self):
+        export_request = ProposalExportRequestFactory()
+        assert export_request.export_type in [c[0] for c in ProposalExportRequest.EXPORT_TYPE_CHOICES]
+        assert export_request.status == 'completed'
