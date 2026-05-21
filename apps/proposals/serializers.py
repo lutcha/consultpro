@@ -129,6 +129,10 @@ class ProposalExportRequestSerializer(serializers.ModelSerializer):
             'executive_summary',
             'output_metadata',
             'error_message',
+            'task_id',
+            'execution_attempts',
+            'started_at',
+            'completed_at',
             'created_at',
             'updated_at',
         ]
@@ -140,6 +144,10 @@ class ProposalExportRequestSerializer(serializers.ModelSerializer):
             'executive_summary',
             'output_metadata',
             'error_message',
+            'task_id',
+            'execution_attempts',
+            'started_at',
+            'completed_at',
             'created_at',
             'updated_at',
         ]

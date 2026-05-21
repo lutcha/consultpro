@@ -18,6 +18,7 @@ from apps.curriculum.models import Curriculum
 from apps.projects.models import Project, ProjectArtifact, ProjectPhase
 from apps.users.models import User
 from .document_generator import generate_proposal_docx, generate_proposal_pdf
+from .tasks import execute_proposal_export_request
 from .models import (
     AISuggestion,
     Budget,
@@ -772,46 +773,6 @@ def _infer_post_mortem_sentiment(outcome, client_feedback='', outcome_reason='')
     return 'neutral'
 
 
-def _build_board_ready_summary(proposal, export_type):
-    opportunity = proposal.opportunity
-    completed_sections = proposal.sections.filter(is_complete=True).count()
-    total_sections = proposal.sections.count()
-    budget = getattr(proposal, 'budget', None)
-    budget_line = ''
-    if budget:
-        budget_line = f' Budget: {budget.total} {budget.currency}.'
-
-    outcome_line = ''
-    if hasattr(proposal, 'post_mortem'):
-        post_mortem = proposal.post_mortem
-        outcome_line = f' Outcome captured as {post_mortem.outcome}.'
-
-    return (
-        f'{export_type.replace("_", " ").title()} for {proposal.title}. '
-        f'Client: {opportunity.client}. Sector: {opportunity.sector}. '
-        f'Current pursuit status: {proposal.status}. '
-        f'Proposal readiness: {completed_sections}/{total_sections} sections complete.'
-        f'{budget_line}{outcome_line}'
-    ).strip()
-
-
-def _complete_export_request(export_request):
-    summary = _build_board_ready_summary(export_request.proposal, export_request.export_type)
-    export_request.status = 'completed'
-    export_request.executive_summary = summary
-    export_request.output_metadata = {
-        'generator': 'deterministic_v1',
-        'format_ready': export_request.export_type in ('executive_summary', 'board_pack'),
-        'heavy_rendering_deferred': export_request.export_type in ('pdf', 'pptx'),
-        'proposal_status': export_request.proposal.status,
-    }
-    export_request.error_message = ''
-    export_request.save(
-        update_fields=['status', 'executive_summary', 'output_metadata', 'error_message', 'updated_at']
-    )
-    return export_request
-
-
 class ProposalViewSet(viewsets.ModelViewSet):
     queryset = Proposal.objects.all()
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
@@ -973,11 +934,38 @@ class ProposalViewSet(viewsets.ModelViewSet):
             requested_by=request.user,
             status='queued',
         )
-        export_request.status = 'processing'
-        export_request.save(update_fields=['status', 'updated_at'])
-        _complete_export_request(export_request)
+        async_result = execute_proposal_export_request.delay(export_request.id)
+        export_request.task_id = async_result.id or export_request.task_id
+        export_request.save(update_fields=['task_id', 'updated_at'])
+        export_request.refresh_from_db()
         serializer = ProposalExportRequestSerializer(export_request)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='export-requests/(?P<export_request_id>[^/.]+)/retry',
+    )
+    def retry_export_request(self, request, pk=None, export_request_id=None):
+        proposal = self.get_object()
+        try:
+            export_request = proposal.export_requests.get(pk=export_request_id)
+        except ProposalExportRequest.DoesNotExist:
+            return Response(
+                {'detail': 'Export request not found.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if export_request.status == 'processing':
+            return Response(
+                {'detail': 'Export request is already processing.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        async_result = execute_proposal_export_request.delay(export_request.id, force=True)
+        export_request.task_id = async_result.id or export_request.task_id
+        export_request.save(update_fields=['task_id', 'updated_at'])
+        export_request.refresh_from_db()
+        serializer = ProposalExportRequestSerializer(export_request)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def add_section(self, request, pk=None):

@@ -668,8 +668,52 @@ class TestProposalViewSet:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['status'] == 'completed'
         assert response.data['executive_summary']
+        assert response.data['execution_attempts'] == 1
+        assert response.data['completed_at']
         assert response.data['output_metadata']['generator'] == 'deterministic_v1'
+        assert response.data['output_metadata']['execution']['status'] == 'completed'
         assert ProposalExportRequest.objects.filter(proposal=proposal, export_type='board_pack').exists()
+
+    def test_export_request_retry_reexecutes_failed_request(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='submitted')
+        export_request = ProposalExportRequest.objects.create(
+            proposal=proposal,
+            export_type='executive_summary',
+            status='failed',
+            requested_by=user,
+            error_message='Temporary renderer issue',
+        )
+        url = reverse(
+            'proposal-retry-export-request',
+            kwargs={'pk': proposal.pk, 'export_request_id': export_request.pk},
+        )
+
+        response = client.post(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['status'] == 'completed'
+        assert response.data['execution_attempts'] == 1
+        assert response.data['error_message'] == ''
+        assert response.data['executive_summary']
+
+    def test_export_request_retry_rejects_processing_request(self, authenticated_client):
+        client, user = authenticated_client
+        proposal = ProposalFactory(created_by=user, status='submitted')
+        export_request = ProposalExportRequest.objects.create(
+            proposal=proposal,
+            export_type='executive_summary',
+            status='processing',
+            requested_by=user,
+        )
+        url = reverse(
+            'proposal-retry-export-request',
+            kwargs={'pk': proposal.pk, 'export_request_id': export_request.pk},
+        )
+
+        response = client.post(url)
+
+        assert response.status_code == status.HTTP_409_CONFLICT
 
     def test_export_requests_get_lists_existing_requests(self, authenticated_client):
         client, user = authenticated_client
