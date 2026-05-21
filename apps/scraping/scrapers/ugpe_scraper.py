@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from django.utils import timezone
 
 from .base import BaseScraper
+from apps.scraping.services.quality import assess_scraped_item
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +52,12 @@ class UGPEScraper(BaseScraper):
             rows = [r for r in all_rows if r.get_text() and any(k in r.get_text().lower() for k in ['prazo', 'deadline', '202', 'consultor'])]
             logger.info(f"UGPE: fallback found {len(rows)} rows")
 
+        seen_ids = set()
         for row in rows:
             try:
                 opp = self._parse_row(row)
-                if opp and opp.get('title'):
+                if opp and opp.get('title') and opp['external_id'] not in seen_ids:
+                    seen_ids.add(opp['external_id'])
                     opportunities.append(self._standardize_item(opp, self.source))
             except Exception as e:
                 logger.warning(f"UGPE: error parsing row: {e}")
@@ -90,10 +93,15 @@ class UGPEScraper(BaseScraper):
             if dm:
                 deadline_text = f"{dm.group(1)}/{dm.group(2)}/{dm.group(3)}"
 
-        ref = ref_elem.get_text(strip=True) if ref_elem else None
+        ref = self._clean_text(ref_elem.get_text(strip=True)) if ref_elem else None
         detail_url = None
         if link_elem and link_elem.get('href'):
-            detail_url = urljoin(self.BASE_URL, link_elem['href'])
+            detail_url = urljoin(self.config.get('url', self.BASE_URL), link_elem['href'])
+
+        assessment = assess_scraped_item({'title': title, 'external_url': detail_url or self.BASE_URL}, self.source.name)
+        if not assessment.valid:
+            return None
+        title = assessment.title
 
         deadline = self._parse_date(deadline_text) if deadline_text else None
 
@@ -114,8 +122,8 @@ class UGPEScraper(BaseScraper):
                 sectors.append(sector)
 
         return {
-            'external_id': ref or self._make_external_id(self.source.name, title),
-            'external_url': detail_url or self.BASE_URL,
+            'external_id': ref or self._make_external_id(self.source.name, detail_url or title),
+            'external_url': detail_url or self.config.get('url', self.BASE_URL),
             'title': title,
             'organization': 'UGPE - Cabo Verde',
             'client': 'UGPE / Governo de Cabo Verde',

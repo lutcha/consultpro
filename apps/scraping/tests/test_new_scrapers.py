@@ -9,7 +9,9 @@ from apps.scraping.scrapers.afdb_scraper import AfDBScraper
 from apps.scraping.scrapers.eu_funding_scraper import EUFundingScraper
 from apps.scraping.scrapers.generic_portal_scraper import GenericPortalScraper
 from apps.scraping.scrapers.giz_scraper import GIZScraper
+from apps.scraping.scrapers.luxdev_scraper import LuxDevScraper
 from apps.scraping.scrapers.undp_scraper import UNDPScraper
+from apps.scraping.scrapers.ugpe_scraper import UGPEScraper
 from apps.scraping.scrapers.worldbank_scraper import WorldBankScraper
 
 
@@ -201,6 +203,66 @@ class PriorityProcurementScraperTests(SimpleTestCase):
 
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]['organization'], 'ECOWAS')
+        self.assertTrue(items[0]['deadline'])
+
+    def test_luxdev_deduplicates_rejects_navigation_and_parses_numeric_deadline(self):
+        scraper = LuxDevScraper(_make_source(
+            name='LuxDev - Marches',
+            organization='LuxDev',
+            url='https://luxdev.lu/fr/marches',
+            scraper_config={'item_selectors': ['article']},
+        ))
+        html = """
+            <article>
+              <h3><a href="/fr/marches/cv-001">Assistance technique pour la gestion des finances publiques au Cabo Verde</a></h3>
+              <span class="deadline">Date limite: 31/08/2026</span>
+              <p>Mission de conseil et renforcement institutionnel.</p>
+            </article>
+            <article>
+              <h3><a href="/fr/marches/cv-001">Assistance technique pour la gestion des finances publiques au Cabo Verde</a></h3>
+              <span class="deadline">Date limite: 31/08/2026</span>
+            </article>
+            <article><a href="/fr/marches">Read more</a></article>
+        """
+
+        items = scraper.parse(html, base_url='https://luxdev.lu/fr/marches')
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['organization'], 'LuxDev')
+        self.assertEqual(items[0]['country'], 'CPV')
+        self.assertTrue(items[0]['deadline'])
+        self.assertEqual(items[0]['external_url'], 'https://luxdev.lu/fr/marches/cv-001')
+
+    def test_ugpe_deduplicates_rejects_navigation_and_uses_configured_url(self):
+        scraper = UGPEScraper(_make_source(
+            name='UGPE - Concursos Cabo Verde',
+            organization='UGPE',
+            url='https://ugpe.gov.cv/concursos',
+            scraper_config={'url': 'https://ugpe.gov.cv/concursos', 'item_selectors': ['tr']},
+        ))
+        html = """
+            <table>
+              <tr>
+                <td>UGPE-2026-01</td>
+                <td><a href="/concursos/ugpe-2026-01">Contratação de consultor para transformação digital da administração pública</a></td>
+                <td>Prazo: 15/09/2026</td>
+              </tr>
+              <tr>
+                <td>UGPE-2026-01</td>
+                <td><a href="/concursos/ugpe-2026-01">Contratação de consultor para transformação digital da administração pública</a></td>
+                <td>Prazo: 15/09/2026</td>
+              </tr>
+              <tr><td><a href="/contactos">Read more</a></td></tr>
+            </table>
+        """
+
+        items = scraper.parse(html)
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['title'], 'Contratação de consultor para transformação digital da administração pública')
+        self.assertEqual(items[0]['external_id'], 'UGPE-2026-01')
+        self.assertEqual(items[0]['external_url'], 'https://ugpe.gov.cv/concursos/ugpe-2026-01')
+        self.assertEqual(items[0]['country'], 'Cabo Verde')
         self.assertTrue(items[0]['deadline'])
 
 
