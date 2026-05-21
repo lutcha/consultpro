@@ -40,7 +40,7 @@ class UNDPScraper(BaseScraper):
                         'pageSize': page_size,
                     },
                 )
-                page_items = resp.json()
+                page_items = self._extract_ungm_items(resp.json())
                 if not isinstance(page_items, list):
                     raise ValueError(f"UNGM returned unexpected response type: {type(page_items).__name__}")
                 if not page_items:
@@ -71,7 +71,9 @@ class UNDPScraper(BaseScraper):
             return []
 
         if payload.get('source') == 'ungm_api':
-            return self._parse_ungm_items(payload.get('items') or [])
+            return self._parse_ungm_items(self._extract_ungm_items(payload))
+        if self._extract_ungm_items(payload):
+            return self._parse_ungm_items(self._extract_ungm_items(payload))
         if payload.get('source') == 'rss':
             return self._parse_rss(payload.get('xml') or '')
         return []
@@ -92,27 +94,32 @@ class UNDPScraper(BaseScraper):
         return opportunities
 
     def _parse_ungm_item(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        title = self._clean_text(item.get('Title'))
-        unique_key = self._clean_text(str(item.get('NoticeId') or item.get('Reference') or ''))
+        title = self._clean_text(item.get('Title') or item.get('title') or item.get('noticeTitle'))
+        unique_key = self._clean_text(str(
+            item.get('NoticeId') or item.get('noticeId') or item.get('id') or
+            item.get('Reference') or item.get('reference') or ''
+        ))
         if not title or not unique_key:
             return None
 
-        notice_id = self._clean_text(str(item.get('NoticeId') or ''))
-        notice_type = self._clean_text(item.get('NoticeTypeCode'))
-        deadline = self._parse_date(item.get('DeadlineDate'))
-        published_at = self._parse_date(item.get('PublishedDate'))
-        external_url = item.get('Url') or (
+        notice_id = self._clean_text(str(item.get('NoticeId') or item.get('noticeId') or item.get('id') or ''))
+        notice_type = self._clean_text(item.get('NoticeTypeCode') or item.get('noticeType') or item.get('type'))
+        deadline = self._parse_date(item.get('DeadlineDate') or item.get('deadlineDate') or item.get('deadline'))
+        published_at = self._parse_date(item.get('PublishedDate') or item.get('publishedDate') or item.get('publicationDate'))
+        external_url = item.get('Url') or item.get('url') or (
             f"{self.UNGM_API_URL}/{notice_id}" if notice_id else self.UNGM_API_URL
         )
-        description = self._html_to_text(item.get('Description')) or title
-        country = self._clean_text(item.get('CountryName')) or 'International'
+        description = self._html_to_text(item.get('Description') or item.get('description')) or title
+        country = self._clean_text(item.get('CountryName') or item.get('countryName') or item.get('country')) or 'International'
+        agency = self._clean_text(item.get('AgencyName') or item.get('agencyName') or item.get('agency'))
+        organization = self.config.get('organization') or agency or 'UNGM'
 
         return {
-            'external_id': self._make_external_id('UNDP', unique_key),
+            'external_id': self._make_external_id('UNGM', unique_key),
             'external_url': external_url,
             'title': title,
-            'organization': self._clean_text(item.get('AgencyName')) or 'UNDP',
-            'client': 'UNDP / UN System',
+            'organization': organization,
+            'client': self.config.get('client') or agency or 'United Nations',
             'sector': notice_type,
             'country': country,
             'region': 'Global',
@@ -131,6 +138,24 @@ class UNDPScraper(BaseScraper):
                 'scraped_from': 'ungm.org',
             },
         }
+
+    @staticmethod
+    def _extract_ungm_items(payload: Any) -> List[Dict[str, Any]]:
+        if isinstance(payload, list):
+            return payload
+        if not isinstance(payload, dict):
+            return []
+        for key in ('items', 'data', 'results', 'notices', 'rows'):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+        nested = payload.get('response') or payload.get('result')
+        if isinstance(nested, dict):
+            for key in ('items', 'data', 'results', 'notices', 'rows'):
+                value = nested.get(key)
+                if isinstance(value, list):
+                    return value
+        return []
 
     def _parse_rss(self, xml_text: str) -> List[Dict[str, Any]]:
         opportunities: List[Dict[str, Any]] = []

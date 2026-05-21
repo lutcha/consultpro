@@ -179,7 +179,15 @@ class BaseScraper:
     def _clean_text(text: Optional[str]) -> str:
         if not text:
             return ""
-        return re.sub(r'\s+', ' ', text).strip()
+        if isinstance(text, (list, tuple, set)):
+            text = ' '.join(BaseScraper._clean_text(item) for item in text if item)
+        elif isinstance(text, dict):
+            preferred = [
+                text.get('value'), text.get('name'), text.get('title'),
+                text.get('label'), text.get('alias'), text.get('url'),
+            ]
+            text = ' '.join(BaseScraper._clean_text(item) for item in preferred if item)
+        return re.sub(r'\s+', ' ', str(text)).strip()
 
     @staticmethod
     def _extract_value(text: str) -> tuple:

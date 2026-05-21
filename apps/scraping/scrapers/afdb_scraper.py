@@ -95,10 +95,10 @@ class AfDBScraper(BaseScraper):
         body = item.get('body') or {}
         body_value = body.get('value') if isinstance(body, dict) else body
         description = self._html_to_text(body_value) or title
-        deadline = self._parse_date(item.get('field_deadline')) or self._extract_date(description)
-        published_at = self._parse_date(item.get('created') or item.get('published_at'))
-        country = self._clean_text(item.get('field_country')) or self._extract_country(f"{title} {description}")
-        sector = self._clean_text(item.get('field_category'))
+        deadline = self._parse_date(item.get('field_deadline') or item.get('deadline')) or self._extract_date(description)
+        published_at = self._parse_date(item.get('created') or item.get('published_at') or item.get('changed'))
+        country = self._clean_text(item.get('field_country') or item.get('country')) or self._extract_country(f"{title} {description}")
+        sector = self._clean_text(item.get('field_category') or item.get('field_sector') or item.get('sector'))
 
         return self._build_item(
             unique_key=unique_key,

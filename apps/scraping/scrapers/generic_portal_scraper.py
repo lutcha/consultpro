@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from django.utils import timezone
 
 from .base import BaseScraper
+from apps.scraping.services.quality import assess_scraped_item
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +53,12 @@ class GenericPortalScraper(BaseScraper):
                 logger.info(f"GenericPortal: matched selector '{sel}' with {len(items)} items")
                 break
 
+        seen_ids = set()
         for item in items:
             try:
                 opp = self._parse_item(item)
-                if opp and opp.get('title'):
+                if opp and opp.get('title') and opp['external_id'] not in seen_ids:
+                    seen_ids.add(opp['external_id'])
                     opportunities.append(self._standardize_item(opp, self.source))
             except Exception as e:
                 logger.warning(f"GenericPortal: error parsing item: {e}")
@@ -77,6 +80,10 @@ class GenericPortalScraper(BaseScraper):
 
         title_elem = item.select_one(title_sel)
         title = self._clean_text(title_elem.get_text()) if title_elem else text[:250]
+        assessment = assess_scraped_item({'title': title, 'external_url': self.source.url}, self.source.name)
+        if not assessment.valid:
+            return None
+        title = assessment.title
 
         # Skip items whose title matches any rejection pattern (e.g. editorial articles)
         reject_patterns = self.config.get('reject_title_patterns', [])
@@ -95,12 +102,16 @@ class GenericPortalScraper(BaseScraper):
         description = self._clean_text(desc_elem.get_text()) if desc_elem else text
 
         deadline_elem = item.select_one(deadline_sel)
-        deadline = self._parse_date(deadline_elem.get_text()) if deadline_elem else None
+        deadline = None
+        if deadline_elem:
+            deadline = self._parse_date(deadline_elem.get('datetime') or deadline_elem.get_text())
         if not deadline:
             # Try regex from full text
             dl_patterns = [
                 r'(?:deadline|closing|prazo|due)\s*[:\-]?\s*(\d{1,2}[\s\/\-][A-Za-z]+[\s\/\-]\d{4})',
+                r'(?:deadline|closing|prazo|due)\s*[:\-]?\s*(\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{4})',
                 r'(\d{1,2}\s+[A-Za-z]+\s+\d{4})',
+                r'(\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{4})',
             ]
             for pat in dl_patterns:
                 m = re.search(pat, text, re.I)
@@ -112,7 +123,8 @@ class GenericPortalScraper(BaseScraper):
         published = self._parse_date(date_elem.get('datetime') or date_elem.get_text()) if date_elem else None
 
         ref_elem = item.select_one(ref_sel)
-        ref = ref_elem.get_text(strip=True) if ref_elem else None
+        ref = self._clean_text(ref_elem.get_text(strip=True)) if ref_elem else None
+        external_id = ref or self._make_external_id(self.source.name, detail_url or title)
 
         # Geographic inference from text
         text_lower = text.lower()
@@ -121,7 +133,7 @@ class GenericPortalScraper(BaseScraper):
             countries.append('CPV')
 
         return {
-            'external_id': ref or self._make_external_id(self.source.name, title),
+            'external_id': external_id,
             'external_url': detail_url or self.source.url,
             'title': title,
             'organization': self.config.get('organization', self.source.organization),

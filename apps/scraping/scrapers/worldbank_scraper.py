@@ -4,6 +4,7 @@ API scraper for World Bank active procurement notices.
 import json
 import logging
 from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin
 
 from .base import BaseScraper
 
@@ -86,12 +87,15 @@ class WorldBankScraper(BaseScraper):
         if not notice_id or not title:
             return None
 
-        country = self._clean_text(doc.get('countryname'))
-        region = self._clean_text(doc.get('regionname'))
-        sector = self._clean_text(doc.get('sector'))
-        deadline = self._parse_date(doc.get('deadline'))
-        published_at = self._parse_date(doc.get('pdate'))
-        external_url = self._clean_text(doc.get('url')) or self.DETAIL_URL.format(notice_id=notice_id)
+        country = self._clean_text(doc.get('countryname') or doc.get('country'))
+        region = self._clean_text(doc.get('regionname') or doc.get('region'))
+        sector = self._clean_text(doc.get('sector') or doc.get('sectorname'))
+        deadline = self._parse_date(doc.get('deadline') or doc.get('closing_date'))
+        published_at = self._parse_date(doc.get('pdate') or doc.get('publishdate'))
+        external_url = self._build_notice_url(doc, notice_id)
+        description = self._clean_text(
+            doc.get('project_name') or doc.get('projectname') or doc.get('description') or title
+        )
 
         return {
             'external_id': self._make_external_id('WorldBank', notice_id),
@@ -102,7 +106,7 @@ class WorldBankScraper(BaseScraper):
             'sector': sector,
             'country': country,
             'region': region,
-            'description': self._clean_text(doc.get('project_name')),
+            'description': description,
             'value': None,
             'currency': 'USD',
             'deadline': deadline.isoformat() if deadline else None,
@@ -119,3 +123,9 @@ class WorldBankScraper(BaseScraper):
                 'scraped_from': 'search.worldbank.org',
             },
         }
+
+    def _build_notice_url(self, doc: Dict[str, Any], notice_id: str) -> str:
+        raw_url = self._clean_text(doc.get('url') or doc.get('notice_url'))
+        if raw_url:
+            return urljoin("https://projects.worldbank.org", raw_url)
+        return self.DETAIL_URL.format(notice_id=notice_id)

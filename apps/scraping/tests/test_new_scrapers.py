@@ -5,8 +5,12 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
+from apps.scraping.scrapers.afdb_scraper import AfDBScraper
 from apps.scraping.scrapers.eu_funding_scraper import EUFundingScraper
+from apps.scraping.scrapers.generic_portal_scraper import GenericPortalScraper
 from apps.scraping.scrapers.giz_scraper import GIZScraper
+from apps.scraping.scrapers.undp_scraper import UNDPScraper
+from apps.scraping.scrapers.worldbank_scraper import WorldBankScraper
 
 
 def _make_source(**kwargs):
@@ -41,7 +45,7 @@ class GIZScraperTests(SimpleTestCase):
               </article>
             </body></html>
         """)
-        scraper = GIZScraper(_make_source(organization='GIZ'))
+        scraper = GIZScraper(_make_source(url='https://www.giz.de', organization='GIZ'))
 
         items = scraper.execute()['items']
 
@@ -76,6 +80,128 @@ class GIZScraperTests(SimpleTestCase):
             'raw_payload', 'source_metadata'
         ]:
             self.assertIn(key, standardized)
+
+    def test_parse_procurement_table_rows(self):
+        scraper = GIZScraper(_make_source(
+            url='https://ausschreibungen.giz.de/Satellite/company/welcome.do',
+            organization='GIZ',
+            scraper_config={'item_selectors': ['table tr']},
+        ))
+
+        items = scraper.parse("""
+            <table>
+              <tr>
+                <td><a href="/Satellite/public/tender/123">Consulting services for energy planning</a></td>
+                <td>Deadline: 31/08/2026</td>
+              </tr>
+            </table>
+        """)
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['title'], 'Consulting services for energy planning')
+        self.assertEqual(items[0]['external_url'], 'https://ausschreibungen.giz.de/Satellite/public/tender/123')
+        self.assertTrue(items[0]['deadline'])
+
+
+class PriorityProcurementScraperTests(SimpleTestCase):
+    def test_world_bank_accepts_list_fields_and_relative_urls(self):
+        scraper = WorldBankScraper(_make_source(organization='World Bank'))
+        items = scraper.parse(json.dumps({
+            'response': {
+                'docs': [{
+                    'id': 'WB-1',
+                    'title': 'Consulting services for digital procurement',
+                    'deadline': '2026-09-30',
+                    'pdate': '2026-05-01',
+                    'countryname': ['Cabo Verde'],
+                    'regionname': ['Africa'],
+                    'sector': [{'name': 'Governance'}],
+                    'project_name': ['Digital government programme'],
+                    'url': '/procurement/noticedetail/WB-1',
+                    'borrower': 'Government of Cabo Verde',
+                }]
+            }
+        }))
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['country'], 'Cabo Verde')
+        self.assertEqual(items[0]['sector'], 'Governance')
+        self.assertEqual(items[0]['external_url'], 'https://projects.worldbank.org/procurement/noticedetail/WB-1')
+
+    def test_afdb_accepts_drupal_reference_fields(self):
+        scraper = AfDBScraper(_make_source(organization='AfDB'))
+        items = scraper.parse(json.dumps({
+            'source': 'json_api',
+            'items': [{
+                'nid': 77,
+                'title': 'Expression of interest for climate finance advisory',
+                'path': {'alias': '/en/procurement/77'},
+                'body': {'value': '<p>Deadline: 15 September 2026</p>'},
+                'field_country': [{'name': 'Cabo Verde'}],
+                'field_category': {'name': 'Consultancy'},
+            }]
+        }))
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['country'], 'Cabo Verde')
+        self.assertEqual(items[0]['sector'], 'Consultancy')
+        self.assertTrue(items[0]['deadline'])
+
+    def test_ungm_accepts_wrapped_results_and_lowercase_keys(self):
+        scraper = UNDPScraper(_make_source(
+            organization='UNGM',
+            scraper_config={'organization': 'UNGM', 'client': 'United Nations'},
+        ))
+        items = scraper.parse(json.dumps({
+            'results': [{
+                'noticeId': 1234,
+                'title': 'Consultancy for public finance reform',
+                'deadlineDate': '2026-10-12',
+                'publishedDate': '2026-05-10',
+                'agencyName': 'UNDP',
+                'countryName': 'Guinea-Bissau',
+                'noticeType': 'Request for proposal',
+                'url': 'https://www.ungm.org/Public/Notice/1234',
+            }]
+        }))
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['organization'], 'UNGM')
+        self.assertEqual(items[0]['client'], 'United Nations')
+        self.assertEqual(items[0]['country'], 'Guinea-Bissau')
+
+    def test_generic_portal_ecowas_deduplicates_and_parses_numeric_deadline(self):
+        scraper = GenericPortalScraper(_make_source(
+            name='ECOWAS - Procurement Portal',
+            organization='ECOWAS',
+            url='https://www.ecowas.int/procurement/',
+            scraper_config={
+                'item_selectors': ['article'],
+                'title_selector': 'h3 a',
+                'link_selector': 'a[href]',
+                'deadline_selector': '.deadline',
+                'organization': 'ECOWAS',
+                'client': 'ECOWAS / CEDEAO',
+                'country': 'West Africa',
+            },
+        ))
+        html = """
+            <article>
+              <h3><a href="/procurement/eoi-1">Expression of interest for regional trade advisory</a></h3>
+              <span class="deadline">Deadline: 31/08/2026</span>
+            </article>
+            <article>
+              <h3><a href="/procurement/eoi-1">Expression of interest for regional trade advisory</a></h3>
+              <span class="deadline">Deadline: 31/08/2026</span>
+            </article>
+            <article><a href="/about">Read more</a></article>
+        """
+
+        items = scraper.parse(html)
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['organization'], 'ECOWAS')
+        self.assertTrue(items[0]['deadline'])
 
 
 class EUFundingScraperTests(SimpleTestCase):
