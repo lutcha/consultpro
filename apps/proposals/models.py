@@ -322,14 +322,18 @@ class ProposalExportRequest(models.Model):
     executive_summary = models.TextField(blank=True)
     output_metadata = models.JSONField(default=dict, blank=True)
     error_message = models.TextField(blank=True)
+    task_id = models.CharField(max_length=255, blank=True)
+    execution_attempts = models.PositiveIntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['proposal', 'status']),
-            models.Index(fields=['export_type', 'created_at']),
+            models.Index(fields=['proposal', 'status'], name='proposals_p_proposa_9e1c4d_idx'),
+            models.Index(fields=['export_type', 'created_at'], name='proposals_p_export_55ab97_idx'),
         ]
 
     def __str__(self):
