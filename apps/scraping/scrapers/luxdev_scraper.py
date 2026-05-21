@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from django.utils import timezone
 
 from .base import BaseScraper
+from apps.scraping.services.quality import assess_scraped_item
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +128,6 @@ class LuxDevScraper(BaseScraper):
         title = self._clean_text(title_elem.get_text()) if title_elem else None
         if not title:
             title = text.split('\n')[0].strip()[:300]
-        if not title:
-            return None
 
         detail_url = None
         if title_elem and title_elem.name == 'a' and title_elem.get('href'):
@@ -137,6 +136,11 @@ class LuxDevScraper(BaseScraper):
             link = el.select_one('a[href]')
             if link and link.get('href'):
                 detail_url = urljoin(base_url, link['href'])
+
+        assessment = assess_scraped_item({'title': title, 'external_url': detail_url or base_url}, 'LuxDev')
+        if not assessment.valid:
+            return None
+        title = assessment.title
 
         # Deadline
         deadline = None
@@ -154,8 +158,9 @@ class LuxDevScraper(BaseScraper):
             # Regex fallback: "Deadline: 15 January 2026" or "15/01/2026"
             dl_patterns = [
                 r'(?:deadline|closing|due)\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})',
-                r'(?:deadline|closing|due)\s*[:\-]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})',
+                r'(?:deadline|closing|due|date limite|limite)\s*[:\-]?\s*(\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{4})',
                 r'(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})',
+                r'(\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{4})',
             ]
             for pat in dl_patterns:
                 m = re.search(pat, text, re.I)
