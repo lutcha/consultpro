@@ -614,14 +614,17 @@ export interface ApiProposalSectionGap {
 
 export interface ApiTeamMember {
   id: number;
-  user: { id: number; email: string; first_name: string; last_name: string };
-  user_id: number;
+  user: { id: number; email: string; first_name: string; last_name: string } | null;
+  user_id: number | null;
   proposal: number;
   role: string;
   hours: number;
   hourly_rate: string;
   cv_attached: boolean;
   cv_document: string | null;
+  team_member_status?: 'suggested_profile' | 'consultant_in_negotiation' | 'cv_pending' | 'confirmed';
+  curriculum?: number | null;
+  suggested_profile?: Record<string, unknown>;
 }
 
 export interface ApiProposalListItem {
@@ -868,6 +871,43 @@ export interface ApiProposalTeamMatch {
   items: ApiProposalTeamMatchItem[];
 }
 
+export interface ApiProposalTeamReadinessMember {
+  member_id: number;
+  user_email: string | null;
+  user_name: string | null;
+  role: string;
+  team_member_status: 'suggested_profile' | 'consultant_in_negotiation' | 'cv_pending' | 'confirmed';
+  has_cv: boolean;
+  cv_attached: boolean;
+  has_cv_document: boolean;
+  curriculum_id: number | null;
+  curriculum_score: number | null;
+  matched_skills: string[];
+  missing_skills: string[];
+  reasons: string[];
+  suggested_profile: Record<string, unknown>;
+}
+
+export interface ApiProposalTeamReadinessMissingCv {
+  member_id: number;
+  role: string;
+  user_email: string | null;
+  team_member_status: ApiProposalTeamReadinessMember['team_member_status'];
+}
+
+export interface ApiProposalTeamReadiness {
+  proposal_id: number;
+  readiness: 'not_started' | 'in_progress' | 'ready';
+  total_members: number;
+  confirmed_count: number;
+  cv_missing_count: number;
+  suggested_count: number;
+  members: ApiProposalTeamReadinessMember[];
+  missing_cvs: ApiProposalTeamReadinessMissingCv[];
+  suggested_profiles: ApiProposalTeamReadinessMember[];
+  warnings: string[];
+}
+
 export interface ApiComplianceMatrixRow {
   id: number;
   matrix: number;
@@ -914,6 +954,10 @@ export async function apiGetProposalEvents(proposalId: string): Promise<ApiPropo
 
 export async function apiGetProposalTeamMatch(proposalId: string): Promise<ApiProposalTeamMatch> {
   return apiRequest<ApiProposalTeamMatch>(`/proposals/${proposalId}/team_match/`);
+}
+
+export async function apiGetProposalTeamReadiness(proposalId: string): Promise<ApiProposalTeamReadiness> {
+  return apiRequest<ApiProposalTeamReadiness>(`/proposals/${proposalId}/team-readiness/`);
 }
 
 export async function apiGetComplianceMatrices(
