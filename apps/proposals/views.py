@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from apps.core.permissions import IsOwnerOrAdmin
 from apps.curriculum.matching import match_cv_to_opportunity
 from apps.curriculum.models import Curriculum
+from apps.teams.readiness import compute_team_readiness
 from apps.projects.models import Project, ProjectArtifact, ProjectPhase
 from apps.users.models import User
 from .document_generator import generate_proposal_docx, generate_proposal_pdf
@@ -1331,6 +1332,20 @@ class ProposalViewSet(viewsets.ModelViewSet):
             'team_score': team_score,
             'items': items,
         })
+
+    @action(detail=True, methods=['get'], url_path='team-readiness')
+    def team_readiness(self, request, pk=None):
+        """
+        Informational team readiness report for a proposal.
+
+        Returns readiness status, missing CVs, suggested profiles, and
+        per-member CV/curriculum match scores. Does not block QC or
+        proposal submission.
+        """
+        proposal = self.get_object()
+        data = compute_team_readiness(proposal)
+        data['proposal_id'] = proposal.id
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def add_team_member(self, request, pk=None):

@@ -213,7 +213,7 @@ class PursuitGateSerializer(serializers.ModelSerializer):
 class ProposalTeamMemberSerializer(serializers.ModelSerializer):
     user = UserMiniSerializer(read_only=True)
     user_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), source='user', write_only=True
+        queryset=User.objects.all(), source='user', write_only=True, required=False, allow_null=True,
     )
 
     class Meta:
@@ -221,6 +221,7 @@ class ProposalTeamMemberSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'user_id', 'proposal', 'role',
             'hours', 'hourly_rate', 'cv_attached', 'cv_document',
+            'team_member_status', 'curriculum', 'suggested_profile',
         ]
 
 

@@ -58,6 +58,9 @@ class ProposalTeamMemberFactory(factory.django.DjangoModelFactory):
     hours = 40
     hourly_rate = 100.00
     cv_attached = False
+    team_member_status = 'cv_pending'
+    curriculum = None
+    suggested_profile = factory.LazyFunction(dict)
 
 
 class ProposalSectionFactory(factory.django.DjangoModelFactory):
