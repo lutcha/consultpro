@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from apps.opportunities.models import Opportunity
 from apps.proposals.models import (
@@ -253,21 +254,28 @@ class OpportunityToProposalTests(TestCase):
 
     def test_proposal_creation_updates_opportunity_status(self):
         """ProposalViewSet.perform_create sets Opportunity.status to 'proposal_draft'."""
-        proposal = Proposal.objects.create(
-            opportunity=self.opportunity,
-            title='Proposta Status Test',
-            created_by=self.user,
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        response = client.post(
+            '/api/proposals/',
+            data={
+                'opportunity': self.opportunity.id,
+                'title': 'Proposta Status Test via API',
+            },
+            format='json',
         )
-        ensure_default_sections(proposal)
-        # Manually replicate perform_create's status update (not going through the view)
-        self.opportunity.status = 'proposal_draft'
-        self.opportunity.save(update_fields=['status', 'updated_at'])
+        self.assertEqual(
+            response.status_code,
+            201,
+            f"Expected 201 Created, got {response.status_code}: {response.data}",
+        )
 
         self.opportunity.refresh_from_db()
         self.assertEqual(
             self.opportunity.status,
             'proposal_draft',
-            "Opportunity status must be 'proposal_draft' once a proposal is created.",
+            "Opportunity status must be 'proposal_draft' once a proposal is created via the API.",
         )
 
 
@@ -597,3 +605,72 @@ class ReadinessLowQualityTests(TestCase):
         result = get_import_readiness(opp)
         self.assertNotIn('low_data_quality', result['reasons'])
         self.assertTrue(result['ready'])
+
+
+# ---------------------------------------------------------------------------
+# Test 6 - import_ready endpoint - low quality path
+# ---------------------------------------------------------------------------
+
+class ImportReadyEndpointTests(TestCase):
+    """
+    POST /api/scraping/opportunities/import_ready/ must skip ScrapedOpportunity
+    records that are below MIN_IMPORT_QUALITY_SCORE, reporting them in the
+    'skipped' list with reason 'low_data_quality'.
+    """
+
+    def setUp(self):
+        self.source = _make_source('ImportReady Source')
+        self.user = _make_user('manager', '_importready')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _create_low_quality(self, external_id='ir-low-001'):
+        low_score = Decimal('0.20')
+        return ScrapedOpportunity.objects.create(
+            source=self.source,
+            external_id=external_id,
+            external_url=f'https://example.org/ir/{external_id}',
+            title='Oportunidade de baixa qualidade',
+            organization='Low Q Org',
+            client='Client IR',
+            description='Descricao insuficiente.',
+            value=Decimal('5000.00'),
+            currency='USD',
+            status='new',
+            cv_eligible=True,
+            data_quality_score=low_score,
+            deadline=timezone.now() + timezone.timedelta(days=15),
+        )
+
+    def test_low_quality_opportunity_not_imported(self):
+        """A ScrapedOpportunity below the quality threshold must be skipped, not imported."""
+        self._create_low_quality()
+
+        response = self.client.post(
+            '/api/scraping/opportunities/import_ready/',
+            data={},
+            format='json',
+        )
+        self.assertEqual(
+            response.status_code,
+            200,
+            f"Expected 200, got {response.status_code}: {response.data}",
+        )
+        data = response.data
+        self.assertEqual(
+            data['imported_count'],
+            0,
+            "Low quality opportunity must not be imported.",
+        )
+        skipped = data.get('skipped', [])
+        self.assertGreater(len(skipped), 0, "Expected at least one entry in 'skipped'.")
+        skipped_reasons = [
+            reason
+            for entry in skipped
+            for reason in entry.get('reasons', [])
+        ]
+        self.assertIn(
+            'low_data_quality',
+            skipped_reasons,
+            f"Expected 'low_data_quality' in skipped reasons, got: {skipped_reasons}",
+        )
