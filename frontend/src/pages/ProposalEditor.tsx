@@ -25,9 +25,9 @@ import { useProposalStore, useQCStore } from '@/stores';
 import {
   apiDownloadProposalWord, apiDownloadProposalPdf, apiUploadProposalLogo,
   apiGetProposalEvents, apiCreateProposalEvent, apiTransitionProposalStatus, apiGetProposalTeamMatch,
-  apiGetProposalSectionGap, apiGetQualityChecks, type ApiProposalEvent, type ApiProposalSectionGap,
+  apiGetProposalTeamReadiness, apiGetProposalSectionGap, apiGetQualityChecks, type ApiProposalEvent, type ApiProposalSectionGap,
   apiGetComplianceMatrices, apiGenerateComplianceMatrix, apiUpdateComplianceMatrixRow,
-  type ApiProposalTeamMatch, type ApiQualityCheck, type ApiComplianceMatrix,
+  type ApiProposalTeamMatch, type ApiProposalTeamReadiness, type ApiQualityCheck, type ApiComplianceMatrix,
   type ApiComplianceMatrixRow, apiSearchKnowledge, type ApiKnowledgeSearchResult,
 } from '@/lib/api';
 import { ExportRequestPanel } from '@/components/proposals/ExportRequestPanel';
@@ -273,6 +273,32 @@ const COMPLIANCE_PRIORITY_LABELS: Record<ApiComplianceMatrixRow['priority'], str
   optional: 'Opcional',
 };
 
+const TEAM_READINESS_LABELS: Record<ApiProposalTeamReadiness['readiness'], string> = {
+  not_started: 'Nao iniciado',
+  in_progress: 'Em preparacao',
+  ready: 'Pronto',
+};
+
+const TEAM_READINESS_STYLES: Record<ApiProposalTeamReadiness['readiness'], string> = {
+  not_started: 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/60 dark:text-slate-300',
+  in_progress: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300',
+  ready: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300',
+};
+
+const TEAM_MEMBER_STATUS_LABELS: Record<string, string> = {
+  suggested_profile: 'Perfil sugerido',
+  consultant_in_negotiation: 'Em negociacao',
+  cv_pending: 'CV pendente',
+  confirmed: 'Confirmado',
+};
+
+const TEAM_MEMBER_STATUS_STYLES: Record<string, string> = {
+  suggested_profile: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300',
+  consultant_in_negotiation: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300',
+  cv_pending: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300',
+  confirmed: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300',
+};
+
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, '&amp;')
@@ -283,6 +309,11 @@ const escapeHtml = (value: string) =>
 
 const cleanGapSuggestion = (suggestion: string) =>
   suggestion.replace(/^Integrar na seccao:\s*/i, '').trim();
+
+const getSuggestedProfileName = (profile: Record<string, unknown>) => {
+  const name = profile.name || profile.title || profile.role;
+  return typeof name === 'string' && name.trim() ? name : 'Perfil sugerido';
+};
 
 // ── Main component ──────────────────────────────────────────────────────────
 
@@ -343,6 +374,9 @@ export function ProposalEditor() {
   const [teamMatch, setTeamMatch] = useState<ApiProposalTeamMatch | null>(null);
   const [teamMatchLoading, setTeamMatchLoading] = useState(false);
   const [teamMatchError, setTeamMatchError] = useState('');
+  const [teamReadiness, setTeamReadiness] = useState<ApiProposalTeamReadiness | null>(null);
+  const [teamReadinessLoading, setTeamReadinessLoading] = useState(false);
+  const [teamReadinessError, setTeamReadinessError] = useState('');
   const [qualityCheck, setQualityCheck] = useState<ApiQualityCheck | null>(null);
   const [qualityCheckLoading, setQualityCheckLoading] = useState(false);
   const [qualityCheckError, setQualityCheckError] = useState('');
@@ -363,6 +397,7 @@ export function ProposalEditor() {
       selectProposal(id);
       loadEvents(id);
       loadTeamMatch(id);
+      loadTeamReadiness(id);
       loadQualityCheck(id);
     }
   }, [id, selectProposal]);
@@ -429,6 +464,25 @@ export function ProposalEditor() {
     } finally {
       setTeamMatchLoading(false);
     }
+  };
+
+  const loadTeamReadiness = async (proposalId: string) => {
+    setTeamReadinessLoading(true);
+    setTeamReadinessError('');
+    try {
+      const data = await apiGetProposalTeamReadiness(proposalId);
+      setTeamReadiness(data);
+    } catch (err) {
+      setTeamReadiness(null);
+      setTeamReadinessError(err instanceof Error ? err.message : 'Erro ao carregar readiness da equipa.');
+    } finally {
+      setTeamReadinessLoading(false);
+    }
+  };
+
+  const refreshTeamSignals = (proposalId: string) => {
+    loadTeamMatch(proposalId);
+    loadTeamReadiness(proposalId);
   };
 
   const loadQualityCheck = async (proposalId: string) => {
@@ -1378,20 +1432,127 @@ export function ProposalEditor() {
                     variant="ghost"
                     size="sm"
                     className="h-6 px-2 text-[10px]"
-                    onClick={() => id && loadTeamMatch(id)}
-                    disabled={teamMatchLoading}
+                    onClick={() => id && refreshTeamSignals(id)}
+                    disabled={teamMatchLoading || teamReadinessLoading}
                   >
+                    <RefreshCw className={cn('h-3 w-3 mr-1', (teamMatchLoading || teamReadinessLoading) && 'animate-spin')} />
                     Atualizar
                   </Button>
                 </div>
-                {teamMatchLoading && (
-                  <p className="text-xs text-muted-foreground">A calcular score...</p>
+                {(teamMatchLoading || teamReadinessLoading) && (
+                  <p className="text-xs text-muted-foreground">A calcular sinais da equipa...</p>
+                )}
+                {!teamReadinessLoading && teamReadinessError && (
+                  <p className="text-xs text-destructive">{teamReadinessError}</p>
                 )}
                 {!teamMatchLoading && teamMatchError && (
                   <p className="text-xs text-destructive">{teamMatchError}</p>
                 )}
+                {!teamReadinessLoading && !teamReadinessError && teamReadiness && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="rounded border border-border bg-muted/20 p-2">
+                        <p className="text-[10px] text-muted-foreground">Readiness</p>
+                        <Badge
+                          variant="outline"
+                          className={cn('mt-1 text-[10px]', TEAM_READINESS_STYLES[teamReadiness.readiness])}
+                        >
+                          {TEAM_READINESS_LABELS[teamReadiness.readiness]}
+                        </Badge>
+                      </div>
+                      <div className="rounded border border-border bg-muted/20 p-2">
+                        <p className="text-[10px] text-muted-foreground">Confirmados</p>
+                        <p className="mt-1 text-xs font-semibold">
+                          {teamReadiness.confirmed_count}/{teamReadiness.total_members}
+                        </p>
+                      </div>
+                      <div className="rounded border border-border bg-muted/20 p-2">
+                        <p className="text-[10px] text-muted-foreground">CVs em falta</p>
+                        <p className={cn('mt-1 text-xs font-semibold', teamReadiness.cv_missing_count > 0 && 'text-amber-700')}>
+                          {teamReadiness.cv_missing_count}
+                        </p>
+                      </div>
+                    </div>
+
+                    {teamReadiness.warnings.length > 0 && (
+                      <div className="space-y-1">
+                        {teamReadiness.warnings.slice(0, 2).map((warning) => (
+                          <p
+                            key={warning}
+                            className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+                          >
+                            {warning}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+
+                    {teamReadiness.members.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                          Membros e perfis
+                        </p>
+                        {teamReadiness.members.slice(0, 4).map((member) => {
+                          const statusStyle = TEAM_MEMBER_STATUS_STYLES[member.team_member_status] || 'bg-muted text-muted-foreground border-border';
+                          const displayName = member.user_name || getSuggestedProfileName(member.suggested_profile);
+                          return (
+                            <div key={member.member_id} className="rounded border border-border p-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-medium">{displayName}</p>
+                                  <p className="truncate text-[10px] text-muted-foreground">{member.role || member.user_email || 'Sem role definido'}</p>
+                                </div>
+                                <Badge variant="outline" className={cn('shrink-0 text-[10px]', statusStyle)}>
+                                  {TEAM_MEMBER_STATUS_LABELS[member.team_member_status] || member.team_member_status}
+                                </Badge>
+                              </div>
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                <Badge variant={member.has_cv ? 'outline' : 'destructive'} className="text-[10px]">
+                                  {member.has_cv ? 'CV ligado' : 'Sem CV'}
+                                </Badge>
+                                {member.curriculum_score !== null && (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    Curriculum {Math.round(member.curriculum_score)}/100
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {teamReadiness.suggested_profiles.length > 0 && (
+                      <div className="rounded border border-blue-200 bg-blue-50/70 p-2 dark:border-blue-900/60 dark:bg-blue-950/30">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-800 dark:text-blue-300">
+                          Perfis sugeridos
+                        </p>
+                        <p className="mt-1 text-[10px] leading-relaxed text-blue-800 dark:text-blue-300">
+                          {teamReadiness.suggested_profiles
+                            .slice(0, 3)
+                            .map((member) => getSuggestedProfileName(member.suggested_profile))
+                            .join(', ')}
+                        </p>
+                      </div>
+                    )}
+
+                    {teamReadiness.missing_cvs.length > 0 && (
+                      <div className="rounded border border-amber-200 bg-amber-50/70 p-2 dark:border-amber-900/60 dark:bg-amber-950/30">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-800 dark:text-amber-300">
+                          Missing CVs
+                        </p>
+                        <p className="mt-1 text-[10px] leading-relaxed text-amber-800 dark:text-amber-300">
+                          {teamReadiness.missing_cvs
+                            .slice(0, 3)
+                            .map((member) => member.user_email || member.role || `Membro ${member.member_id}`)
+                            .join(', ')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {!teamMatchLoading && !teamMatchError && teamMatch && (
-                  <div className="space-y-2">
+                  <div className="mt-3 space-y-2 border-t border-border pt-3">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">Score global</span>
                       <span className="font-semibold">{teamMatch.team_score}/100</span>

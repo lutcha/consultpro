@@ -341,20 +341,53 @@ class ProposalExportRequest(models.Model):
 
 
 class ProposalTeamMember(models.Model):
+    TEAM_MEMBER_STATUS_CHOICES = [
+        ('suggested_profile', 'Perfil Sugerido'),
+        ('consultant_in_negotiation', 'Consultor em Negociacao'),
+        ('cv_pending', 'CV Pendente'),
+        ('confirmed', 'Confirmado'),
+    ]
+
     proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name='team_members_detail')
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    role = models.CharField(max_length=200)  # Team Leader, Especialista, etc.
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    role = models.CharField(max_length=200)
     hours = models.PositiveIntegerField(default=0)
     hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     cv_attached = models.BooleanField(default=False)
     cv_document = models.FileField(upload_to='cv_documents/', null=True, blank=True)
+    team_member_status = models.CharField(
+        max_length=30,
+        choices=TEAM_MEMBER_STATUS_CHOICES,
+        default='cv_pending',
+    )
+    curriculum = models.ForeignKey(
+        'curriculum.Curriculum',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='proposal_memberships',
+    )
+    suggested_profile = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Free-text profile description for suggested (non-user) slots.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['proposal', 'user']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['proposal', 'user'],
+                condition=models.Q(user__isnull=False),
+                name='unique_proposal_user_when_set',
+            )
+        ]
 
     def __str__(self):
-        return f"{self.user.get_full_name() or self.user.email} - {self.role}"
+        if self.user_id:
+            return f"{self.user.get_full_name() or self.user.email} - {self.role}"
+        label = (self.suggested_profile or {}).get('name') or 'Perfil Sugerido'
+        return f"{label} - {self.role}"
 
 
 class ProposalSection(models.Model):
