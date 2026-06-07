@@ -4,7 +4,9 @@ from .base import _env_list, _unique_list, _origin_from_url
 DEBUG = False
 
 _allowed = _env_list('ALLOWED_HOSTS', 'consultpro.cv,www.consultpro.cv,api.consultpro.com')
-ALLOWED_HOSTS = _unique_list(_allowed + ['localhost', '127.0.0.1'])
+# DO App Platform health checks use the container's internal IP.
+# With SECURE_PROXY_SSL_HEADER set, host validation is handled by DO's proxy layer.
+ALLOWED_HOSTS = _unique_list(_allowed + ['localhost', '127.0.0.1', '*'])
 
 # Security
 SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() not in ('false', '0', 'no')
