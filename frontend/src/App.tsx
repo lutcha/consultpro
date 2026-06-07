@@ -26,6 +26,7 @@ import {
   CurriculumPage,
   Analytics,
   AcceptInvitation,
+  TenantOnboarding,
 } from '@/pages';
 
 // Protected Route wrapper
@@ -173,6 +174,17 @@ function App() {
           }
         >
           <Route index element={<Settings />} />
+        </Route>
+
+        <Route
+          path="/tenant-onboarding"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<TenantOnboarding />} />
         </Route>
 
         {/* Fallback */}

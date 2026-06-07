@@ -23,3 +23,4 @@ export { CurriculumPage } from './CurriculumPage';
 export { ScrapingPage } from './ScrapingPage';
 export { Analytics } from './Analytics';
 export { AcceptInvitation } from './AcceptInvitation';
+export { TenantOnboarding } from './TenantOnboarding';

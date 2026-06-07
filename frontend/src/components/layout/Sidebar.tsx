@@ -15,6 +15,7 @@ import {
   Globe,
   FileBadge,
   BarChart2,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -65,6 +66,11 @@ const navigationItems = [
     name: 'Fontes',
     href: '/scraping',
     icon: Globe,
+  },
+  {
+    name: 'Onboarding',
+    href: '/tenant-onboarding',
+    icon: SlidersHorizontal,
   },
   {
     name: 'Currículos',
