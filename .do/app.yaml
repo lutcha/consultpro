@@ -29,6 +29,12 @@ ingress:
       path:
         prefix: /static
   - component:
+      name: api
+      preserve_path_prefix: true
+    match:
+      path:
+        prefix: /health
+  - component:
       name: frontend
     match:
       path:
@@ -81,10 +87,16 @@ services:
     value: "False"
     scope: RUN_AND_BUILD_TIME
   - key: ALLOWED_HOSTS
-    value: "${APP_DOMAIN}"
+    value: "consultpro.cv,www.consultpro.cv,api.consultpro.com,${APP_DOMAIN}"
+    scope: RUN_AND_BUILD_TIME
+  - key: FRONTEND_URL
+    value: "https://consultpro.cv"
     scope: RUN_AND_BUILD_TIME
   - key: CORS_ALLOWED_ORIGINS
-    value: "https://${APP_DOMAIN}"
+    value: "https://consultpro.cv,https://www.consultpro.cv,https://${APP_DOMAIN}"
+    scope: RUN_AND_BUILD_TIME
+  - key: CSRF_TRUSTED_ORIGINS
+    value: "https://consultpro.cv,https://www.consultpro.cv,https://${APP_DOMAIN}"
     scope: RUN_AND_BUILD_TIME
   - key: POSTGRES_DB
     value: ${db.DATABASE}
