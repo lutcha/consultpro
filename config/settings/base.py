@@ -365,12 +365,24 @@ SIMPLE_JWT = {
 }
 
 # CORS
-CORS_ALLOWED_ORIGINS = [
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://consultpro.cv')
+_frontend_origin = _origin_from_url(FRONTEND_URL)
+_default_cors_origins = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "https://consultpro.cv",
+    "https://www.consultpro.cv",
 ]
+CORS_ALLOWED_ORIGINS = _unique_list(
+    _default_cors_origins + [_frontend_origin] + _env_list('CORS_ALLOWED_ORIGINS')
+)
+CSRF_TRUSTED_ORIGINS = _unique_list(
+    ["https://consultpro.cv", "https://www.consultpro.cv"]
+    + [_frontend_origin]
+    + _env_list('CSRF_TRUSTED_ORIGINS')
+)
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -426,7 +438,6 @@ EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() == 'true'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'apikey' if SENDGRID_API_KEY else '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', SENDGRID_API_KEY)
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@consultpro.com')
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://consultpro.cv')
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '15'))
 
 # AI / LLM Configuration
