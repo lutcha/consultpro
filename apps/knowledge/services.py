@@ -59,9 +59,11 @@ def _reasoning_trace(query_tokens, asset):
     return trace or ['fallback_rank']
 
 
-def search_knowledge(query='', asset_type='', country='', sector='', limit=10):
+def search_knowledge(query='', asset_type='', country='', sector='', limit=10, tenant=None):
     query_tokens = tokenize(query)
     queryset = KnowledgeAsset.objects.filter(status='active')
+    if tenant is not None:
+        queryset = queryset.filter(tenant=tenant)
     if asset_type:
         queryset = queryset.filter(asset_type=asset_type)
     if country:
@@ -116,6 +118,7 @@ def upsert_asset_from_proposal(proposal):
             'sector': opportunity.sector or '',
             'status': 'active',
             'created_by': proposal.created_by,
+            'tenant': proposal.tenant,
         },
     )[0]
 
@@ -142,6 +145,7 @@ def upsert_asset_from_section(section):
             'sector': opportunity.sector or '',
             'status': 'active',
             'created_by': proposal.created_by,
+            'tenant': proposal.tenant,
         },
     )[0]
 
@@ -162,6 +166,7 @@ def upsert_asset_from_project(project):
             'sector': project.sector or '',
             'status': 'active',
             'created_by': project.manager,
+            'tenant': project.tenant,
         },
     )[0]
 
@@ -182,6 +187,7 @@ def upsert_asset_from_curriculum(curriculum):
             'tags': extracted.get('skills', []) if isinstance(extracted.get('skills', []), list) else [],
             'status': 'active',
             'created_by': curriculum.user,
+            'tenant': curriculum.tenant,
         },
     )[0]
 

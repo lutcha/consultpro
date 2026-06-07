@@ -37,10 +37,25 @@ class User(AbstractUser):
 
 class UserInvitation(models.Model):
     ROLE_CHOICES = User.ROLE_CHOICES
+    TENANT_ROLE_CHOICES = [
+        ('owner', 'Owner'),
+        ('admin', 'Admin'),
+        ('manager', 'Manager'),
+        ('consultant', 'Consultant'),
+        ('viewer', 'Viewer'),
+    ]
 
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     email = models.EmailField()
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='consultant')
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='user_invitations',
+    )
+    tenant_role = models.CharField(max_length=20, choices=TENANT_ROLE_CHOICES, default='consultant')
     invited_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -59,10 +74,12 @@ class UserInvitation(models.Model):
         return f"Invitation({self.email}, {self.role})"
 
     @classmethod
-    def create_for(cls, email, role, invited_by, days_valid=7):
+    def create_for(cls, email, role, invited_by, days_valid=7, tenant=None, tenant_role='consultant'):
         return cls.objects.create(
             email=email,
             role=role,
+            tenant=tenant,
+            tenant_role=tenant_role,
             invited_by=invited_by,
             expires_at=timezone.now() + timedelta(days=days_valid),
         )

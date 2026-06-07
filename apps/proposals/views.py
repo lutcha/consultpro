@@ -13,6 +13,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import IsOwnerOrAdmin
+from apps.tenants.intelligence import normalize_mapping, normalize_list, tenant_intelligence_profile
+from apps.tenants.utils import get_request_tenant, scope_queryset_to_request_tenant
 from apps.curriculum.matching import match_cv_to_opportunity
 from apps.curriculum.models import Curriculum
 from apps.teams.readiness import compute_team_readiness
@@ -153,6 +155,7 @@ def _default_section_content(proposal, section_type):
 
 def _build_proposal_ai_context(proposal):
     opportunity = proposal.opportunity
+    intelligence = tenant_intelligence_profile(proposal.tenant)
     context_parts = [
         f"Titulo da proposta: {proposal.title}",
         f"Secao/Oportunidade: {opportunity.title}",
@@ -164,6 +167,16 @@ def _build_proposal_ai_context(proposal):
         f"Resumo IA da oportunidade: {opportunity.ai_summary or ''}",
         f"Descricao/TdR: {opportunity.description or ''}",
     ]
+    if intelligence:
+        tenant_bits = [
+            f"Keywords prioritarias: {', '.join(normalize_list(intelligence.opportunity_keywords)[:12])}",
+            f"Keywords de exclusao/no-go: {', '.join(normalize_list(intelligence.excluded_keywords)[:12])}",
+            f"Paises prioritarios: {', '.join(normalize_mapping(intelligence.geographic_priority_weights).keys())}",
+            f"Setores prioritarios: {', '.join(normalize_mapping(intelligence.sector_priority_weights).keys())}",
+            f"Doadores prioritarios: {', '.join(normalize_mapping(intelligence.donor_priority_weights).keys())}",
+            f"Instrucoes IA do tenant: {intelligence.ai_instructions or ''}",
+        ]
+        context_parts.append('Contexto de inteligencia do tenant:\n' + '\n'.join(bit for bit in tenant_bits if bit))
     cos_analysis = (opportunity.ai_extraction or {}).get('cos_analysis') or {}
     for key in (
         'tor_dissection_matrix',
@@ -379,6 +392,7 @@ def _ensure_project_for_proposal(proposal, manager=None):
         proposal=proposal,
         defaults={
             'title': proposal.title,
+            'tenant': proposal.tenant,
             'description': opportunity.description or '',
             'client': opportunity.client,
             'status': Project.Status.PLANNING,
@@ -780,9 +794,10 @@ class ProposalViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        base = scope_queryset_to_request_tenant(Proposal.objects.all(), self.request)
         if user.role in ('manager', 'admin') or user.is_staff:
-            return Proposal.objects.all()
-        return Proposal.objects.filter(created_by=user)
+            return base
+        return base.filter(created_by=user)
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -791,7 +806,17 @@ class ProposalViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         with transaction.atomic():
-            proposal = serializer.save(created_by=self.request.user)
+            tenant = get_request_tenant(self.request)
+            opportunity = serializer.validated_data.get('opportunity')
+            if tenant and opportunity and opportunity.tenant_id and opportunity.tenant_id != tenant.id:
+                from rest_framework.exceptions import PermissionDenied
+
+                raise PermissionDenied('Opportunity does not belong to the active tenant.')
+            proposal = serializer.save(created_by=self.request.user, tenant=tenant or getattr(opportunity, 'tenant', None))
+            tenant = tenant or proposal.opportunity.tenant
+            if tenant and proposal.tenant_id != tenant.id:
+                proposal.tenant = tenant
+                proposal.save(update_fields=['tenant', 'updated_at'])
             ensure_default_sections(proposal)
             proposal.opportunity.status = 'proposal_draft'
             proposal.opportunity.save(update_fields=['status', 'updated_at'])

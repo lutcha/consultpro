@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from django.db.models import Q
+
 from apps.opportunities.models import Opportunity
+from apps.tenants.intelligence import normalize_mapping, normalize_list, tenant_intelligence_profile
 from apps.users.models import User
 
 from .models import PartnerProfile
@@ -32,8 +35,16 @@ def suggest_partners(opportunity: Opportunity, limit: int = 5) -> list[MatchResu
     sector = (opportunity.sector or '').lower()
     country = (opportunity.country or '').lower()
     region = (opportunity.region or '').lower()
+    intelligence = tenant_intelligence_profile(opportunity.tenant)
+    preferred_countries = normalize_mapping(getattr(intelligence, 'geographic_priority_weights', {}))
+    preferred_sectors = normalize_mapping(getattr(intelligence, 'sector_priority_weights', {}))
+    requires_local_partner = bool(getattr(intelligence, 'requires_local_partner', False))
 
-    for partner in PartnerProfile.objects.filter(is_active=True):
+    partner_queryset = PartnerProfile.objects.filter(is_active=True)
+    if opportunity.tenant_id:
+        partner_queryset = partner_queryset.filter(Q(tenant=opportunity.tenant) | Q(tenant__isnull=True))
+
+    for partner in partner_queryset:
         score = int(partner.trust_score or 0)
         trace = [f'Trust score base: {score}/100.']
 
@@ -49,6 +60,15 @@ def suggest_partners(opportunity: Opportunity, limit: int = 5) -> list[MatchResu
         if partner.capabilities:
             score += min(10, len(partner.capabilities) * 2)
             trace.append(f'Capabilities available: {", ".join(partner.capabilities[:4])}.')
+        if sector and sector in preferred_sectors:
+            score += min(8, int(preferred_sectors[sector] or 0) // 12)
+            trace.append('Tenant intelligence prioritizes this sector.')
+        if country and country in preferred_countries:
+            score += min(8, int(preferred_countries[country] or 0) // 12)
+            trace.append('Tenant intelligence prioritizes this geography.')
+        if requires_local_partner and country and _contains_token(partner.geographies, country):
+            score += 10
+            trace.append('Local partner preference is enabled for this tenant.')
 
         if len(trace) == 1:
             trace.append('No direct sector/geography match; retained as low-priority option.')
@@ -79,6 +99,9 @@ def suggest_consultants(opportunity: Opportunity, limit: int = 5) -> list[MatchR
     sector = (opportunity.sector or '').lower()
     country = (opportunity.country or '').lower()
     region = (opportunity.region or '').lower()
+    intelligence = tenant_intelligence_profile(opportunity.tenant)
+    eligible_languages = _normalize_list(normalize_list(getattr(intelligence, 'eligible_languages', [])))
+    preferred_sectors = normalize_mapping(getattr(intelligence, 'sector_priority_weights', {}))
 
     consultants = User.objects.filter(role='consultant', is_active=True)
     for consultant in consultants:
@@ -100,6 +123,9 @@ def suggest_consultants(opportunity: Opportunity, limit: int = 5) -> list[MatchR
         if sector and (sector in skills or sector.replace('_', ' ') in skills):
             score += 25
             trace.append(f'Skill match for sector: {opportunity.sector}.')
+        if sector and sector in preferred_sectors:
+            score += min(8, int(preferred_sectors[sector] or 0) // 12)
+            trace.append('Tenant intelligence prioritizes this sector.')
         if country and country in location:
             score += 10
             trace.append(f'Location mentions country: {opportunity.country}.')
@@ -109,6 +135,9 @@ def suggest_consultants(opportunity: Opportunity, limit: int = 5) -> list[MatchR
         if languages:
             score += min(10, len(languages) * 3)
             trace.append(f'Languages available: {", ".join(sorted(languages)[:4])}.')
+        if eligible_languages and languages.intersection(eligible_languages):
+            score += 8
+            trace.append('Language matches tenant eligible languages.')
         if consultant.years_experience:
             score += min(10, consultant.years_experience)
             trace.append(f'Experience: {consultant.years_experience} years.')

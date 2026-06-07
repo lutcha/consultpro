@@ -34,12 +34,14 @@ def send_notification(
     action_label='',
     action_url='',
     email_category=None,
+    tenant_id=None,
 ):
     user = User.objects.filter(pk=user_id).first()
     if not user:
         return None
     notification = Notification.objects.create(
         user=user,
+        tenant_id=tenant_id,
         type=type,
         title=title,
         message=message,

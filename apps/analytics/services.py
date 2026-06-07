@@ -32,8 +32,10 @@ def _normalize_scope(value: str | None) -> str:
     return (value or '').strip()
 
 
-def _opportunity_queryset(country: str | None = None, sector: str | None = None):
+def _opportunity_queryset(country: str | None = None, sector: str | None = None, tenant=None):
     queryset = Opportunity.objects.all()
+    if tenant is not None:
+        queryset = queryset.filter(tenant=tenant)
     if country:
         queryset = queryset.filter(country__iexact=country)
     if sector:
@@ -41,8 +43,10 @@ def _opportunity_queryset(country: str | None = None, sector: str | None = None)
     return queryset
 
 
-def _scraped_queryset(country: str | None = None, sector: str | None = None):
+def _scraped_queryset(country: str | None = None, sector: str | None = None, tenant=None):
     queryset = ScrapedOpportunity.objects.all()
+    if tenant is not None:
+        queryset = queryset.filter(tenant=tenant)
     if country:
         queryset = queryset.filter(country__iexact=country)
     if sector:
@@ -50,9 +54,9 @@ def _scraped_queryset(country: str | None = None, sector: str | None = None):
     return queryset
 
 
-def _win_rate_rows(group_field: str, country: str | None = None, sector: str | None = None) -> list[dict]:
+def _win_rate_rows(group_field: str, country: str | None = None, sector: str | None = None, tenant=None) -> list[dict]:
     rows = (
-        _opportunity_queryset(country=country, sector=sector)
+        _opportunity_queryset(country=country, sector=sector, tenant=tenant)
         .values(group_field)
         .annotate(
             total=Count('id', filter=Q(status__in=DECISION_STATUSES)),
@@ -74,22 +78,22 @@ def _win_rate_rows(group_field: str, country: str | None = None, sector: str | N
     ]
 
 
-def _status_counts(country: str | None = None, sector: str | None = None) -> dict:
+def _status_counts(country: str | None = None, sector: str | None = None, tenant=None) -> dict:
     return {
         row['status']: row['total']
-        for row in _opportunity_queryset(country=country, sector=sector)
+        for row in _opportunity_queryset(country=country, sector=sector, tenant=tenant)
         .values('status')
         .annotate(total=Count('id'))
         .order_by('status')
     }
 
 
-def _weighted_pipeline(country: str | None = None, sector: str | None = None) -> dict:
+def _weighted_pipeline(country: str | None = None, sector: str | None = None, tenant=None) -> dict:
     total_value = Decimal('0')
     weighted_value = Decimal('0')
     items = []
     opportunities = (
-        _opportunity_queryset(country=country, sector=sector)
+        _opportunity_queryset(country=country, sector=sector, tenant=tenant)
         .filter(status__in=ACTIVE_PIPELINE_STATUSES)
         .prefetch_related('scores')
         .order_by('-value')
@@ -148,8 +152,10 @@ def _average_stage_duration_days() -> dict:
     }
 
 
-def _proposal_outcomes(country: str | None = None, sector: str | None = None) -> dict:
+def _proposal_outcomes(country: str | None = None, sector: str | None = None, tenant=None) -> dict:
     decided = Proposal.objects.filter(status__in=['won', 'lost'])
+    if tenant is not None:
+        decided = decided.filter(tenant=tenant)
     if country:
         decided = decided.filter(opportunity__country__iexact=country)
     if sector:
@@ -164,12 +170,12 @@ def _proposal_outcomes(country: str | None = None, sector: str | None = None) ->
     }
 
 
-def _monthly_counts(country: str | None = None, sector: str | None = None, months: int = 12) -> list[dict]:
+def _monthly_counts(country: str | None = None, sector: str | None = None, months: int = 12, tenant=None) -> list[dict]:
     now = timezone.now()
     start = now - timezone.timedelta(days=30 * months)
     counts = defaultdict(int)
-    opportunities = _opportunity_queryset(country=country, sector=sector).filter(created_at__gte=start)
-    scraped = _scraped_queryset(country=country, sector=sector).filter(scraped_at__gte=start)
+    opportunities = _opportunity_queryset(country=country, sector=sector, tenant=tenant).filter(created_at__gte=start)
+    scraped = _scraped_queryset(country=country, sector=sector, tenant=tenant).filter(scraped_at__gte=start)
 
     for created_at in opportunities.values_list('created_at', flat=True):
         counts[created_at.strftime('%Y-%m')] += 1
@@ -184,15 +190,15 @@ def _monthly_counts(country: str | None = None, sector: str | None = None, month
     return series
 
 
-def _avg_lead_time_days(country: str | None = None, sector: str | None = None) -> float | None:
+def _avg_lead_time_days(country: str | None = None, sector: str | None = None, tenant=None) -> float | None:
     lead_times = []
-    opportunities = _opportunity_queryset(country=country, sector=sector).exclude(deadline=None)
+    opportunities = _opportunity_queryset(country=country, sector=sector, tenant=tenant).exclude(deadline=None)
     for created_at, deadline in opportunities.values_list('created_at', 'deadline'):
         days = (deadline - created_at).total_seconds() / 86400
         if days >= 0:
             lead_times.append(days)
 
-    scraped = _scraped_queryset(country=country, sector=sector).exclude(deadline=None)
+    scraped = _scraped_queryset(country=country, sector=sector, tenant=tenant).exclude(deadline=None)
     for scraped_at, deadline in scraped.values_list('scraped_at', 'deadline'):
         days = (deadline - scraped_at).total_seconds() / 86400
         if days >= 0:
@@ -203,9 +209,9 @@ def _avg_lead_time_days(country: str | None = None, sector: str | None = None) -
     return round(median(lead_times), 2)
 
 
-def _budget_concentration_index(country: str | None = None, sector: str | None = None) -> float:
+def _budget_concentration_index(country: str | None = None, sector: str | None = None, tenant=None) -> float:
     rows = (
-        _opportunity_queryset(country=country, sector=sector)
+        _opportunity_queryset(country=country, sector=sector, tenant=tenant)
         .values('client')
         .annotate(total_value=Sum('value'))
         .order_by('-total_value')
@@ -217,8 +223,8 @@ def _budget_concentration_index(country: str | None = None, sector: str | None =
     return round(sum(values[:3]) / total, 2)
 
 
-def _competitive_density(country: str | None = None, sector: str | None = None) -> dict:
-    active_count = _opportunity_queryset(country=country, sector=sector).filter(
+def _competitive_density(country: str | None = None, sector: str | None = None, tenant=None) -> dict:
+    active_count = _opportunity_queryset(country=country, sector=sector, tenant=tenant).filter(
         status__in=ACTIVE_PIPELINE_STATUSES
     ).count()
     consultants = User.objects.filter(role='consultant')
@@ -242,12 +248,13 @@ def compute_descriptive_metrics(
     country: str | None = None,
     sector: str | None = None,
     lookback_months: int = DEFAULT_LOOKBACK_MONTHS,
+    tenant=None,
 ) -> dict:
     now = timezone.now()
     recent_since = now - timezone.timedelta(days=30)
     lookback_since = now - timezone.timedelta(days=30 * lookback_months)
-    opportunities = _opportunity_queryset(country=country, sector=sector)
-    scraped = _scraped_queryset(country=country, sector=sector)
+    opportunities = _opportunity_queryset(country=country, sector=sector, tenant=tenant)
+    scraped = _scraped_queryset(country=country, sector=sector, tenant=tenant)
     recent_count = opportunities.filter(created_at__gte=recent_since).count()
     recent_count += scraped.filter(scraped_at__gte=recent_since).count()
     lookback_count = opportunities.filter(created_at__gte=lookback_since).count()
@@ -255,7 +262,7 @@ def compute_descriptive_metrics(
     monthly_average = lookback_count / lookback_months if lookback_months else 0
     demand_velocity = recent_count / monthly_average if monthly_average else 0
 
-    monthly = _monthly_counts(country=country, sector=sector, months=12)
+    monthly = _monthly_counts(country=country, sector=sector, months=12, tenant=tenant)
     monthly_values = [row['tenders'] for row in monthly]
     monthly_avg = sum(monthly_values) / len(monthly_values) if monthly_values else 0
     seasonality_score = 0
@@ -268,10 +275,10 @@ def compute_descriptive_metrics(
         'lookback_months': lookback_months,
         'lookback_tenders': lookback_count,
         'monthly_average_tenders': round(monthly_average, 2),
-        'budget_concentration_index': _budget_concentration_index(country=country, sector=sector),
+        'budget_concentration_index': _budget_concentration_index(country=country, sector=sector, tenant=tenant),
         'seasonality_score': seasonality_score,
-        'competitive_density': _competitive_density(country=country, sector=sector),
-        'avg_lead_time_days': _avg_lead_time_days(country=country, sector=sector),
+        'competitive_density': _competitive_density(country=country, sector=sector, tenant=tenant),
+        'avg_lead_time_days': _avg_lead_time_days(country=country, sector=sector, tenant=tenant),
         'monthly_distribution': monthly,
     }
 
@@ -299,9 +306,9 @@ def _forecast_recommendations(descriptive: dict, forecast: list[dict]) -> list[s
     return recommendations
 
 
-def generate_demand_forecast(country: str | None = None, sector: str | None = None, horizon: int = 3) -> dict:
+def generate_demand_forecast(country: str | None = None, sector: str | None = None, horizon: int = 3, tenant=None) -> dict:
     horizon = max(1, min(int(horizon or 3), 12))
-    history = _monthly_counts(country=country, sector=sector, months=12)
+    history = _monthly_counts(country=country, sector=sector, months=12, tenant=tenant)
     counts = [row['tenders'] for row in history]
     non_zero_months = len([value for value in counts if value > 0])
     recent_avg = sum(counts[-3:]) / 3 if len(counts) >= 3 else 0
@@ -324,7 +331,7 @@ def generate_demand_forecast(country: str | None = None, sector: str | None = No
         confidence_intervals.append({'month': month, 'lower': max(0, point - spread), 'upper': point + spread})
 
     confidence = min(0.8, round(0.35 + (non_zero_months / 24), 2))
-    descriptive = compute_descriptive_metrics(country=country, sector=sector)
+    descriptive = compute_descriptive_metrics(country=country, sector=sector, tenant=tenant)
     return {
         'method': 'heuristic_moving_average_trend_v1',
         'point_estimates': point_estimates,
@@ -354,9 +361,11 @@ def _persist_signal(
     severity: str,
     message: str,
     data_snapshot: dict,
+    tenant=None,
 ) -> None:
     recent_since = timezone.now() - timezone.timedelta(days=7)
     exists = MarketSignal.objects.filter(
+        tenant=tenant,
         signal_type=signal_type,
         country_iso=country,
         sector_code=sector,
@@ -365,6 +374,7 @@ def _persist_signal(
     ).exists()
     if not exists:
         MarketSignal.objects.create(
+            tenant=tenant,
             signal_type=signal_type,
             country_iso=country,
             sector_code=sector,
@@ -374,10 +384,10 @@ def _persist_signal(
         )
 
 
-def detect_market_signals(country: str | None = None, sector: str | None = None, descriptive: dict | None = None) -> list:
+def detect_market_signals(country: str | None = None, sector: str | None = None, descriptive: dict | None = None, tenant=None) -> list:
     country_scope = _normalize_scope(country)
     sector_scope = _normalize_scope(sector)
-    descriptive = descriptive or compute_descriptive_metrics(country=country, sector=sector)
+    descriptive = descriptive or compute_descriptive_metrics(country=country, sector=sector, tenant=tenant)
 
     if descriptive['demand_velocity'] >= 1.4:
         _persist_signal(
@@ -390,6 +400,7 @@ def detect_market_signals(country: str | None = None, sector: str | None = None,
                 f"for {country_scope or 'all countries'}/{sector_scope or 'all sectors'}."
             ),
             descriptive,
+            tenant=tenant,
         )
     if descriptive['budget_concentration_index'] >= 0.65:
         _persist_signal(
@@ -399,6 +410,7 @@ def detect_market_signals(country: str | None = None, sector: str | None = None,
             'medium',
             'Budget is concentrated in the top three clients for the selected market.',
             descriptive,
+            tenant=tenant,
         )
     if descriptive['seasonality_score'] >= 0.6:
         _persist_signal(
@@ -408,10 +420,12 @@ def detect_market_signals(country: str | None = None, sector: str | None = None,
             'low',
             'Monthly tender distribution shows a visible seasonal pattern.',
             descriptive,
+            tenant=tenant,
         )
 
     recent_since = timezone.now() - timezone.timedelta(days=7)
     signals = MarketSignal.objects.filter(
+        tenant=tenant,
         country_iso=country_scope,
         sector_code=sector_scope,
         acknowledged=False,
@@ -433,6 +447,7 @@ def get_or_compute_predictive_metric(
     sector: str | None = None,
     horizon: int = 3,
     force_refresh: bool = False,
+    tenant=None,
 ) -> dict:
     country_scope = _normalize_scope(country)
     sector_scope = _normalize_scope(sector)
@@ -440,6 +455,7 @@ def get_or_compute_predictive_metric(
     now = timezone.now()
 
     cached = PredictiveMetric.objects.filter(
+        tenant=tenant,
         metric_key='demand_forecast',
         country_iso=country_scope,
         sector_code=sector_scope,
@@ -451,9 +467,10 @@ def get_or_compute_predictive_metric(
         value['cache_status'] = 'hit'
         return value
 
-    forecast = generate_demand_forecast(country=country_scope, sector=sector_scope, horizon=horizon)
+    forecast = generate_demand_forecast(country=country_scope, sector=sector_scope, horizon=horizon, tenant=tenant)
     value = {'demand_forecast': forecast}
     PredictiveMetric.objects.update_or_create(
+        tenant=tenant,
         metric_key='demand_forecast',
         country_iso=country_scope,
         sector_code=sector_scope,
@@ -472,12 +489,13 @@ def compute_procurement_trends(
     sector: str | None = None,
     horizon: int = 3,
     include_forecast: bool = False,
+    tenant=None,
 ) -> dict:
-    descriptive = compute_descriptive_metrics(country=country, sector=sector)
-    signals = detect_market_signals(country=country, sector=sector, descriptive=descriptive)
+    descriptive = compute_descriptive_metrics(country=country, sector=sector, tenant=tenant)
+    signals = detect_market_signals(country=country, sector=sector, descriptive=descriptive, tenant=tenant)
     predictive = None
     if include_forecast:
-        predictive = get_or_compute_predictive_metric(country=country, sector=sector, horizon=horizon)
+        predictive = get_or_compute_predictive_metric(country=country, sector=sector, horizon=horizon, tenant=tenant)
 
     return {
         'meta': {
@@ -487,12 +505,12 @@ def compute_procurement_trends(
             'include_forecast': include_forecast,
             'generated_at': timezone.now().isoformat(),
         },
-        'win_rate_by_sector': _win_rate_rows('sector', country=country, sector=sector),
-        'win_rate_by_country': _win_rate_rows('country', country=country, sector=sector),
-        'weighted_pipeline': _weighted_pipeline(country=country, sector=sector),
+        'win_rate_by_sector': _win_rate_rows('sector', country=country, sector=sector, tenant=tenant),
+        'win_rate_by_country': _win_rate_rows('country', country=country, sector=sector, tenant=tenant),
+        'weighted_pipeline': _weighted_pipeline(country=country, sector=sector, tenant=tenant),
         'avg_stage_duration_days': _average_stage_duration_days(),
-        'opportunity_status_counts': _status_counts(country=country, sector=sector),
-        'proposal_outcomes': _proposal_outcomes(country=country, sector=sector),
+        'opportunity_status_counts': _status_counts(country=country, sector=sector, tenant=tenant),
+        'proposal_outcomes': _proposal_outcomes(country=country, sector=sector, tenant=tenant),
         'descriptive': descriptive,
         'predictive': predictive,
         'signals': signals,

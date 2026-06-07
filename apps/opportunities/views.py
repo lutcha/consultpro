@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 
 from apps.core.permissions import IsConsultantOrManager
+from apps.tenants.utils import get_request_tenant, save_with_request_tenant, scope_queryset_to_request_tenant
 
 from .filters import OpportunityFilter
 from .models import FirmProfile, Opportunity, Requirement, Risk, SavedFilter
@@ -38,6 +39,7 @@ class OpportunityViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = scope_queryset_to_request_tenant(queryset, self.request)
         return self._apply_profile_defaults(queryset)
 
     def _apply_profile_defaults(self, queryset):
@@ -49,7 +51,11 @@ class OpportunityViewSet(viewsets.ModelViewSet):
         if any(params.get(key) for key in ['sector', 'country', 'region']):
             return queryset
 
-        profile = FirmProfile.objects.filter(is_default=True).first()
+        profile_qs = FirmProfile.objects.filter(is_default=True)
+        tenant = get_request_tenant(self.request)
+        if tenant is not None:
+            profile_qs = profile_qs.filter(tenant=tenant)
+        profile = profile_qs.first()
         if not profile:
             return queryset
         if profile.target_sectors:
@@ -64,7 +70,7 @@ class OpportunityViewSet(viewsets.ModelViewSet):
         return OpportunityDetailSerializer
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        save_with_request_tenant(serializer, self.request, created_by=self.request.user)
 
     @action(detail=True, methods=['post'])
     def go(self, request, pk=None):
@@ -99,6 +105,7 @@ class OpportunityViewSet(viewsets.ModelViewSet):
 
         proposal = Proposal.objects.create(
             opportunity=opportunity,
+            tenant=opportunity.tenant,
             title=f'Proposta Tecnica - {opportunity.title}',
             version=1,
             status='draft',
@@ -202,15 +209,19 @@ class FirmProfileViewSet(viewsets.ModelViewSet):
     serializer_class = FirmProfileSerializer
     permission_classes = [IsConsultantOrManager]
 
+    def get_queryset(self):
+        return scope_queryset_to_request_tenant(super().get_queryset(), self.request)
+
     def perform_create(self, serializer):
-        serializer.save(updated_by=self.request.user)
+        save_with_request_tenant(serializer, self.request, updated_by=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
 
     @action(detail=False, methods=['get'])
     def current(self, request):
-        profile = FirmProfile.objects.filter(is_default=True).first()
+        queryset = scope_queryset_to_request_tenant(FirmProfile.objects.filter(is_default=True), request)
+        profile = queryset.first()
         if profile is None:
             return Response({'detail': 'Nenhum perfil configurado.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = self.get_serializer(profile)
@@ -228,10 +239,11 @@ class SavedFilterViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return SavedFilter.objects.filter(owner=user) | SavedFilter.objects.filter(is_shared=True)
+        queryset = SavedFilter.objects.filter(owner=user) | SavedFilter.objects.filter(is_shared=True)
+        return scope_queryset_to_request_tenant(queryset, self.request)
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        save_with_request_tenant(serializer, self.request, owner=self.request.user)
 
     def perform_update(self, serializer):
         if serializer.instance.owner_id != self.request.user.id:

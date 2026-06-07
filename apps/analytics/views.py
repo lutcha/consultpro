@@ -24,6 +24,7 @@ class AnalyticsViewSet(viewsets.ViewSet):
             sector=request.query_params.get('sector'),
             horizon=horizon,
             include_forecast=include_forecast,
+            tenant=getattr(request, 'tenant', None),
         )
         response = Response(data)
         if include_forecast:

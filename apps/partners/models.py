@@ -2,6 +2,13 @@ from django.db import models
 
 
 class PartnerProfile(models.Model):
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='partner_profiles',
+    )
     name = models.CharField(max_length=200)
     sectors = models.JSONField(default=list, blank=True)
     geographies = models.JSONField(default=list, blank=True)

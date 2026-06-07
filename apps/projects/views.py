@@ -6,6 +6,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager, IsManager
+from apps.tenants.utils import get_request_tenant, scope_queryset_to_request_tenant
 
 from .models import (
     Project,
@@ -30,6 +31,13 @@ from .serializers import (
 )
 
 
+def _scope_project_child_queryset(queryset, request):
+    tenant = get_request_tenant(request)
+    if tenant is not None:
+        return queryset.filter(project__tenant=tenant)
+    return queryset
+
+
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
@@ -43,6 +51,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return ProjectListSerializer
         return ProjectDetailSerializer
 
+    def get_queryset(self):
+        return scope_queryset_to_request_tenant(super().get_queryset(), self.request)
+
     def get_permissions(self):
         if self.action in ['create', 'destroy', 'update', 'partial_update']:
             permission_classes = [IsManager]
@@ -51,10 +62,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
+        tenant = get_request_tenant(self.request)
+        tenant_kwargs = {'tenant': tenant} if tenant else {}
         if serializer.validated_data.get('manager') is None:
-            serializer.save(manager=self.request.user)
+            serializer.save(manager=self.request.user, **tenant_kwargs)
         else:
-            serializer.save()
+            serializer.save(**tenant_kwargs)
 
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
@@ -155,12 +168,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='stats')
     def stats(self, request):
         from django.db.models import Count, Q
-        total = Project.objects.count()
-        active = Project.objects.filter(status=Project.Status.ACTIVE).count()
-        planning = Project.objects.filter(status=Project.Status.PLANNING).count()
-        completed = Project.objects.filter(status=Project.Status.COMPLETED).count()
-        on_hold = Project.objects.filter(status=Project.Status.ON_HOLD).count()
-        overdue = sum(1 for p in Project.objects.all() if p.is_overdue)
+        queryset = self.get_queryset()
+        total = queryset.count()
+        active = queryset.filter(status=Project.Status.ACTIVE).count()
+        planning = queryset.filter(status=Project.Status.PLANNING).count()
+        completed = queryset.filter(status=Project.Status.COMPLETED).count()
+        on_hold = queryset.filter(status=Project.Status.ON_HOLD).count()
+        overdue = sum(1 for p in queryset if p.is_overdue)
 
         return Response({
             'total_projects': total,
@@ -177,12 +191,18 @@ class ProjectTeamMemberViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectTeamMemberSerializer
     permission_classes = [IsConsultantOrManager]
 
+    def get_queryset(self):
+        return _scope_project_child_queryset(super().get_queryset(), self.request)
+
 
 class ProjectMilestoneViewSet(viewsets.ModelViewSet):
     queryset = ProjectMilestone.objects.all()
     serializer_class = ProjectMilestoneSerializer
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'status']
+
+    def get_queryset(self):
+        return _scope_project_child_queryset(super().get_queryset(), self.request)
 
     def perform_create(self, serializer):
         milestone = serializer.save()
@@ -207,6 +227,9 @@ class ProjectTaskViewSet(viewsets.ModelViewSet):
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'status', 'priority', 'assignee']
 
+    def get_queryset(self):
+        return _scope_project_child_queryset(super().get_queryset(), self.request)
+
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
@@ -217,6 +240,9 @@ class ProjectRiskViewSet(viewsets.ModelViewSet):
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'severity', 'status']
 
+    def get_queryset(self):
+        return _scope_project_child_queryset(super().get_queryset(), self.request)
+
 
 class ProjectDeliverableViewSet(viewsets.ModelViewSet):
     queryset = ProjectDeliverable.objects.select_related('phase').all()
@@ -224,12 +250,18 @@ class ProjectDeliverableViewSet(viewsets.ModelViewSet):
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'phase', 'status']
 
+    def get_queryset(self):
+        return _scope_project_child_queryset(super().get_queryset(), self.request)
+
 
 class ProjectArtifactViewSet(viewsets.ModelViewSet):
     queryset = ProjectArtifact.objects.all()
     serializer_class = ProjectArtifactSerializer
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'phase', 'artifact_type', 'status']
+
+    def get_queryset(self):
+        return _scope_project_child_queryset(super().get_queryset(), self.request)
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -240,6 +272,9 @@ class ProjectPhaseViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectPhaseSerializer
     permission_classes = [IsConsultantOrManager]
     filterset_fields = ['project', 'name', 'is_completed']
+
+    def get_queryset(self):
+        return _scope_project_child_queryset(super().get_queryset(), self.request)
 
     def perform_update(self, serializer):
         phase = serializer.save()

@@ -7,6 +7,8 @@ from django.db.models import Case, IntegerField, Q, When
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.core.permissions import IsConsultantOrManager, IsManager
+from apps.tenants.intelligence import normalize_list, normalize_mapping
+from apps.tenants.utils import get_request_tenant, scope_queryset_to_request_tenant
 from apps.scraping.filters import ScrapedOpportunityFilter
 from apps.scraping.services.readiness import filter_ready_to_import, get_import_readiness
 from apps.scraping.services.source_health import get_sources_health
@@ -55,6 +57,16 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
             return ScrapingSourceListSerializer
         return ScrapingSourceDetailSerializer
 
+    def get_queryset(self):
+        return scope_queryset_to_request_tenant(super().get_queryset(), self.request)
+
+    def perform_create(self, serializer):
+        tenant = get_request_tenant(self.request)
+        if tenant:
+            serializer.save(tenant=tenant)
+        else:
+            serializer.save()
+
     @action(detail=True, methods=['post'])
     def run(self, request, pk=None):
         """Manually trigger scraping for this source"""
@@ -84,26 +96,29 @@ class ScrapingSourceViewSet(viewsets.ModelViewSet):
     def stats(self, request):
         """Get scraping statistics"""
         from django.db.models import Avg
-        total_sources = ScrapingSource.objects.count()
-        active_sources = ScrapingSource.objects.filter(status='active').count()
-        total_opportunities = ScrapedOpportunity.objects.count()
-        imported_opportunities = ScrapedOpportunity.objects.filter(status='imported').count()
-        new_opportunities = ScrapedOpportunity.objects.filter(status='new').count()
-        cv_eligible = ScrapedOpportunity.objects.filter(cv_eligible=True, status='new').count()
-        ready_to_import = filter_ready_to_import(ScrapedOpportunity.objects.all()).count()
+        source_qs = scope_queryset_to_request_tenant(ScrapingSource.objects.all(), request)
+        opp_qs = scope_queryset_to_request_tenant(ScrapedOpportunity.objects.all(), request)
+        job_qs = scope_queryset_to_request_tenant(ScrapingJob.objects.all(), request)
+        total_sources = source_qs.count()
+        active_sources = source_qs.filter(status='active').count()
+        total_opportunities = opp_qs.count()
+        imported_opportunities = opp_qs.filter(status='imported').count()
+        new_opportunities = opp_qs.filter(status='new').count()
+        cv_eligible = opp_qs.filter(cv_eligible=True, status='new').count()
+        ready_to_import = filter_ready_to_import(opp_qs).count()
         
-        avg_quality = ScrapedOpportunity.objects.aggregate(
+        avg_quality = opp_qs.aggregate(
             avg=Avg('data_quality_score')
         )['avg'] or 0
         
-        terminal_jobs = ScrapingJob.objects.filter(status__in=['completed', 'failed'])
+        terminal_jobs = job_qs.filter(status__in=['completed', 'failed'])
         terminal_count = terminal_jobs.count()
         if terminal_count:
             completed_count = terminal_jobs.filter(status='completed').count()
             avg_success_rate = int((completed_count / terminal_count) * 100)
         else:
             avg_success_rate = int(
-                ScrapingSource.objects.aggregate(avg=Avg('success_rate'))['avg'] or 0
+                source_qs.aggregate(avg=Avg('success_rate'))['avg'] or 0
             )
         
         return Response({
@@ -157,6 +172,69 @@ class ScrapedOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
                 output_field=IntegerField(),
             )
         )
+        queryset = scope_queryset_to_request_tenant(queryset, self.request)
+        return self._apply_intelligence_defaults(queryset)
+
+    def _apply_intelligence_defaults(self, queryset):
+        if self.action != 'list':
+            return queryset
+        params = self.request.query_params
+        if str(params.get('apply_intelligence_defaults', 'true')).lower() in {'false', '0', 'no'}:
+            return queryset
+        if any(params.get(key) for key in ['country', 'sector', 'source', 'search']):
+            return queryset
+
+        tenant = get_request_tenant(self.request)
+        if not tenant:
+            return queryset
+        try:
+            intelligence = tenant.intelligence_profile
+        except Exception:
+            return queryset
+
+        countries = list(normalize_mapping(intelligence.geographic_priority_weights).keys())
+        sectors = list(normalize_mapping(intelligence.sector_priority_weights).keys())
+        preferred_sources = normalize_list(intelligence.preferred_sources)
+        excluded_sources = normalize_list(intelligence.excluded_sources)
+        keywords = normalize_list(intelligence.opportunity_keywords)
+        excluded_keywords = normalize_list(intelligence.excluded_keywords)
+
+        if countries:
+            queryset = queryset.filter(country__in=countries)
+        if sectors:
+            queryset = queryset.filter(sector__in=sectors)
+        if intelligence.minimum_budget is not None:
+            queryset = queryset.filter(value__gte=intelligence.minimum_budget)
+        if intelligence.maximum_budget is not None:
+            queryset = queryset.filter(value__lte=intelligence.maximum_budget)
+        if intelligence.deadline_min_days is not None:
+            queryset = queryset.filter(deadline__gte=timezone.now() + timezone.timedelta(days=intelligence.deadline_min_days))
+        if intelligence.deadline_max_days is not None:
+            queryset = queryset.filter(deadline__lte=timezone.now() + timezone.timedelta(days=intelligence.deadline_max_days))
+        if preferred_sources:
+            source_query = Q()
+            for source in preferred_sources:
+                source_query |= Q(source__name__icontains=source) | Q(source__organization__icontains=source)
+            queryset = queryset.filter(source_query)
+        for source in excluded_sources:
+            queryset = queryset.exclude(source__name__icontains=source).exclude(source__organization__icontains=source)
+        if keywords:
+            keyword_query = Q()
+            for keyword in keywords:
+                keyword_query |= (
+                    Q(title__icontains=keyword)
+                    | Q(description__icontains=keyword)
+                    | Q(client__icontains=keyword)
+                    | Q(organization__icontains=keyword)
+                )
+            queryset = queryset.filter(keyword_query)
+        for keyword in excluded_keywords:
+            queryset = (
+                queryset.exclude(title__icontains=keyword)
+                .exclude(description__icontains=keyword)
+                .exclude(client__icontains=keyword)
+                .exclude(organization__icontains=keyword)
+            )
         return queryset
 
     def get_serializer_class(self):
@@ -258,6 +336,9 @@ class ScrapingJobViewSet(viewsets.ReadOnlyModelViewSet):
             return ScrapingJobListSerializer
         return ScrapingJobDetailSerializer
 
+    def get_queryset(self):
+        return scope_queryset_to_request_tenant(super().get_queryset(), self.request)
+
 
 class ScrapingAlertViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -273,7 +354,8 @@ class ScrapingAlertViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if self.request.user.is_authenticated:
-            return ScrapingAlert.objects.filter(user=self.request.user)
+            queryset = ScrapingAlert.objects.filter(user=self.request.user)
+            return scope_queryset_to_request_tenant(queryset, self.request)
         return ScrapingAlert.objects.none()
 
     @action(detail=True, methods=['post'])

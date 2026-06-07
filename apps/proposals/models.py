@@ -26,6 +26,13 @@ class Proposal(models.Model):
     ]
 
     opportunity = models.ForeignKey(Opportunity, on_delete=models.CASCADE, related_name='proposals')
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='proposals',
+    )
     title = models.CharField(max_length=500)
     version = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='draft')
