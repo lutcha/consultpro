@@ -1,7 +1,5 @@
-from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.core.mail import send_mail
 from django.utils import timezone
 from rest_framework import viewsets, serializers, permissions, status
 from rest_framework.decorators import action
@@ -25,33 +23,6 @@ from apps.users.serializers import (
 )
 from apps.notifications.models import NotificationPreference
 from apps.notifications.serializers import NotificationPreferenceSerializer
-
-
-def _send_invitation_email(invitation, request):
-    return send_invitation_email(invitation)
-    frontend_url = getattr(settings, 'FRONTEND_URL', 'https://consultpro.cv')
-    accept_url = f"{frontend_url}/accept-invitation/{invitation.token}/"
-    invited_by_name = (
-        f"{invitation.invited_by.first_name} {invitation.invited_by.last_name}".strip()
-        if invitation.invited_by
-        else 'ConsultPro'
-    )
-    role_display = dict(invitation.ROLE_CHOICES).get(invitation.role, invitation.role)
-    subject = f"Convite para ConsultPro — {role_display}"
-    message = (
-        f"Olá,\n\n"
-        f"{invited_by_name} convidou-te para a plataforma ConsultPro como {role_display}.\n\n"
-        f"Clica no link abaixo para activar a tua conta (válido por 7 dias):\n{accept_url}\n\n"
-        f"Se não esperavas este convite, podes ignorar este email.\n\n"
-        f"Equipa ConsultPro"
-    )
-    send_mail(
-        subject=subject,
-        message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[invitation.email],
-        fail_silently=False,
-    )
 
 
 class AcceptInvitationView(APIView):
@@ -104,23 +75,6 @@ class AcceptInvitationView(APIView):
             {'detail': 'Conta criada com sucesso. Podes agora iniciar sessão.'},
             status=status.HTTP_201_CREATED,
         )
-
-
-def _send_welcome_email(user):
-    subject = "Bem-vindo ao ConsultPro"
-    message = (
-        f"Olá {user.first_name or user.username},\n\n"
-        f"A tua conta foi criada com sucesso na plataforma ConsultPro.\n\n"
-        f"Podes iniciar sessão em: {getattr(settings, 'FRONTEND_URL', 'https://consultpro.cv')}\n\n"
-        f"Equipa ConsultPro"
-    )
-    send_mail(
-        subject=subject,
-        message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
 
 
 class MeAPIView(APIView):

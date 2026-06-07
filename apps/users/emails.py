@@ -11,8 +11,34 @@ class EmailDeliveryError(RuntimeError):
     pass
 
 
+class EmailConfigurationError(RuntimeError):
+    pass
+
+
 def _frontend_url() -> str:
     return str(getattr(settings, 'FRONTEND_URL', 'https://consultpro.cv')).rstrip('/')
+
+
+def validate_smtp_configuration() -> None:
+    backend = str(getattr(settings, 'EMAIL_BACKEND', ''))
+    host = str(getattr(settings, 'EMAIL_HOST', ''))
+    from_email = str(getattr(settings, 'DEFAULT_FROM_EMAIL', ''))
+    host_user = str(getattr(settings, 'EMAIL_HOST_USER', ''))
+    host_password = str(getattr(settings, 'EMAIL_HOST_PASSWORD', ''))
+
+    if 'console.EmailBackend' in backend:
+        raise EmailConfigurationError(
+            'EMAIL_BACKEND is console.EmailBackend; configure SMTP before beta validation.'
+        )
+    if 'smtp.EmailBackend' in backend:
+        if not host:
+            raise EmailConfigurationError('EMAIL_HOST is empty; configure SMTP provider host.')
+        if not host_user:
+            raise EmailConfigurationError('EMAIL_HOST_USER is empty; configure SMTP provider username.')
+        if not host_password:
+            raise EmailConfigurationError('EMAIL_HOST_PASSWORD is empty; configure SMTP provider password/token.')
+    if not from_email:
+        raise EmailConfigurationError('DEFAULT_FROM_EMAIL is empty; configure a verified sender.')
 
 
 def _send(subject: str, message: str, recipients: list[str]) -> int:

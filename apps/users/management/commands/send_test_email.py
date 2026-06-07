@@ -1,7 +1,11 @@
-from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.users.emails import EmailDeliveryError, send_smtp_test_email
+from apps.users.emails import (
+    EmailConfigurationError,
+    EmailDeliveryError,
+    send_smtp_test_email,
+    validate_smtp_configuration,
+)
 
 
 class Command(BaseCommand):
@@ -11,16 +15,10 @@ class Command(BaseCommand):
         parser.add_argument('--to', required=True, help='Destination email address')
 
     def handle(self, *args, **options):
-        backend = getattr(settings, 'EMAIL_BACKEND', '')
-        host = getattr(settings, 'EMAIL_HOST', '')
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '')
-
-        if 'console.EmailBackend' in backend:
-            raise CommandError('EMAIL_BACKEND is console.EmailBackend; configure SMTP before beta validation.')
-        if not host:
-            raise CommandError('EMAIL_HOST is empty; configure SMTP provider host.')
-        if not from_email:
-            raise CommandError('DEFAULT_FROM_EMAIL is empty; configure a verified sender.')
+        try:
+            validate_smtp_configuration()
+        except EmailConfigurationError as exc:
+            raise CommandError(str(exc)) from exc
 
         try:
             delivered = send_smtp_test_email(options['to'])
