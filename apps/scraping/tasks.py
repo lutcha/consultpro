@@ -732,12 +732,6 @@ def _apply_tenant_intelligence_to_eligibility(source, opportunity_data: dict, el
         'tenant_minimum_score_threshold': profile.minimum_score_threshold,
     }
 
-
-def _safe_weight(value) -> int:
-    try:
-        return int(value or 0)
-    except (TypeError, ValueError):
-        return 0
     return {
         **eligibility,
         'is_eligible': max(0.0, min(1.0, confidence)) >= 0.25 and not hard_negative,
@@ -746,6 +740,13 @@ def _safe_weight(value) -> int:
         'negative_reasons': negative_reasons,
         'metadata': metadata,
     }
+
+
+def _safe_weight(value) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 @shared_task

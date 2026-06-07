@@ -3,7 +3,7 @@ from django.db.models import Count, Max, Q
 from apps.scraping.models import ScrapingJob, ScrapingSource
 
 
-BLOCKED_ACCESS = {'restricted_login', 'subscription'}
+BLOCKED_ACCESS = {'restricted_login', 'subscription', 'bot_challenge', 'robots_disallowed'}
 
 
 def _source_access(source: ScrapingSource) -> str:
@@ -18,6 +18,10 @@ def _source_access(source: ScrapingSource) -> str:
 
 def _health_reason(health_status: str, access: str, source: ScrapingSource, last_job: ScrapingJob | None) -> str:
     if health_status == 'blocked':
+        if access == 'bot_challenge':
+            return 'Fonte protegida por challenge anti-bot; manter pausada ate haver API/allowlist oficial.'
+        if access == 'robots_disallowed':
+            return 'robots.txt nao permite scraping automatico; manter pausada ate haver permissao/API oficial.'
         return 'Fonte requer login ou subscricao; manter como lead discovery ate haver acesso.'
     if health_status == 'paused':
         return 'Fonte pausada manualmente; nao entra no scraping automatico.'

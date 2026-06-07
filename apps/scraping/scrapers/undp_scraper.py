@@ -17,7 +17,7 @@ class UNDPScraper(BaseScraper):
     """Scraper for UNDP notices through UNGM, with UNDP RSS fallback."""
 
     UNGM_API_URL = "https://www.ungm.org/Public/Notice"
-    UNDP_RSS_URL = "https://procurement-notices.undp.org/feed.cfm?po_filter=all"
+    UNDP_RSS_URL = "https://procurement-notices.undp.org/rss_feeds/rss.xml"
 
     def fetch(self, url: Optional[str] = None, **kwargs) -> str:
         api_url = url or self.config.get('api_url', self.UNGM_API_URL)

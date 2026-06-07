@@ -8,6 +8,7 @@ Usage:
 from django.core.management.base import BaseCommand
 from apps.scraping.models import ScrapingSource
 from apps.scraping.requested_procurement_sources import REQUESTED_PROCUREMENT_SOURCES
+from apps.scraping.services.cos_scope import enrich_source_definitions
 
 
 DEFAULT_SOURCES = [
@@ -63,9 +64,19 @@ DEFAULT_SOURCES = [
         'scraper_class': 'WorldBankScraper',
         'scraper_config': {
             'url': 'https://www.worldbank.org/en/about/corporate-procurement/business-opportunities/operational-consulting-opportunities',
-            'api_url': 'https://search.worldbank.org/api/v2/procurement',
-            'fields': 'id,title,deadline,pdate,countryname,regionname,project_name,url,borrower,sector,docty',
-            'filter_query': 'docty:Notice AND status:Active',
+            'api_url': 'https://search.worldbank.org/api/v2/procnotices',
+            'fields': (
+                'id,title,submission_deadline_date,pdate,project_ctry_name,regionname,'
+                'project_name,url,borrower,sector,notice_type,notice_text,'
+                'procurement_group_desc,procurement_method_name'
+            ),
+            'query_params': {
+                'notice_type_exact': (
+                    'Request for Expression of Interest^Invitation for Bids^'
+                    'Invitation for Prequalification'
+                ),
+                'procurement_group_desc_exact': 'Consultant Services',
+            },
             'page_size': 50,
             'max_items': 200,
         },
@@ -79,7 +90,7 @@ DEFAULT_SOURCES = [
         'organization': 'African Development Bank',
         'url': 'https://www.afdb.org/en/about-us/careers/current-vacancies/consultants',
         'source_type': 'portal',
-        'status': 'active',
+        'status': 'paused',
         'scrape_frequency': 'daily',
         'scraper_class': 'AfDBScraper',
         'scraper_config': {
@@ -89,10 +100,17 @@ DEFAULT_SOURCES = [
             'page_size': 50,
             'page': 0,
             'status': 1,
+            'access': 'bot_challenge',
+            'notes': (
+                'AfDB public procurement endpoints currently return a Cloudflare '
+                'JavaScript/cookie challenge to server-side clients; keep paused '
+                'until official API access or allowlisting is available.'
+            ),
         },
         'filters': {
             'countries': ['CPV', 'Africa'],
             'keywords': ['consultant', 'consulting', 'expert'],
+            'access': ['bot_challenge'],
         },
     },
     {
@@ -100,20 +118,27 @@ DEFAULT_SOURCES = [
         'organization': 'UNDP',
         'url': 'https://jobs.undp.org/cj_view_jobs.cfm',
         'source_type': 'job_board',
-        'status': 'active',
+        'status': 'paused',
         'scrape_frequency': 'daily',
         'scraper_class': 'UNDPScraper',
         'scraper_config': {
             'url': 'https://jobs.undp.org/cj_view_jobs.cfm',
             'api_url': 'https://www.ungm.org/Public/Notice',
-            'rss_url': 'https://procurement-notices.undp.org/feed.cfm?po_filter=all',
+            'rss_url': 'https://procurement-notices.undp.org/rss_feeds/rss.xml',
             'notice_type': 0,
             'page_size': 50,
             'max_items': 200,
+            'access': 'robots_disallowed',
+            'notes': (
+                'UNDP RSS currently allows HTTP access but robots.txt disallows '
+                'automatic scraping; UNGM public page returns dynamic HTML rather '
+                'than JSON for this scraper.'
+            ),
         },
         'filters': {
             'countries': ['CPV', 'Africa'],
             'keywords': ['consultant', 'consultancy', 'international consultant'],
+            'access': ['robots_disallowed'],
         },
     },
     {
@@ -1171,15 +1196,21 @@ DEFAULT_SOURCES = [
         'organization': 'UNDP / UN System',
         'url': 'https://procurement-notices.undp.org',
         'source_type': 'portal',
-        'status': 'active',
+        'status': 'paused',
         'scrape_frequency': 'daily',
         'scraper_class': 'UNDPScraper',
         'scraper_config': {
             'api_url': 'https://www.ungm.org/Public/Notice',
-            'rss_url': 'https://procurement-notices.undp.org/feed.cfm?po_filter=all',
+            'rss_url': 'https://procurement-notices.undp.org/rss_feeds/rss.xml',
             'notice_type': 0,
             'page_size': 50,
             'max_items': 200,
+            'access': 'robots_disallowed',
+            'notes': (
+                'UNDP RSS currently allows HTTP access but robots.txt disallows '
+                'automatic scraping; UNGM public page returns dynamic HTML rather '
+                'than JSON for this scraper.'
+            ),
         },
         'filters': {
             'countries': ['CPV', 'Africa'],
@@ -1187,6 +1218,7 @@ DEFAULT_SOURCES = [
                 'consultant', 'consultancy', 'individual contractor',
                 'technical assistance', 'evaluation', 'assessment', 'advisory',
             ],
+            'access': ['robots_disallowed'],
         },
     },
     {
@@ -1589,6 +1621,7 @@ DEFAULT_SOURCES = [
 ]
 
 DEFAULT_SOURCES.extend(REQUESTED_PROCUREMENT_SOURCES)
+DEFAULT_SOURCES = enrich_source_definitions(DEFAULT_SOURCES)
 
 
 class Command(BaseCommand):

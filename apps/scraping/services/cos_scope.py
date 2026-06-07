@@ -181,7 +181,7 @@ def enrich_source_definition(source: dict) -> dict:
     }
 
     access = config.get('access') or next(iter(filters.get('access', []) or []), '')
-    if access in {'subscription', 'restricted_login', 'limited'}:
+    if access in {'subscription', 'restricted_login', 'limited', 'bot_challenge', 'robots_disallowed'}:
         config['intelligence_mode'] = 'partial_intelligence'
         config['limited_access_actions'] = LIMITED_ACCESS_ACTIONS
         filters['partial_intelligence'] = True
