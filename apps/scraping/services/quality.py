@@ -3,6 +3,8 @@ import html
 import re
 from dataclasses import dataclass, field
 
+from .cos_scope import CONSULTING_SERVICE_TERMS, PROJECT_TYPE_TERMS, STRATEGIC_PRIORITY_TERMS
+
 
 _NAVIGATION_TITLES = {
     'about',
@@ -34,22 +36,37 @@ _NAVIGATION_PATTERNS = [
 ]
 
 _TITLE_KEYWORDS = {
+    'advisory',
+    'assessment',
     'bid',
     'call',
+    'capacity',
     'consultancy',
     'consultant',
     'contrato',
     'concurso',
+    'evaluation',
     'expression',
+    'framework',
     'interest',
+    'pmo',
     'procurement',
     'proposal',
     'proposals',
     'quotation',
+    'services',
+    'study',
+    'technical',
     'rfp',
     'tender',
     'tenders',
+    'training',
 }
+_TITLE_KEYWORDS.update(
+    term.replace('-', ' ').split()[0]
+    for term in CONSULTING_SERVICE_TERMS + PROJECT_TYPE_TERMS + STRATEGIC_PRIORITY_TERMS
+    if term
+)
 
 
 @dataclass(frozen=True)

@@ -21,6 +21,13 @@ class KnowledgeAsset(models.Model):
     ]
 
     asset_type = models.CharField(max_length=40, choices=ASSET_TYPE_CHOICES, db_index=True)
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='knowledge_assets',
+    )
     title = models.CharField(max_length=300)
     summary = models.TextField(blank=True)
     content = models.TextField(blank=True)

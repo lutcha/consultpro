@@ -5,14 +5,16 @@ Django settings for ConsultPro project.
 import os
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Load environment variables. .env.local is ignored by Git and may override local secrets.
+load_dotenv()
+load_dotenv(BASE_DIR / '.env.local', override=True)
 
 
 # Quick-start development settings - unsuitable for production
@@ -23,6 +25,21 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+
+def _env_list(name, default=''):
+    return [item.strip() for item in os.getenv(name, default).split(',') if item.strip()]
+
+
+def _unique_list(items):
+    return list(dict.fromkeys(item for item in items if item))
+
+
+def _origin_from_url(url):
+    parsed = urlparse(str(url or '').strip())
+    if not parsed.scheme or not parsed.netloc:
+        return ''
+    return f'{parsed.scheme}://{parsed.netloc}'
 
 
 # Application definition
@@ -47,6 +64,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     'apps.core',
+    'apps.tenants',
     'apps.users',
     'apps.opportunities',
     'apps.proposals',
@@ -212,6 +230,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.tenants.middleware.TenantContextMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -346,12 +365,24 @@ SIMPLE_JWT = {
 }
 
 # CORS
-CORS_ALLOWED_ORIGINS = [
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://consultpro.cv')
+_frontend_origin = _origin_from_url(FRONTEND_URL)
+_default_cors_origins = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "https://consultpro.cv",
+    "https://www.consultpro.cv",
 ]
+CORS_ALLOWED_ORIGINS = _unique_list(
+    _default_cors_origins + [_frontend_origin] + _env_list('CORS_ALLOWED_ORIGINS')
+)
+CSRF_TRUSTED_ORIGINS = _unique_list(
+    ["https://consultpro.cv", "https://www.consultpro.cv"]
+    + [_frontend_origin]
+    + _env_list('CSRF_TRUSTED_ORIGINS')
+)
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -403,10 +434,11 @@ EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.Em
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.sendgrid.net' if SENDGRID_API_KEY else '')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() == 'true'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'apikey' if SENDGRID_API_KEY else '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', SENDGRID_API_KEY)
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@consultpro.com')
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://consultpro.cv')
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '15'))
 
 # AI / LLM Configuration
 # Providers: openai | deepseek | kimi | anthropic | qwen | google | mock

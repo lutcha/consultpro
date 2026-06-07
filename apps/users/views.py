@@ -1,8 +1,5 @@
-from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.core.mail import send_mail
-from smtplib import SMTPException
 from django.utils import timezone
 from rest_framework import viewsets, serializers, permissions, status
 from rest_framework.decorators import action
@@ -12,6 +9,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from apps.core.permissions import IsConsultantOrManager, IsManager
+from apps.users.emails import EmailDeliveryError, send_invitation_email, send_welcome_email
 from apps.users.models import User, Certification, ConsultantProfile, UserInvitation
 from apps.users.serializers import (
     UserListSerializer,
@@ -25,32 +23,6 @@ from apps.users.serializers import (
 )
 from apps.notifications.models import NotificationPreference
 from apps.notifications.serializers import NotificationPreferenceSerializer
-
-
-def _send_invitation_email(invitation, request):
-    frontend_url = getattr(settings, 'FRONTEND_URL', 'https://consultpro.cv')
-    accept_url = f"{frontend_url}/accept-invitation/{invitation.token}/"
-    invited_by_name = (
-        f"{invitation.invited_by.first_name} {invitation.invited_by.last_name}".strip()
-        if invitation.invited_by
-        else 'ConsultPro'
-    )
-    role_display = dict(invitation.ROLE_CHOICES).get(invitation.role, invitation.role)
-    subject = f"Convite para ConsultPro — {role_display}"
-    message = (
-        f"Olá,\n\n"
-        f"{invited_by_name} convidou-te para a plataforma ConsultPro como {role_display}.\n\n"
-        f"Clica no link abaixo para activar a tua conta (válido por 7 dias):\n{accept_url}\n\n"
-        f"Se não esperavas este convite, podes ignorar este email.\n\n"
-        f"Equipa ConsultPro"
-    )
-    send_mail(
-        subject=subject,
-        message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[invitation.email],
-        fail_silently=False,
-    )
 
 
 class AcceptInvitationView(APIView):
@@ -80,32 +52,29 @@ class AcceptInvitationView(APIView):
             is_active=True,
         )
 
+        if invitation.tenant_id:
+            from apps.tenants.models import TenantMembership
+            from apps.tenants.services import ensure_tenant_context_records
+
+            TenantMembership.objects.update_or_create(
+                tenant=invitation.tenant,
+                user=user,
+                defaults={'role': invitation.tenant_role, 'status': 'active'},
+            )
+            ensure_tenant_context_records(invitation.tenant)
+
         invitation.is_used = True
         invitation.accepted_at = timezone.now()
         invitation.save(update_fields=['is_used', 'accepted_at'])
 
-        _send_welcome_email(user)
+        try:
+            send_welcome_email(user)
+        except EmailDeliveryError:
+            pass
         return Response(
             {'detail': 'Conta criada com sucesso. Podes agora iniciar sessão.'},
             status=status.HTTP_201_CREATED,
         )
-
-
-def _send_welcome_email(user):
-    subject = "Bem-vindo ao ConsultPro"
-    message = (
-        f"Olá {user.first_name or user.username},\n\n"
-        f"A tua conta foi criada com sucesso na plataforma ConsultPro.\n\n"
-        f"Podes iniciar sessão em: {getattr(settings, 'FRONTEND_URL', 'https://consultpro.cv')}\n\n"
-        f"Equipa ConsultPro"
-    )
-    send_mail(
-        subject=subject,
-        message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
 
 
 class MeAPIView(APIView):
@@ -260,11 +229,11 @@ class UserViewSet(viewsets.ModelViewSet):
 
         invitation = UserInvitation.create_for(email=email, role=role, invited_by=request.user)
         try:
-            _send_invitation_email(invitation, request)
-        except (SMTPException, OSError) as exc:
+            send_invitation_email(invitation)
+        except EmailDeliveryError as exc:
             invitation.delete()
             return Response(
-                {'detail': f'Convite criado mas falhou o envio do email: {exc}'},
+                {'detail': f'Convite nao enviado: falhou o envio do email ({exc}).'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         return Response(UserInvitationSerializer(invitation).data, status=status.HTTP_201_CREATED)

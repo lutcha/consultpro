@@ -2262,3 +2262,97 @@ export async function apiMarkScrapingAlertRead(id: number): Promise<{ status: st
     method: 'POST',
   });
 }
+
+export interface ApiTenant {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  plan: string;
+  organization_type: string;
+  size: string;
+  maturity_level: string;
+  primary_country: string;
+  default_language: string;
+  settings: Record<string, unknown>;
+}
+
+export interface ApiTenantProfile {
+  legal_name: string;
+  brand_name: string;
+  website: string;
+  organization_description: string;
+  countries_of_operation: string[];
+  languages: string[];
+  core_capabilities: string[];
+  certifications: string[];
+  past_clients: string[];
+  donor_experience: string[];
+  sector_experience: string[];
+  team_size: number;
+  annual_bid_capacity: number;
+  average_contract_size: string | null;
+  preferred_contract_size: string | null;
+}
+
+export interface ApiTenantStrategy {
+  strategic_objectives: string[];
+  target_markets: string[];
+  target_donors: string[];
+  target_sectors: string[];
+  target_countries: string[];
+  priority_project_types: string[];
+  growth_goals: string[];
+  positioning_statement: string;
+  risk_appetite: string;
+  partnership_strategy: string;
+  go_no_go_preferences: Record<string, unknown>;
+}
+
+export interface ApiTenantIntelligenceProfile {
+  opportunity_keywords: string[];
+  excluded_keywords: string[];
+  preferred_sources: string[];
+  excluded_sources: string[];
+  preferred_procurement_types: string[];
+  minimum_score_threshold: number;
+  deadline_min_days: number | null;
+  deadline_max_days: number | null;
+  minimum_budget: string | null;
+  maximum_budget: string | null;
+  requires_local_partner: boolean;
+  eligible_languages: string[];
+  geographic_priority_weights: Record<string, number>;
+  sector_priority_weights: Record<string, number>;
+  donor_priority_weights: Record<string, number>;
+  scoring_weights: Record<string, number>;
+  ai_instructions: string;
+  partial_intelligence_rules: Record<string, unknown>;
+  created_from_onboarding: boolean;
+}
+
+export async function apiGetCurrentTenant(): Promise<ApiTenant> {
+  return apiRequest<ApiTenant>('/tenants/current/');
+}
+
+export async function apiGetTenantProfile(tenantId: string): Promise<ApiTenantProfile> {
+  return apiRequest<ApiTenantProfile>(`/tenants/${tenantId}/profile/`);
+}
+
+export async function apiGetTenantStrategy(tenantId: string): Promise<ApiTenantStrategy> {
+  return apiRequest<ApiTenantStrategy>(`/tenants/${tenantId}/strategy/`);
+}
+
+export async function apiGetTenantIntelligenceProfile(tenantId: string): Promise<ApiTenantIntelligenceProfile> {
+  return apiRequest<ApiTenantIntelligenceProfile>(`/tenants/${tenantId}/intelligence-profile/`);
+}
+
+export async function apiSubmitTenantOnboarding(
+  tenantId: string,
+  responses: Record<string, unknown>,
+): Promise<{ id: number; responses: Record<string, unknown>; created_at: string }> {
+  return apiRequest(`/tenants/${tenantId}/onboarding/`, {
+    method: 'POST',
+    body: JSON.stringify({ responses }),
+  });
+}

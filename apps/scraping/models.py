@@ -22,6 +22,13 @@ class ScrapingSource(models.Model):
     ]
 
     name = models.CharField(max_length=200)
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='scraping_sources',
+    )
     organization = models.CharField(max_length=200)
     url = models.URLField()
     logo = models.URLField(blank=True)
@@ -70,6 +77,13 @@ class ScrapedOpportunity(models.Model):
     ]
 
     source = models.ForeignKey(ScrapingSource, on_delete=models.CASCADE, related_name='scraped_opportunities')
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='scraped_opportunities',
+    )
     external_id = models.CharField(max_length=200, blank=True)
     external_url = models.URLField()
     
@@ -161,6 +175,13 @@ class ScrapingJob(models.Model):
     ]
 
     source = models.ForeignKey(ScrapingSource, on_delete=models.CASCADE, related_name='jobs')
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='scraping_jobs',
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     
     started_at = models.DateTimeField(null=True, blank=True)
@@ -197,6 +218,13 @@ class ScrapingAlert(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='scraping_alerts')
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='scraping_alerts',
+    )
     type = models.CharField(max_length=30, choices=TYPE_CHOICES)
     title = models.CharField(max_length=200)
     message = models.TextField()

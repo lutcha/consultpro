@@ -22,6 +22,13 @@ class Project(models.Model):
 
     # Core fields
     title = models.CharField(max_length=300)
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='projects',
+    )
     description = models.TextField(blank=True)
     proposal = models.OneToOneField(
         Proposal,

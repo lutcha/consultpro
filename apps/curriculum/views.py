@@ -5,6 +5,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.core.permissions import IsConsultantOrManager
+from apps.tenants.utils import get_request_tenant, scope_queryset_to_request_tenant
 from .models import (
     Curriculum,
     CVTemplate,
@@ -34,7 +35,8 @@ class CurriculumViewSet(viewsets.ModelViewSet):
     lookup_value_regex = r'[0-9]+'
 
     def get_queryset(self):
-        return Curriculum.objects.filter(user=self.request.user)
+        queryset = Curriculum.objects.filter(user=self.request.user)
+        return scope_queryset_to_request_tenant(queryset, self.request)
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -42,7 +44,11 @@ class CurriculumViewSet(viewsets.ModelViewSet):
         return CurriculumDetailSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        tenant = get_request_tenant(self.request)
+        if tenant:
+            serializer.save(user=self.request.user, tenant=tenant)
+        else:
+            serializer.save(user=self.request.user)
 
     @action(detail=True, methods=['post'])
     def analyze(self, request, pk=None):
@@ -97,7 +103,8 @@ class CurriculumViewSet(viewsets.ModelViewSet):
         from .matching import match_cv_to_opportunity
 
         curriculum = self.get_object()
-        opportunity = get_object_or_404(Opportunity, id=opp_id)
+        opportunity_qs = scope_queryset_to_request_tenant(Opportunity.objects.all(), request)
+        opportunity = get_object_or_404(opportunity_qs, id=opp_id)
         match = match_cv_to_opportunity(curriculum, opportunity)
         serializer = CVOpportunityMatchSerializer(match)
         return Response(serializer.data)

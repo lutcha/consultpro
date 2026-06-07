@@ -93,6 +93,7 @@ def import_scraped_opportunity(scraped_opp, user=None) -> dict:
 
     opportunity = Opportunity.objects.create(
         title=scraped_opp.title,
+        tenant=scraped_opp.tenant,
         client=scraped_opp.client or scraped_opp.organization,
         sector=enriched['sector'],
         country=enriched['country'],

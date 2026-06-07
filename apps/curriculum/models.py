@@ -17,6 +17,13 @@ class Curriculum(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='curricula')
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='curricula',
+    )
     file_name = models.CharField(max_length=255)
     file = models.FileField(upload_to='curricula/%Y/%m/')
     file_type = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES)

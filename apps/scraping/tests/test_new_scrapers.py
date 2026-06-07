@@ -130,6 +130,31 @@ class PriorityProcurementScraperTests(SimpleTestCase):
         self.assertEqual(items[0]['sector'], 'Governance')
         self.assertEqual(items[0]['external_url'], 'https://projects.worldbank.org/procurement/noticedetail/WB-1')
 
+    def test_world_bank_accepts_current_procnotices_payload(self):
+        scraper = WorldBankScraper(_make_source(organization='World Bank'))
+        items = scraper.parse(json.dumps({
+            'total': '1',
+            'procnotices': [{
+                'id': 'OP00404566',
+                'title': 'Consulting services for energy access planning',
+                'submission_deadline_date': '2028-11-24T23:59:59Z',
+                'pdate': '2026-06-01T00:00:00Z',
+                'project_ctry_name': 'Cabo Verde',
+                'regionname': 'Western And Central Africa',
+                'procurement_group_desc': 'Consultant Services',
+                'procurement_method_name': 'Individual Consultant Selection',
+                'project_name': 'Renewable energy programme',
+                'notice_type': 'Request for Expression of Interest',
+                'url': 'https://projects.worldbank.org/en/projects-operations/procurement-detail/OP00404566',
+            }]
+        }))
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['external_id'], scraper._make_external_id('WorldBank', 'OP00404566'))
+        self.assertEqual(items[0]['country'], 'Cabo Verde')
+        self.assertEqual(items[0]['sector'], 'Consultant Services')
+        self.assertTrue(items[0]['deadline'])
+
     def test_afdb_accepts_drupal_reference_fields(self):
         scraper = AfDBScraper(_make_source(organization='AfDB'))
         items = scraper.parse(json.dumps({

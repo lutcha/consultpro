@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager
+from apps.tenants.utils import scope_queryset_to_request_tenant
 
 from .models import ActivityLog, Notification
 from .serializers import ActivityLogSerializer, NotificationSerializer
@@ -19,7 +20,8 @@ class NotificationViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
 
     def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user)
+        queryset = Notification.objects.filter(user=self.request.user)
+        return scope_queryset_to_request_tenant(queryset, self.request)
 
     @action(detail=True, methods=['patch', 'post'])
     def read(self, request, pk=None):
@@ -42,3 +44,6 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['type']
     ordering_fields = ['created_at']
     ordering = ['-created_at']
+
+    def get_queryset(self):
+        return scope_queryset_to_request_tenant(super().get_queryset(), self.request)

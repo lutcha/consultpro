@@ -18,6 +18,8 @@ def get_source_category(source) -> str:
         return 'aggregator'
     if source.source_type == 'api':
         return 'grants'
+    if (source.scraper_config or {}).get('intelligence_mode') == 'partial_intelligence':
+        return 'procurement_intelligence'
     if any(token in haystack for token in ('ugpe', 'cabo verde', 'cv ', '.cv')):
         return 'national'
     if any(token in haystack for token in ('european commission', 'eu ', 'funding', 'grant', 'undp')):

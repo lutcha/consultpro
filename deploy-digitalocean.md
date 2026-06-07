@@ -48,7 +48,11 @@ Alterar:
 DEBUG=False
 SECRET_KEY=<gerar-uma-chave-segura>
 DJANGO_SETTINGS_MODULE=config.settings.production
-ALLOWED_HOSTS=<IP_DO_DROPLET>,api.consultpro.com
+ALLOWED_HOSTS=consultpro.cv,www.consultpro.cv,api.consultpro.com
+CORS_ALLOWED_ORIGINS=https://consultpro.cv,https://www.consultpro.cv
+CSRF_TRUSTED_ORIGINS=https://consultpro.cv,https://www.consultpro.cv
+FRONTEND_URL=https://consultpro.cv
+SECURE_SSL_REDIRECT=True
 
 POSTGRES_HOST=db
 POSTGRES_PASSWORD=<password-forte>
@@ -92,7 +96,7 @@ Criar `/etc/nginx/sites-available/consultpro`:
 ```nginx
 server {
     listen 80;
-    server_name <IP_DO_DROPLET> api.consultpro.com;
+    server_name consultpro.cv www.consultpro.cv api.consultpro.com;
 
     location / {
         proxy_pass http://localhost:8000;
@@ -128,7 +132,8 @@ ufw enable
 ### 12. HTTPS (Let's Encrypt) - Opcional
 ```bash
 apt install certbot python3-certbot-nginx -y
-certbot --nginx -d api.consultpro.com
+certbot --nginx -d consultpro.cv -d www.consultpro.cv -d api.consultpro.com
+curl -I https://consultpro.cv/health/
 ```
 
 ---

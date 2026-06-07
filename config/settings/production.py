@@ -2,8 +2,8 @@ from .base import *
 
 DEBUG = False
 
-_allowed = os.getenv('ALLOWED_HOSTS', 'api.consultpro.com').split(',')
-ALLOWED_HOSTS = list(set(_allowed + ['localhost', '127.0.0.1', '*']))
+_allowed = _env_list('ALLOWED_HOSTS', 'consultpro.cv,www.consultpro.cv,api.consultpro.com')
+ALLOWED_HOSTS = _unique_list(_allowed + ['localhost', '127.0.0.1'])
 
 # Security
 SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() not in ('false', '0', 'no')

@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/auth/me/', MeAPIView.as_view(), name='auth-me'),
 
     # API Endpoints
+    path('api/tenants/', include('apps.tenants.urls')),
     path('api/users/', include('apps.users.urls')),
     path('api/opportunities/', include('apps.opportunities.urls')),
     path('api/proposals/', include('apps.proposals.urls')),

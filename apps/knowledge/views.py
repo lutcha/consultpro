@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.permissions import IsConsultantOrManager
+from apps.tenants.utils import get_request_tenant, scope_queryset_to_request_tenant
 
 from .models import KnowledgeAsset
 from .serializers import KnowledgeAssetSerializer, KnowledgeSearchResultSerializer
@@ -15,7 +16,7 @@ class KnowledgeAssetViewSet(viewsets.ModelViewSet):
     permission_classes = [IsConsultantOrManager]
 
     def get_queryset(self):
-        queryset = KnowledgeAsset.objects.all()
+        queryset = scope_queryset_to_request_tenant(KnowledgeAsset.objects.all(), self.request)
         asset_type = self.request.query_params.get('asset_type')
         country = self.request.query_params.get('country')
         sector = self.request.query_params.get('sector')
@@ -28,7 +29,11 @@ class KnowledgeAssetViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        tenant = get_request_tenant(self.request)
+        if tenant:
+            serializer.save(created_by=self.request.user, tenant=tenant)
+        else:
+            serializer.save(created_by=self.request.user)
 
     @action(detail=False, methods=['get'])
     def search(self, request):
@@ -38,6 +43,7 @@ class KnowledgeAssetViewSet(viewsets.ModelViewSet):
             country=request.query_params.get('country', ''),
             sector=request.query_params.get('sector', ''),
             limit=int(request.query_params.get('limit', 10)),
+            tenant=get_request_tenant(request),
         )
         serializer = KnowledgeSearchResultSerializer(results, many=True)
         return Response(

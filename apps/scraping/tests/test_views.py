@@ -305,6 +305,40 @@ class ScrapingSourceHealthTests(APITestCase):
         self.assertFalse(item['production_ready'])
         self.assertEqual(item['access'], 'subscription')
 
+    def test_health_endpoint_marks_bot_challenge_sources_as_blocked(self):
+        self._create_source(
+            name='Bot Challenge Source',
+            url='https://example.org/challenge',
+            scraper_config={'access': 'bot_challenge'},
+            filters={'access': ['bot_challenge']},
+        )
+
+        response = self.client.get(reverse('scraping:scraping-source-health'), {'search': 'Bot Challenge Source'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item = response.data['results'][0]
+        self.assertEqual(item['health_status'], 'blocked')
+        self.assertFalse(item['production_ready'])
+        self.assertEqual(item['access'], 'bot_challenge')
+        self.assertIn('challenge anti-bot', item['health_reason'])
+
+    def test_health_endpoint_marks_robots_disallowed_sources_as_blocked(self):
+        self._create_source(
+            name='Robots Blocked Source',
+            url='https://example.org/robots-blocked',
+            scraper_config={'access': 'robots_disallowed'},
+            filters={'access': ['robots_disallowed']},
+        )
+
+        response = self.client.get(reverse('scraping:scraping-source-health'), {'search': 'Robots Blocked Source'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item = response.data['results'][0]
+        self.assertEqual(item['health_status'], 'blocked')
+        self.assertFalse(item['production_ready'])
+        self.assertEqual(item['access'], 'robots_disallowed')
+        self.assertIn('robots.txt', item['health_reason'])
+
     def test_health_endpoint_filters_by_health_status(self):
         self._create_source(name='Paused Source', url='https://example.org/paused', status='paused')
         self._create_source(name='Active Source', url='https://example.org/active')

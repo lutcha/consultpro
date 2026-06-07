@@ -95,10 +95,15 @@ class UserAdminSerializer(serializers.ModelSerializer):
 
 class UserInvitationSerializer(serializers.ModelSerializer):
     invited_by_name = serializers.SerializerMethodField(read_only=True)
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
 
     class Meta:
         model = UserInvitation
-        fields = ['id', 'token', 'email', 'role', 'invited_by_name', 'expires_at', 'is_used', 'accepted_at', 'created_at']
+        fields = [
+            'id', 'token', 'email', 'role', 'tenant', 'tenant_name',
+            'tenant_role', 'invited_by_name', 'expires_at', 'is_used',
+            'accepted_at', 'created_at',
+        ]
         read_only_fields = ['id', 'token', 'invited_by_name', 'is_used', 'accepted_at', 'created_at']
 
     def get_invited_by_name(self, obj):

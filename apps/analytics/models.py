@@ -2,6 +2,13 @@ from django.db import models
 
 
 class PredictiveMetric(models.Model):
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='predictive_metrics',
+    )
     metric_key = models.CharField(max_length=100, db_index=True)
     country_iso = models.CharField(max_length=20, blank=True, db_index=True)
     sector_code = models.CharField(max_length=100, blank=True, db_index=True)
@@ -40,6 +47,13 @@ class MarketSignal(models.Model):
     ]
 
     signal_type = models.CharField(max_length=30, choices=SIGNAL_TYPES)
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='market_signals',
+    )
     country_iso = models.CharField(max_length=20, blank=True, db_index=True)
     sector_code = models.CharField(max_length=100, blank=True, db_index=True)
     severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='low')

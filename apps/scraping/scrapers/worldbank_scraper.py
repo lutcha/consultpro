@@ -14,11 +14,12 @@ logger = logging.getLogger(__name__)
 class WorldBankScraper(BaseScraper):
     """Scraper for the World Bank public procurement search API."""
 
-    API_URL = "https://search.worldbank.org/api/v2/procurement"
+    API_URL = "https://search.worldbank.org/api/v2/procnotices"
     DETAIL_URL = "https://projects.worldbank.org/procurement/noticedetail/{notice_id}"
     DEFAULT_FIELDS = (
-        "id,title,deadline,pdate,countryname,regionname,project_name,url,"
-        "borrower,sector,docty"
+        "id,title,submission_deadline_date,pdate,project_ctry_name,regionname,"
+        "project_name,url,borrower,sector,notice_type,notice_text,"
+        "procurement_group_desc,procurement_method_name"
     )
 
     def fetch(self, url: Optional[str] = None, **kwargs) -> str:
@@ -37,16 +38,22 @@ class WorldBankScraper(BaseScraper):
                 'format': 'json',
                 'fl': self.config.get('fields', self.DEFAULT_FIELDS),
                 'rows': page_size,
-                'start': start,
-                'fq': self.config.get('filter_query', 'docty:Notice AND status:Active'),
+                'os': start,
+                'srce': self.config.get('srce', 'both'),
+                'srt': self.config.get('sort_field', 'submission_deadline_date'),
+                'order': self.config.get('order', 'desc'),
+                'apilang': self.config.get('apilang', 'en'),
             }
+            params.update(self.config.get('query_params') or {})
+            filter_query = self.config.get('filter_query')
+            if filter_query:
+                params['fq'] = filter_query
             resp = self._http_get(api_url, params=params)
             payload = resp.json()
-            response = payload.get('response') or {}
-            page_docs = response.get('docs') or []
+            page_docs = self._extract_docs(payload)
 
             if num_found is None:
-                num_found = response.get('numFound', 0)
+                num_found = self._extract_total(payload)
 
             if not page_docs:
                 break
@@ -64,7 +71,7 @@ class WorldBankScraper(BaseScraper):
         opportunities: List[Dict[str, Any]] = []
         try:
             payload = json.loads(raw_data)
-            docs = (payload.get('response') or {}).get('docs') or []
+            docs = self._extract_docs(payload)
         except (TypeError, json.JSONDecodeError) as exc:
             logger.warning(f"WorldBank: could not parse API response: {exc}")
             return []
@@ -83,19 +90,31 @@ class WorldBankScraper(BaseScraper):
 
     def _parse_doc(self, doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         notice_id = self._clean_text(str(doc.get('id') or ''))
-        title = self._clean_text(doc.get('title'))
+        title = self._clean_text(
+            doc.get('title') or doc.get('assignment_title') or
+            doc.get('project_name') or doc.get('notice_type')
+        )
         if not notice_id or not title:
             return None
 
-        country = self._clean_text(doc.get('countryname') or doc.get('country'))
+        country = self._clean_text(
+            doc.get('project_ctry_name') or doc.get('countryname') or doc.get('country')
+        )
         region = self._clean_text(doc.get('regionname') or doc.get('region'))
-        sector = self._clean_text(doc.get('sector') or doc.get('sectorname'))
-        deadline = self._parse_date(doc.get('deadline') or doc.get('closing_date'))
+        sector = self._clean_text(
+            doc.get('sector') or doc.get('sectorname') or
+            doc.get('procurement_group_desc') or doc.get('procurement_method_name')
+        )
+        deadline = self._parse_date(
+            doc.get('submission_deadline_date') or doc.get('deadline') or doc.get('closing_date')
+        )
         published_at = self._parse_date(doc.get('pdate') or doc.get('publishdate'))
         external_url = self._build_notice_url(doc, notice_id)
         description = self._clean_text(
-            doc.get('project_name') or doc.get('projectname') or doc.get('description') or title
+            doc.get('notice_text') or doc.get('project_name') or doc.get('projectname') or
+            doc.get('description') or title
         )
+        notice_type = doc.get('notice_type') or doc.get('docty')
 
         return {
             'external_id': self._make_external_id('WorldBank', notice_id),
@@ -119,7 +138,8 @@ class WorldBankScraper(BaseScraper):
             },
             'source_metadata': {
                 'api_id': notice_id,
-                'document_type': doc.get('docty'),
+                'document_type': notice_type,
+                'procurement_method': doc.get('procurement_method_name'),
                 'scraped_from': 'search.worldbank.org',
             },
         }
@@ -129,3 +149,26 @@ class WorldBankScraper(BaseScraper):
         if raw_url:
             return urljoin("https://projects.worldbank.org", raw_url)
         return self.DETAIL_URL.format(notice_id=notice_id)
+
+    @staticmethod
+    def _extract_docs(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        if not isinstance(payload, dict):
+            return []
+        procnotices = payload.get('procnotices')
+        if isinstance(procnotices, list):
+            return procnotices
+        response_docs = (payload.get('response') or {}).get('docs')
+        if isinstance(response_docs, list):
+            return response_docs
+        docs = payload.get('docs')
+        return docs if isinstance(docs, list) else []
+
+    @staticmethod
+    def _extract_total(payload: Dict[str, Any]) -> int:
+        total = payload.get('total')
+        if total is None:
+            total = (payload.get('response') or {}).get('numFound')
+        try:
+            return int(total)
+        except (TypeError, ValueError):
+            return 0

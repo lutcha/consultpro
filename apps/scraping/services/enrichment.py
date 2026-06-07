@@ -11,6 +11,7 @@ from apps.opportunities.constants import (
     SECTOR_CHOICES,
     COUNTRY_CHOICES,
 )
+from apps.scraping.services.cos_scope import classify_cos_scope_text
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,20 @@ _SECTOR_KEYWORDS: list = [
     ('commerce', ['comércio regional', 'regional trade', 'facilitação do comércio', 'trade facilitation']),
     ('industry', ['indústria', 'industry', 'industrial development']),
 ]
+
+_COS_SECTOR_KEYWORDS = [
+    ('digital_transformation', ['govtech', 'digital public infrastructure', 'smart government', 'digital services', 'interoperability']),
+    ('data_science', ['artificial intelligence', 'ai governance', 'data project', 'data analytics']),
+    ('capacity_building', ['training services', 'coaching', 'mentoring', 'institutional support']),
+    ('monitoring_evaluation', ['impact assessment', 'evaluation', 'baseline study', 'monitoring & evaluation']),
+    ('private_sector', ['msme development', 'sme development', 'entrepreneurship', 'startup ecosystem', 'incubation', 'acceleration']),
+    ('financial_services', ['financial inclusion', 'blended finance', 'development finance', 'investment readiness']),
+    ('environment', ['environmental governance', 'green economy', 'circular economy']),
+    ('research', ['feasibility study', 'diagnostic', 'assessment', 'study']),
+    ('public_administration', ['public sector modernization', 'institutional strengthening', 'regulatory reform']),
+    ('procurement', ['procurement reform', 'public procurement reform']),
+]
+_SECTOR_KEYWORDS = _COS_SECTOR_KEYWORDS + _SECTOR_KEYWORDS
 
 # ── Country name → ISO-2 code ──────────────────────────────────────────────────
 _COUNTRY_NAMES: dict = {
@@ -236,6 +251,7 @@ def enrich_for_import(scraped_opp) -> dict:
         region = detect_region(country)
         eligible = detect_eligible_countries(scraped_opp)
         consortium = detect_consortium_type(lookup)
+        cos_scope = classify_cos_scope_text(lookup)
         logger.info(
             'C3 enrich id=%s sector=%s country=%s region=%s eligible=%s consortium=%s',
             scraped_opp.id, sector, country, region, eligible, consortium,
@@ -246,6 +262,7 @@ def enrich_for_import(scraped_opp) -> dict:
             'region': region,
             'eligible_countries': eligible,
             'consortium_type': consortium,
+            'cos_scope': cos_scope,
         }
     except Exception as exc:
         logger.warning('C3 enrichment failed for id=%s: %s', scraped_opp.id, exc)
@@ -255,4 +272,5 @@ def enrich_for_import(scraped_opp) -> dict:
             'region': '',
             'eligible_countries': [],
             'consortium_type': 'solo',
+            'cos_scope': {},
         }

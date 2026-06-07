@@ -1,3 +1,6 @@
+from apps.scraping.services.cos_scope import enrich_source_definitions
+
+
 REQUESTED_PROCUREMENT_SOURCES = [
     {
         'name': 'World Bank STEP - Procurement Portal',
@@ -9,9 +12,19 @@ REQUESTED_PROCUREMENT_SOURCES = [
         'scraper_class': 'WorldBankScraper',
         'scraper_config': {
             'url': 'https://step.worldbank.org/',
-            'api_url': 'https://search.worldbank.org/api/v2/procurement',
-            'fields': 'id,title,deadline,pdate,countryname,regionname,project_name,url,borrower,sector,docty,source',
-            'filter_query': 'docty:Notice AND status:Active AND source:STEP',
+            'api_url': 'https://search.worldbank.org/api/v2/procnotices',
+            'fields': (
+                'id,title,submission_deadline_date,pdate,project_ctry_name,regionname,'
+                'project_name,url,borrower,sector,notice_type,notice_text,'
+                'procurement_group_desc,procurement_method_name'
+            ),
+            'query_params': {
+                'notice_type_exact': (
+                    'Request for Expression of Interest^Invitation for Bids^'
+                    'Invitation for Prequalification'
+                ),
+                'procurement_group_desc_exact': 'Consultant Services',
+            },
             'page_size': 50,
             'max_items': 300,
         },
@@ -149,9 +162,19 @@ REQUESTED_PROCUREMENT_SOURCES = [
         'scraper_class': 'WorldBankScraper',
         'scraper_config': {
             'url': 'https://projects.worldbank.org/en/projects-operations/procurement?srce=both',
-            'api_url': 'https://search.worldbank.org/api/v2/procurement',
-            'fields': 'id,title,deadline,pdate,countryname,regionname,project_name,url,borrower,sector,docty',
-            'filter_query': 'docty:(Notice OR Request for Expressions of Interest OR Contract Award Notice) AND status:Active',
+            'api_url': 'https://search.worldbank.org/api/v2/procnotices',
+            'fields': (
+                'id,title,submission_deadline_date,pdate,project_ctry_name,regionname,'
+                'project_name,url,borrower,sector,notice_type,notice_text,'
+                'procurement_group_desc,procurement_method_name'
+            ),
+            'query_params': {
+                'notice_type_exact': (
+                    'Request for Expression of Interest^Invitation for Bids^'
+                    'Invitation for Prequalification'
+                ),
+                'procurement_group_desc_exact': 'Consultant Services',
+            },
             'page_size': 50,
             'max_items': 300,
         },
@@ -167,17 +190,24 @@ REQUESTED_PROCUREMENT_SOURCES = [
         'organization': 'African Development Bank',
         'url': 'https://www.afdb.org/en/projects-and-operations/procurement',
         'source_type': 'api',
-        'status': 'active',
+        'status': 'paused',
         'scrape_frequency': 'daily',
         'scraper_class': 'AfDBScraper',
         'scraper_config': {
             'url': 'https://www.afdb.org/en/projects-and-operations/procurement',
             'api_url': 'https://www.afdb.org/en/projects-and-operations/procurement',
             'max_items': 200,
+            'access': 'bot_challenge',
+            'notes': (
+                'AfDB public procurement endpoints currently return a Cloudflare '
+                'JavaScript/cookie challenge to server-side clients; keep paused '
+                'until official API access or allowlisting is available.'
+            ),
         },
         'filters': {
             'countries': ['CPV', 'Africa', 'West Africa', 'PALOP'],
             'keywords': ['consultancy', 'consultant', 'request for expressions of interest', 'procurement'],
+            'access': ['bot_challenge'],
         },
         'verify_ssl': True,
         'respect_robots_txt': True,
@@ -283,7 +313,7 @@ REQUESTED_PROCUREMENT_SOURCES = [
         'organization': 'United Nations Global Marketplace',
         'url': 'https://www.ungm.org/Public/Notice',
         'source_type': 'api',
-        'status': 'active',
+        'status': 'paused',
         'scrape_frequency': 'daily',
         'scraper_class': 'UNDPScraper',
         'scraper_config': {
@@ -294,10 +324,17 @@ REQUESTED_PROCUREMENT_SOURCES = [
             'country': 'Africa / International',
             'language': 'en',
             'max_items': 200,
+            'access': 'robots_disallowed',
+            'notes': (
+                'UNDP RSS currently allows HTTP access but robots.txt disallows '
+                'automatic scraping; UNGM public page returns dynamic HTML rather '
+                'than JSON for this scraper.'
+            ),
         },
         'filters': {
             'countries': ['CPV', 'Africa', 'PALOP'],
             'keywords': ['consultancy', 'consultant', 'technical assistance', 'services'],
+            'access': ['robots_disallowed'],
         },
     },
     {
@@ -383,3 +420,5 @@ REQUESTED_PROCUREMENT_SOURCES = [
         },
     },
 ]
+
+REQUESTED_PROCUREMENT_SOURCES = enrich_source_definitions(REQUESTED_PROCUREMENT_SOURCES)

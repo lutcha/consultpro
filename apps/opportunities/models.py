@@ -30,6 +30,13 @@ class Opportunity(models.Model):
     ]
 
     title = models.CharField(max_length=500)
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='opportunities',
+    )
     client = models.CharField(max_length=200)
     client_logo = models.ImageField(upload_to='client_logos/', null=True, blank=True)
     sector = models.CharField(max_length=100, choices=SECTOR_CHOICES)
@@ -127,6 +134,13 @@ class OpportunityScore(models.Model):
 
 
 class FirmProfile(models.Model):
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='firm_profiles',
+    )
     name = models.CharField(max_length=200, default='Default firm profile')
     target_sectors = models.JSONField(default=list, blank=True)
     geographies = models.JSONField(default=list, blank=True)
@@ -148,7 +162,12 @@ class FirmProfile(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         if self.is_default:
-            FirmProfile.objects.exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
+            queryset = FirmProfile.objects.exclude(pk=self.pk).filter(is_default=True)
+            if self.tenant_id:
+                queryset = queryset.filter(tenant_id=self.tenant_id)
+            else:
+                queryset = queryset.filter(tenant__isnull=True)
+            queryset.update(is_default=False)
 
     def __str__(self):
         return self.name
@@ -164,6 +183,13 @@ class SavedFilter(models.Model):
     owner = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
+        related_name='saved_filters',
+    )
+    tenant = models.ForeignKey(
+        'tenants.Tenant',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='saved_filters',
     )
     name = models.CharField(max_length=120)

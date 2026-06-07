@@ -25,6 +25,7 @@ from .services.deadline_validator import DeadlineValidator
 from .services.cv_eligibility import CaboVerdeEligibilityValidator
 from .services.deduplication import SmartDeduplicator
 from .services.quality import assess_scraped_item, score_quality_adjustment
+from apps.tenants.intelligence import normalize_mapping, tenant_intelligence_profile, text_matches_any
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ def run_scraping_source(self, source_id, executed_by='scheduler', user_id=None):
     batch_id = str(uuid.uuid4())
     job = ScrapingJob.objects.create(
         source=source,
+        tenant=source.tenant,
         status='running',
         started_at=timezone.now(),
         executed_by=executed_by,
@@ -272,6 +274,7 @@ def _process_single_item(raw_item, source, batch_id, stats, verify_ssl: bool = T
     # === Phase 3: Cabo Verde eligibility ===
     eligibility_item = {**raw_item, 'description': analysis_description}
     eligibility = CaboVerdeEligibilityValidator.evaluate(eligibility_item)
+    eligibility = _apply_tenant_intelligence_to_eligibility(source, eligibility_item, eligibility)
 
     # === Phase 4: Smart deduplication (title + description + deadline) ===
     is_duplicate, existing_id = SmartDeduplicator.check_duplicate(
@@ -320,6 +323,7 @@ def _process_single_item(raw_item, source, batch_id, stats, verify_ssl: bool = T
                 'title': title[:500],
                 'organization': raw_item.get('organization', source.organization)[:200],
                 'client': raw_item.get('client', '')[:200],
+                'tenant': source.tenant,
                 'sector': raw_item.get('sector', '')[:100],
                 'country': raw_item.get('country', '')[:100],
                 'region': raw_item.get('region', '')[:100],
@@ -519,15 +523,21 @@ def notify_new_cv_eligible_opportunities(batch_id: str = None, hours_window: int
     if batch_id:
         qs = qs.filter(ingestion_batch_id=batch_id)
 
-    # Get managers to notify
-    managers = User.objects.filter(role__in=['manager', 'admin'])
-    if not managers.exists():
-        managers = User.objects.filter(is_staff=True)
-
     alerts_created = 0
     notifications_created = 0
 
     for opp in qs:
+        if opp.tenant_id:
+            managers = User.objects.filter(
+                tenant_memberships__tenant=opp.tenant,
+                tenant_memberships__status='active',
+                tenant_memberships__role__in=['owner', 'admin', 'manager'],
+            ).distinct()
+        else:
+            managers = User.objects.filter(role__in=['manager', 'admin'])
+            if not managers.exists():
+                managers = User.objects.filter(is_staff=True)
+
         # Skip if already alerted for this opportunity in the last 7 days
         already_alerted = ScrapingAlert.objects.filter(
             scraped_opportunity=opp,
@@ -544,6 +554,7 @@ def notify_new_cv_eligible_opportunities(batch_id: str = None, hours_window: int
                 type='new_opportunity',
                 scraped_opportunity=opp,
                 defaults={
+                    'tenant': opp.tenant,
                     'title': f'Nova oportunidade elegivel para CV: {opp.title[:80]}',
                     'message': (
                         f'Fonte: {opp.source.name}\n'
@@ -581,6 +592,7 @@ def notify_new_cv_eligible_opportunities(batch_id: str = None, hours_window: int
                     action_label='Ver Oportunidade',
                     action_url=f'/scraping/opportunities/{opp.id}/',
                     email_category='new_opportunity',
+                    tenant_id=opp.tenant_id,
                 )
                 notifications_created += 1
             except Exception as notify_exc:
@@ -594,6 +606,7 @@ def notify_new_cv_eligible_opportunities(batch_id: str = None, hours_window: int
                         'action_label': 'Ver Oportunidade',
                         'action_url': f'/scraping/opportunities/{opp.id}/',
                         'email_category': 'new_opportunity',
+                        'tenant_id': opp.tenant_id,
                     })
                     notifications_created += 1
                 except Exception:
@@ -618,6 +631,7 @@ def _create_rejected_record(source, external_id, external_url, title, raw_item,
         external_id=external_id,
         defaults={
             'external_url': external_url,
+            'tenant': source.tenant,
             'title': title[:500] if title else 'Untitled',
             'organization': raw_item.get('organization', source.organization)[:200],
             'description': raw_item.get('description', '')[:1000],
@@ -668,6 +682,71 @@ def _compute_quality_score(raw_item, deadline_validation, eligibility, quality_a
         score += score_quality_adjustment(raw_item, quality_assessment)
 
     return round(max(0.0, min(1.0, score)), 2)
+
+
+def _apply_tenant_intelligence_to_eligibility(source, opportunity_data: dict, eligibility: dict) -> dict:
+    profile = tenant_intelligence_profile(source.tenant)
+    if not profile:
+        return eligibility
+
+    text = ' '.join([
+        str(opportunity_data.get('title', '')),
+        str(opportunity_data.get('description', '')),
+        str(opportunity_data.get('organization', '')),
+        str(opportunity_data.get('sector', '')),
+        str(opportunity_data.get('country', '')),
+    ])
+    positive_matches = text_matches_any(text, profile.opportunity_keywords)
+    negative_matches = text_matches_any(text, profile.excluded_keywords)
+    sector_weights = normalize_mapping(profile.sector_priority_weights)
+    geo_weights = normalize_mapping(profile.geographic_priority_weights)
+    source_name = f'{source.name} {source.organization} {source.url}'.lower()
+    source_excluded = any(term.lower() in source_name for term in profile.excluded_sources)
+
+    confidence = float(eligibility.get('confidence', 0.0))
+    reasons = list(eligibility.get('reasons', []))
+    negative_reasons = list(eligibility.get('negative_reasons', []))
+
+    if positive_matches:
+        confidence += min(0.20, len(positive_matches) * 0.04)
+        reasons.append('tenant_keyword_match')
+    if opportunity_data.get('sector') in sector_weights:
+        confidence += min(0.15, _safe_weight(sector_weights[opportunity_data['sector']]) / 1000)
+        reasons.append('tenant_sector_priority')
+    if opportunity_data.get('country') in geo_weights:
+        confidence += min(0.15, _safe_weight(geo_weights[opportunity_data['country']]) / 1000)
+        reasons.append('tenant_geographic_priority')
+    if negative_matches:
+        confidence -= min(0.35, len(negative_matches) * 0.10)
+        negative_reasons.append('tenant_exclusion_keyword')
+    if source_excluded:
+        confidence -= 0.50
+        negative_reasons.append('tenant_excluded_source')
+
+    hard_negative = source_excluded or bool(negative_matches)
+    metadata = {
+        **eligibility.get('metadata', {}),
+        'tenant_intelligence_applied': True,
+        'tenant_keyword_matches': positive_matches,
+        'tenant_exclusion_matches': negative_matches,
+        'tenant_minimum_score_threshold': profile.minimum_score_threshold,
+    }
+
+    return {
+        **eligibility,
+        'is_eligible': max(0.0, min(1.0, confidence)) >= 0.25 and not hard_negative,
+        'confidence': round(max(0.0, min(1.0, confidence)), 2),
+        'reasons': reasons,
+        'negative_reasons': negative_reasons,
+        'metadata': metadata,
+    }
+
+
+def _safe_weight(value) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 @shared_task
