@@ -366,6 +366,7 @@ SIMPLE_JWT = {
 
 # CORS
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://consultpro.cv')
+BETA_CONTACT_EMAIL = os.getenv('BETA_CONTACT_EMAIL', 'info@consultpro.cv')
 _frontend_origin = _origin_from_url(FRONTEND_URL)
 _default_cors_origins = [
     "http://localhost:3000",

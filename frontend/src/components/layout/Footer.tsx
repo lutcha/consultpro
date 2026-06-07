@@ -2,7 +2,7 @@
 // FOOTER COMPONENT
 // ============================================
 
-import { Briefcase, Mail, Phone, MapPin, Linkedin, Twitter } from 'lucide-react';
+import { Briefcase, Mail, MapPin, Linkedin, Facebook } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FooterProps {
@@ -23,22 +23,26 @@ export function Footer({ className }: FooterProps) {
               <span className="font-semibold text-lg">ConsultPro</span>
             </div>
             <p className="text-sm text-secondary-foreground/70">
-              Plataforma inteligente para gestão de propostas de consultoria internacional.
+              Plataforma AI-native para identificar oportunidades, preparar propostas e gerir inteligência comercial para consultoria internacional.
             </p>
             <div className="flex gap-4">
               <a
-                href="#"
+                href="https://www.linkedin.com/company/consultpro-cv"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-secondary-foreground/70 hover:text-secondary-foreground transition-colors"
                 aria-label="LinkedIn"
               >
                 <Linkedin className="h-5 w-5" />
               </a>
               <a
-                href="#"
+                href="https://www.facebook.com/consultprocv"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-secondary-foreground/70 hover:text-secondary-foreground transition-colors"
-                aria-label="Twitter"
+                aria-label="Facebook"
               >
-                <Twitter className="h-5 w-5" />
+                <Facebook className="h-5 w-5" />
               </a>
             </div>
           </div>
@@ -126,23 +130,19 @@ export function Footer({ className }: FooterProps) {
             <h3 className="font-semibold mb-4">Contacto</h3>
             <ul className="space-y-3">
               <li className="flex items-start gap-2">
-                <MapPin className="h-4 w-4 mt-0.5 text-secondary-foreground/70" />
+                <MapPin className="h-4 w-4 mt-0.5 text-secondary-foreground/70 shrink-0" />
                 <span className="text-sm text-secondary-foreground/70">
-                  Av. da Liberdade, 110<br />
-                  1250-146 Lisboa, Portugal
+                  Praia, Cabo Verde
                 </span>
               </li>
               <li className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-secondary-foreground/70" />
-                <span className="text-sm text-secondary-foreground/70">
-                  +351 210 000 000
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-secondary-foreground/70" />
-                <span className="text-sm text-secondary-foreground/70">
-                  info@consultpro.com
-                </span>
+                <Mail className="h-4 w-4 text-secondary-foreground/70 shrink-0" />
+                <a
+                  href="mailto:info@consultpro.cv"
+                  className="text-sm text-secondary-foreground/70 hover:text-secondary-foreground transition-colors"
+                >
+                  info@consultpro.cv
+                </a>
               </li>
             </ul>
           </div>
