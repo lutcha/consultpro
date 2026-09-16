@@ -1,12 +1,16 @@
 from smtplib import SMTPException
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+import requests
 from django.core import mail
 from django.core.management import CommandError, call_command
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from apps.users.emails import EmailDeliveryError, send_invitation_email, send_smtp_test_email
+from apps.users.mail_backends import SendGridAPIBackend
 from apps.users.models import User, UserInvitation
+
+SENDGRID_API_BACKEND = 'apps.users.mail_backends.SendGridAPIBackend'
 
 
 class EmailServiceTests(SimpleTestCase):
@@ -42,6 +46,54 @@ class EmailServiceTests(SimpleTestCase):
     def test_send_test_email_command_rejects_missing_smtp_credentials(self):
         with self.assertRaisesMessage(CommandError, 'EMAIL_HOST_USER is empty'):
             call_command('send_test_email', to='admin@example.com')
+
+    @override_settings(
+        EMAIL_BACKEND=SENDGRID_API_BACKEND,
+        SENDGRID_API_KEY='',
+        DEFAULT_FROM_EMAIL='noreply@consultpro.test',
+    )
+    def test_send_test_email_command_rejects_missing_sendgrid_api_key(self):
+        with self.assertRaisesMessage(CommandError, 'SENDGRID_API_KEY is empty'):
+            call_command('send_test_email', to='admin@example.com')
+
+
+class SendGridAPIBackendTests(SimpleTestCase):
+    @override_settings(SENDGRID_API_KEY='SG.fake-key', EMAIL_TIMEOUT=15)
+    @patch('apps.users.mail_backends.requests.post')
+    def test_send_messages_posts_to_sendgrid_api(self, mocked_post):
+        mocked_post.return_value = Mock(status_code=202, raise_for_status=lambda: None)
+        message = mail.EmailMessage(
+            subject='Subject',
+            body='Body',
+            from_email='noreply@consultpro.cv',
+            to=['dest@example.com'],
+        )
+
+        sent = SendGridAPIBackend().send_messages([message])
+
+        self.assertEqual(sent, 1)
+        mocked_post.assert_called_once()
+        _, kwargs = mocked_post.call_args
+        self.assertEqual(kwargs['headers']['Authorization'], 'Bearer SG.fake-key')
+        self.assertEqual(kwargs['json']['from'], {'email': 'noreply@consultpro.cv'})
+        self.assertEqual(kwargs['json']['personalizations'][0]['to'], [{'email': 'dest@example.com'}])
+
+    @override_settings(SENDGRID_API_KEY='')
+    def test_send_messages_raises_when_api_key_missing(self):
+        message = mail.EmailMessage(
+            subject='Subject', body='Body', from_email='noreply@consultpro.cv', to=['dest@example.com']
+        )
+        with self.assertRaises(OSError):
+            SendGridAPIBackend().send_messages([message])
+
+    @override_settings(SENDGRID_API_KEY='SG.fake-key')
+    @patch('apps.users.mail_backends.requests.post', side_effect=requests.ConnectionError('boom'))
+    def test_send_messages_wraps_request_errors_as_oserror(self, _mocked_post):
+        message = mail.EmailMessage(
+            subject='Subject', body='Body', from_email='noreply@consultpro.cv', to=['dest@example.com']
+        )
+        with self.assertRaises(OSError):
+            SendGridAPIBackend().send_messages([message])
 
 
 class InvitationEmailTests(TestCase):
