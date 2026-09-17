@@ -328,6 +328,9 @@ jobs:
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
+  - key: ADMIN_PASSWORD
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
   - key: POSTGRES_DB
     value: ${db.DATABASE}
     scope: RUN_AND_BUILD_TIME
