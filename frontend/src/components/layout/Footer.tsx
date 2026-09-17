@@ -2,6 +2,7 @@
 // FOOTER COMPONENT
 // ============================================
 
+import { Link } from 'react-router-dom';
 import { Briefcase, Mail, MapPin, Linkedin, Facebook } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -115,16 +116,16 @@ export function Footer({ className }: FooterProps) {
                 </a>
               </li>
               <li>
-                <a
-                  href="#"
+                <Link
+                  to="/support"
                   className="text-sm text-secondary-foreground/70 hover:text-secondary-foreground transition-colors"
                 >
                   Contacto
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
-          
+
           {/* Contact */}
           <div>
             <h3 className="font-semibold mb-4">Contacto</h3>
@@ -155,18 +156,18 @@ export function Footer({ className }: FooterProps) {
               &copy; {new Date().getFullYear()} ConsultPro. Todos os direitos reservados.
             </p>
             <div className="flex gap-6">
-              <a
-                href="#"
+              <Link
+                to="/terms"
                 className="text-sm text-secondary-foreground/50 hover:text-secondary-foreground transition-colors"
               >
                 Termos de Uso
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                to="/privacy"
                 className="text-sm text-secondary-foreground/50 hover:text-secondary-foreground transition-colors"
               >
                 Política de Privacidade
-              </a>
+              </Link>
               <a
                 href="#"
                 className="text-sm text-secondary-foreground/50 hover:text-secondary-foreground transition-colors"

@@ -57,10 +57,44 @@ def beta_access_request(request):
     return JsonResponse({'status': 'ok'})
 
 
+@csrf_exempt
+@require_POST
+def support_feedback_request(request):
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'error': 'invalid payload'}, status=400)
+
+    name = str(data.get('name') or '').strip()
+    email = str(data.get('email') or '').strip()
+    category = str(data.get('category') or 'other').strip()
+    message = str(data.get('message') or '').strip()
+
+    if not name or not email or not message:
+        return JsonResponse({'error': 'name, email and message are required'}, status=400)
+
+    subject = f'[ConsultPro Suporte] {category} — {name}'
+    body = (
+        f'Nome: {name}\n'
+        f'Email: {email}\n'
+        f'Categoria: {category}\n\n'
+        f'Mensagem:\n{message}'
+    )
+    try:
+        from apps.users.emails import _send
+        _send(subject, body, [settings.SUPPORT_CONTACT_EMAIL])
+    except Exception:
+        logger.exception('support_feedback_request: email delivery failed for %s', email)
+        return JsonResponse({'error': 'delivery failed'}, status=502)
+
+    return JsonResponse({'status': 'ok'})
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', health_check, name='health-check'),
     path('api/beta-access/', beta_access_request, name='beta-access'),
+    path('api/support/feedback/', support_feedback_request, name='support-feedback'),
 
     # Authentication
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

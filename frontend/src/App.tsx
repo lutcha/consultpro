@@ -29,6 +29,9 @@ import {
   TenantOnboarding,
   SignUp,
   VerifyEmail,
+  Support,
+  Terms,
+  Privacy,
 } from '@/pages';
 
 // Protected Route wrapper
@@ -52,6 +55,9 @@ function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/verify-email/:token" element={<VerifyEmail />} />
         <Route path="/accept-invitation/:token" element={<AcceptInvitation />} />
+        <Route path="/support" element={<Support />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
 
         {/* Protected Dashboard Routes */}
         <Route

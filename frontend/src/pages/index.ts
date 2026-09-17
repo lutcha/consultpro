@@ -26,3 +26,6 @@ export { AcceptInvitation } from './AcceptInvitation';
 export { TenantOnboarding } from './TenantOnboarding';
 export { SignUp } from './SignUp';
 export { VerifyEmail } from './VerifyEmail';
+export { Support } from './Support';
+export { Terms } from './Terms';
+export { Privacy } from './Privacy';
