@@ -44,6 +44,10 @@ class UserInvitation(models.Model):
         ('consultant', 'Consultant'),
         ('viewer', 'Viewer'),
     ]
+    SIGNUP_SOURCE_CHOICES = [
+        ('admin_invite', 'Admin invite'),
+        ('self_service', 'Self service'),
+    ]
 
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     email = models.EmailField()
@@ -60,7 +64,19 @@ class UserInvitation(models.Model):
         User,
         on_delete=models.SET_NULL,
         null=True,
+        blank=True,
         related_name='sent_invitations',
+    )
+    signup_source = models.CharField(
+        max_length=20,
+        choices=SIGNUP_SOURCE_CHOICES,
+        default='admin_invite',
+        db_index=True,
+    )
+    organization_name = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text='Only used for self_service signup_source — the tenant name to create on verification.',
     )
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)

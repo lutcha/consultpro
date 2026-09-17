@@ -86,6 +86,21 @@ def send_invitation_email(invitation) -> int:
     return _send(subject, message, [invitation.email])
 
 
+def send_self_signup_verification_email(invitation) -> int:
+    verify_url = f'{_frontend_url()}/verify-email/{invitation.token}/'
+    subject = 'Confirma o teu email - ConsultPro'
+    message = (
+        f'Ola,\n\n'
+        f'Recebemos um pedido para criar a conta "{invitation.organization_name}" no ConsultPro.\n\n'
+        f'Clica no link abaixo para confirmar o teu email e ativar o periodo de teste. '
+        f'O link e valido por 48 horas:\n'
+        f'{verify_url}\n\n'
+        f'Se nao pediste esta conta, podes ignorar este email.\n\n'
+        f'Equipa ConsultPro'
+    )
+    return _send(subject, message, [invitation.email])
+
+
 def send_welcome_email(user) -> int:
     subject = 'Bem-vindo ao ConsultPro'
     message = (

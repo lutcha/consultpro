@@ -3,11 +3,8 @@
 // ============================================
 
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Menu, X, Check, Loader2 } from 'lucide-react';
+import { Briefcase, Menu, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { useState } from 'react';
 import { HeroSection } from '@/components/landing/HeroSection';
 import { FeaturesSection } from '@/components/landing/FeaturesSection';
@@ -19,7 +16,7 @@ const navLinks = [
   { label: 'Funcionalidades', href: '#features' },
   { label: 'Como Funciona', href: '#how-it-works' },
   { label: 'Planos', href: '#plans' },
-  { label: 'Contacto', href: '#contact' },
+  { label: 'Contacto', href: 'mailto:info@consultpro.cv' },
 ];
 
 const plans = [
@@ -35,9 +32,10 @@ const plans = [
       'Onboarding assistido',
       '1 organização',
     ],
-    cta: 'Solicitar Acesso Beta',
+    cta: 'Criar Conta Grátis',
     highlight: false,
     plan: 'beta',
+    ctaTarget: 'signup' as const,
   },
   {
     name: 'Profissional',
@@ -52,9 +50,10 @@ const plans = [
       'Partner matching',
       'Analytics avançados',
     ],
-    cta: 'Manifestar Interesse',
+    cta: 'Criar Conta Grátis',
     highlight: true,
     plan: 'pro',
+    ctaTarget: 'signup' as const,
   },
   {
     name: 'Enterprise',
@@ -72,89 +71,28 @@ const plans = [
     cta: 'Falar com Equipa',
     highlight: false,
     plan: 'enterprise',
+    ctaTarget: 'mailto' as const,
   },
 ];
 
-function BetaAccessForm() {
-  const [form, setForm] = useState({ name: '', organization: '', email: '', plan: 'beta', message: '' });
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-
-  const update = (key: keyof typeof form, value: string) => setForm((f) => ({ ...f, [key]: value }));
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus('sending');
-    try {
-      const res = await fetch('/api/beta-access/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      setStatus(res.ok ? 'sent' : 'error');
-    } catch {
-      setStatus('error');
-    }
-  };
-
+function SignupCta() {
+  const navigate = useNavigate();
   return (
-    <section id="contact" className="py-20 bg-primary">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-10">
-          <h2 className="text-3xl sm:text-4xl font-bold text-primary-foreground mb-4">
-            Solicitar Acesso Beta
-          </h2>
-          <p className="text-lg text-primary-foreground/80">
-            O beta é assistido e por convite. Preencha o formulário e entraremos em contacto em 24h.
-          </p>
-        </div>
-
-        {status === 'sent' ? (
-          <div className="bg-primary-foreground/10 rounded-2xl p-8 text-center text-primary-foreground">
-            <Check className="h-10 w-10 mx-auto mb-4" />
-            <p className="text-lg font-semibold">Pedido recebido!</p>
-            <p className="text-primary-foreground/80 mt-2">Vamos entrar em contacto em breve para agendar o onboarding.</p>
-          </div>
-        ) : (
-          <form onSubmit={submit} className="bg-primary-foreground/10 rounded-2xl p-8 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-primary-foreground/90">Nome *</Label>
-                <Input value={form.name} onChange={(e) => update('name', e.target.value)} required placeholder="Maria Silva" className="bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-primary-foreground/90">Organização</Label>
-                <Input value={form.organization} onChange={(e) => update('organization', e.target.value)} placeholder="Consultora Exemplo Lda" className="bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-primary-foreground/90">Email *</Label>
-              <Input type="email" value={form.email} onChange={(e) => update('email', e.target.value)} required placeholder="maria@exemplo.cv" className="bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-primary-foreground/90" htmlFor="plan-select">Plano de interesse</Label>
-              <select
-                id="plan-select"
-                value={form.plan}
-                onChange={(e) => update('plan', e.target.value)}
-                className="w-full h-10 rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 text-sm text-primary-foreground"
-              >
-                <option value="beta">Beta (gratuito)</option>
-                <option value="pro">Profissional</option>
-                <option value="enterprise">Enterprise</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-primary-foreground/90">O que procura melhorar?</Label>
-              <Textarea value={form.message} onChange={(e) => update('message', e.target.value)} rows={3} placeholder="Ex: Identificar oportunidades no Banco Mundial, melhorar a qualidade das propostas..." className="bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40" />
-            </div>
-            {status === 'error' && (
-              <p className="text-sm text-red-300">Erro ao enviar. Tente novamente ou escreva para <a href="mailto:info@consultpro.cv" className="underline">info@consultpro.cv</a>.</p>
-            )}
-            <Button type="submit" size="lg" variant="secondary" className="w-full" disabled={status === 'sending'}>
-              {status === 'sending' ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />A enviar...</> : 'Enviar Pedido'}
-            </Button>
-          </form>
-        )}
+    <section className="py-20 bg-primary">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <h2 className="text-3xl sm:text-4xl font-bold text-primary-foreground mb-4">
+          Comece agora — 15 dias grátis
+        </h2>
+        <p className="text-lg text-primary-foreground/80 mb-8">
+          Cria a tua conta em minutos. Sem cartão de crédito, sem espera por aprovação manual.
+        </p>
+        <Button size="lg" variant="secondary" onClick={() => navigate('/signup')}>
+          Criar Conta Grátis
+        </Button>
+        <p className="text-sm text-primary-foreground/60 mt-4">
+          Precisas de SSO, RLS dedicado ou onboarding white-glove?{' '}
+          <a href="mailto:info@consultpro.cv" className="underline">Fala com a equipa</a>.
+        </p>
       </div>
     </section>
   );
@@ -196,8 +134,8 @@ export function LandingPage() {
               <Button variant="ghost" onClick={() => navigate('/login')}>
                 Entrar
               </Button>
-              <Button onClick={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })}>
-                Solicitar Acesso
+              <Button onClick={() => navigate('/signup')}>
+                Criar Conta
               </Button>
             </div>
 
@@ -235,8 +173,8 @@ export function LandingPage() {
                 <Button variant="outline" className="w-full" onClick={() => navigate('/login')}>
                   Entrar
                 </Button>
-                <Button className="w-full" onClick={() => { setMobileMenuOpen(false); document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                  Solicitar Acesso
+                <Button className="w-full" onClick={() => { setMobileMenuOpen(false); navigate('/signup'); }}>
+                  Criar Conta
                 </Button>
               </div>
             </div>
@@ -294,14 +232,11 @@ export function LandingPage() {
                   <Button
                     variant={plan.highlight ? 'default' : 'outline'}
                     className="w-full"
-                    onClick={() => {
-                      const el = document.getElementById('contact');
-                      if (el) el.scrollIntoView({ behavior: 'smooth' });
-                      setTimeout(() => {
-                        const planInput = document.getElementById('plan-select') as HTMLSelectElement | null;
-                        if (planInput) planInput.value = plan.plan;
-                      }, 400);
-                    }}
+                    onClick={() =>
+                      plan.ctaTarget === 'mailto'
+                        ? (window.location.href = 'mailto:info@consultpro.cv')
+                        : navigate('/signup')
+                    }
                   >
                     {plan.cta}
                   </Button>
@@ -311,8 +246,8 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* Beta Access Form */}
-        <BetaAccessForm />
+        {/* Signup CTA */}
+        <SignupCta />
       </main>
 
       {/* Footer */}

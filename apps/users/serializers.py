@@ -136,6 +136,48 @@ class AcceptInvitationSerializer(serializers.Serializer):
         return attrs
 
 
+class SelfSignupSerializer(serializers.Serializer):
+    organization_name = serializers.CharField(max_length=200, trim_whitespace=True)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate_organization_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Nome da organização é obrigatório.')
+        return value
+
+    def validate_email(self, value):
+        value = value.lower().strip()
+        if User.objects.filter(email=value, is_active=True).exists():
+            raise serializers.ValidationError('Já existe uma conta ativa com este email. Inicia sessão.')
+        return value
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs.pop('confirm_password'):
+            raise serializers.ValidationError({'confirm_password': 'As passwords não coincidem.'})
+        try:
+            validate_password(attrs['password'])
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'password': list(exc.messages)})
+        return attrs
+
+
+class VerifyEmailSerializer(serializers.Serializer):
+    token = serializers.UUIDField()
+
+    def validate_token(self, value):
+        try:
+            invitation = UserInvitation.objects.get(token=value, signup_source='self_service')
+        except UserInvitation.DoesNotExist:
+            raise serializers.ValidationError('Link de confirmação inválido.')
+        if not invitation.is_valid:
+            raise serializers.ValidationError('Link de confirmação expirado ou já utilizado.')
+        self.invitation = invitation
+        return value
+
+
 class MeSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
     certifications = CertificationSerializer(many=True, read_only=True)
