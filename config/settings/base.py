@@ -368,6 +368,7 @@ SIMPLE_JWT = {
 # CORS
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://consultpro.cv')
 BETA_CONTACT_EMAIL = os.getenv('BETA_CONTACT_EMAIL', 'info@consultpro.cv')
+SUPPORT_CONTACT_EMAIL = os.getenv('SUPPORT_CONTACT_EMAIL', BETA_CONTACT_EMAIL)
 
 # Self-service signup (Workstream T9)
 TURNSTILE_SECRET_KEY = os.getenv('TURNSTILE_SECRET_KEY', '')
