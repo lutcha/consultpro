@@ -1647,7 +1647,8 @@ class Command(BaseCommand):
 
         for src_data in DEFAULT_SOURCES:
             source_status = src_data['status']
-            if src_data['scraper_class'] in ('EUFundingScraper', 'GIZScraper'):
+            access_mode = (src_data.get('scraper_config') or {}).get('access')
+            if src_data['scraper_class'] in ('EUFundingScraper', 'GIZScraper') and access_mode != 'dynamic_portal':
                 source_status = 'active'
 
             source, created = ScrapingSource.objects.update_or_create(

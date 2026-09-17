@@ -42,6 +42,31 @@ class COSScopeClassificationTests(SimpleTestCase):
         )
         self.assertTrue(sources['GlobalTenders - Guinea-Bissau']['filters']['partial_intelligence'])
 
+    def test_requested_eu_opportunityhub_sources_are_modelled_conservatively(self):
+        sources = {src['name']: src for src in REQUESTED_PROCUREMENT_SOURCES}
+
+        self.assertEqual(sources['EIC - Funding Opportunities']['status'], 'active')
+        self.assertEqual(
+            sources['EIC - Funding Opportunities']['scraper_config']['source_category'],
+            'eu_grants',
+        )
+        self.assertEqual(
+            sources['EU Funding & Tenders - Calls for Tenders']['status'],
+            'paused',
+        )
+        self.assertEqual(
+            sources['EU Funding & Tenders - Calls for Tenders']['scraper_config']['access'],
+            'dynamic_portal',
+        )
+        self.assertEqual(
+            sources['OpportunityHub EU - Funding Opportunities']['scraper_config']['intelligence_mode'],
+            'partial_intelligence',
+        )
+        self.assertEqual(
+            sources['OpportunityHub EU - Tech Heatmap']['filters']['category'],
+            'market_intelligence',
+        )
+
 
 class COSScopePipelineTests(TestCase):
     def test_eligibility_accepts_regional_consulting_scope(self):

@@ -73,20 +73,15 @@ class ECREEEScraper(BaseScraper):
         description = self._clean_text(summary_elem.get_text()) if summary_elem else title
         text_combined = f"{title} {description}".lower()
 
-        # Extract deadline from text
-        deadline = None
-        deadline_text = None
-        # Patterns like "Deadline: 15 May 2025" or "Closing date: 30/04/2025"
-        dl_patterns = [
-            r'(?:deadline|closing date|date limite|prazo)\s*[:\-]?\s*(\d{1,2}[\s\/\-][A-Za-z]+[\s\/\-]\d{4})',
-            r'(?:deadline|closing date|date limite|prazo)\s*[:\-]?\s*(\d{1,2}[\s\/\-]\d{1,2}[\s\/\-]\d{4})',
-        ]
-        for pat in dl_patterns:
-            m = re.search(pat, text_combined, re.I)
-            if m:
-                deadline_text = m.group(1)
-                deadline = self._parse_date(deadline_text)
-                break
+        deadline, deadline_text = self._extract_deadline(text_combined)
+        deadline_source = 'listing' if deadline else None
+
+        if not deadline and detail_url:
+            detail_deadline, detail_deadline_text = self._fetch_detail_deadline(detail_url)
+            if detail_deadline:
+                deadline = detail_deadline
+                deadline_text = detail_deadline_text
+                deadline_source = 'detail'
 
         published = self._parse_date(date_elem.get('datetime') or date_elem.get_text()) if date_elem else None
 
@@ -129,5 +124,39 @@ class ECREEEScraper(BaseScraper):
             'source_metadata': {
                 'scraped_from': 'ecreee.org',
                 'deadline_text': deadline_text,
+                'deadline_source': deadline_source,
             },
         }
+
+    def _fetch_detail_deadline(self, detail_url: str) -> tuple:
+        try:
+            resp = self._http_get(detail_url, retries=0)
+        except Exception as exc:
+            logger.info("ECREEE: detail fetch failed for %s: %s", detail_url, exc)
+            return None, None
+
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        detail_text = soup.get_text(separator=' ', strip=True)
+        return self._extract_deadline(detail_text)
+
+    def _extract_deadline(self, text: str) -> tuple:
+        if not text:
+            return None, None
+
+        # ECREEE posts usually phrase closing dates as deadline/submission
+        # labels followed by a human date; keep regex broad but label-bound.
+        weekday = r'(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+'
+        named_date = rf'(?:{weekday})?\d{{1,2}}(?:st|nd|rd|th)?(?:\s+of)?[\s,\/\-]+[A-Za-z]+[\s,\/\-]+\d{{4}}'
+        dl_patterns = [
+            rf'(?:deadline for submission is no later than)\s*({named_date})',
+            rf'(?:deadline|closing date|submission deadline|date limite|prazo)\s*[:\-]?\s*({named_date})',
+            r'(?:deadline|closing date|submission deadline|date limite|prazo)\s*[:\-]?\s*(\d{1,2}[\s\/\-]\d{1,2}[\s\/\-]\d{4})',
+            rf'\b({named_date})\b',
+        ]
+        for pat in dl_patterns:
+            match = re.search(pat, text, re.I)
+            if match:
+                deadline_text = match.group(1)
+                return self._parse_date(deadline_text), deadline_text
+
+        return None, None

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 
 from apps.scraping.scrapers.afdb_scraper import AfDBScraper
+from apps.scraping.scrapers.ecreee_scraper import ECREEEScraper
 from apps.scraping.scrapers.eu_funding_scraper import EUFundingScraper
 from apps.scraping.scrapers.generic_portal_scraper import GenericPortalScraper
 from apps.scraping.scrapers.giz_scraper import GIZScraper
@@ -230,6 +231,70 @@ class PriorityProcurementScraperTests(SimpleTestCase):
         self.assertEqual(items[0]['organization'], 'ECOWAS')
         self.assertTrue(items[0]['deadline'])
 
+    def test_generic_portal_ecowas_parses_closing_date_embedded_in_title(self):
+        scraper = GenericPortalScraper(_make_source(
+            name='ECOWAS - Procurement Portal',
+            organization='ECOWAS',
+            url='https://www.ecowas.int/procurement/',
+            scraper_config={
+                'item_selectors': ['article'],
+                'title_selector': 'h3 a',
+                'link_selector': 'a[href]',
+                'deadline_selector': '.deadline',
+                'organization': 'ECOWAS',
+                'client': 'ECOWAS / CEDEAO',
+                'country': 'West Africa',
+            },
+        ))
+        html = """
+            <article>
+              <h3>
+                <a href="/procurement/regional-advisory">
+                  Expression of interest for regional advisory services - Closing date: 30 Sep, 2026
+                </a>
+              </h3>
+              <p>Consultancy support for ECOWAS institutions.</p>
+            </article>
+        """
+
+        items = scraper.parse(html)
+
+        self.assertEqual(len(items), 1)
+        self.assertIn('2026-09-30', items[0]['deadline'])
+        self.assertEqual(items[0]['organization'], 'ECOWAS')
+        self.assertEqual(items[0]['country'], 'West Africa')
+        self.assertEqual(
+            items[0]['external_url'],
+            'https://www.ecowas.int/procurement/regional-advisory',
+        )
+
+    def test_generic_portal_ecowas_parses_closing_date_text_variation(self):
+        scraper = GenericPortalScraper(_make_source(
+            name='ECOWAS - Procurement Portal',
+            organization='ECOWAS',
+            url='https://www.ecowas.int/procurement/',
+            scraper_config={
+                'item_selectors': ['article'],
+                'title_selector': 'h3 a',
+                'link_selector': 'a[href]',
+                'deadline_selector': '.deadline',
+                'organization': 'ECOWAS',
+                'client': 'ECOWAS / CEDEAO',
+                'country': 'West Africa',
+            },
+        ))
+        html = """
+            <article>
+              <h3><a href="/procurement/digital-trade">Technical assistance for digital trade facilitation</a></h3>
+              <p>Closing date - 30 September, 2026</p>
+            </article>
+        """
+
+        items = scraper.parse(html)
+
+        self.assertEqual(len(items), 1)
+        self.assertIn('2026-09-30', items[0]['deadline'])
+
     def test_luxdev_deduplicates_rejects_navigation_and_parses_numeric_deadline(self):
         scraper = LuxDevScraper(_make_source(
             name='LuxDev - Marches',
@@ -289,6 +354,151 @@ class PriorityProcurementScraperTests(SimpleTestCase):
         self.assertEqual(items[0]['external_url'], 'https://ugpe.gov.cv/concursos/ugpe-2026-01')
         self.assertEqual(items[0]['country'], 'Cabo Verde')
         self.assertTrue(items[0]['deadline'])
+
+
+class ECREEEScraperTests(SimpleTestCase):
+    @patch('apps.scraping.scrapers.ecreee_scraper.BaseScraper._http_get')
+    def test_fetches_detail_deadline_when_listing_has_none(self, mock_get):
+        mock_get.return_value = _response("""
+            <html><body>
+              <article>
+                <p>Submission Deadline: 31 December 2028 at 23:59 GMT</p>
+                <p>Regional renewable energy technical assistance.</p>
+              </article>
+            </body></html>
+        """)
+        scraper = ECREEEScraper(_make_source(
+            name='ECREEE - Procurement Notices',
+            organization='ECREEE',
+            url='https://www.ecreee.org/category/procurement-notices/',
+        ))
+
+        items = scraper.parse("""
+            <article class="post">
+              <h2><a href="/procurement/energy-advisory/">Consulting services for renewable energy planning</a></h2>
+              <p>Expression of interest for regional advisory support.</p>
+            </article>
+        """)
+
+        self.assertEqual(len(items), 1)
+        self.assertTrue(items[0]['deadline'])
+        self.assertEqual(items[0]['source_metadata']['deadline_source'], 'detail')
+        self.assertEqual(items[0]['source_metadata']['deadline_text'], '31 December 2028')
+        self.assertEqual(
+            items[0]['external_url'],
+            'https://www.ecreee.org/procurement/energy-advisory/',
+        )
+        mock_get.assert_called_once_with(
+            'https://www.ecreee.org/procurement/energy-advisory/',
+            retries=0,
+        )
+
+    @patch('apps.scraping.scrapers.ecreee_scraper.BaseScraper._http_get')
+    def test_detail_fetch_failure_does_not_crash(self, mock_get):
+        mock_get.side_effect = TimeoutError('detail timeout')
+        scraper = ECREEEScraper(_make_source(
+            name='ECREEE - Procurement Notices',
+            organization='ECREEE',
+            url='https://www.ecreee.org/category/procurement-notices/',
+        ))
+
+        items = scraper.parse("""
+            <article class="post">
+              <h2><a href="/procurement/no-deadline/">Regional clean energy advisory</a></h2>
+              <p>Request for expressions of interest.</p>
+            </article>
+        """)
+
+        self.assertEqual(len(items), 1)
+        self.assertIsNone(items[0]['deadline'])
+        self.assertIsNone(items[0]['source_metadata']['deadline_source'])
+
+    @patch('apps.scraping.scrapers.ecreee_scraper.BaseScraper._http_get')
+    def test_listing_deadline_skips_detail_fetch_and_keeps_absolute_url(self, mock_get):
+        scraper = ECREEEScraper(_make_source(
+            name='ECREEE - Procurement Notices',
+            organization='ECREEE',
+            url='https://www.ecreee.org/category/procurement-notices/',
+        ))
+
+        items = scraper.parse("""
+            <article class="post">
+              <h2><a href="https://www.ecreee.org/procurement/solar-advisory/">Solar advisory services</a></h2>
+              <p>Deadline: 15 January 2029</p>
+            </article>
+        """)
+
+        self.assertEqual(len(items), 1)
+        self.assertTrue(items[0]['deadline'])
+        self.assertEqual(items[0]['source_metadata']['deadline_source'], 'listing')
+        self.assertEqual(
+            items[0]['external_url'],
+            'https://www.ecreee.org/procurement/solar-advisory/',
+        )
+        mock_get.assert_not_called()
+
+    @patch('apps.scraping.scrapers.ecreee_scraper.BaseScraper._http_get')
+    def test_parses_no_later_than_submission_deadline_phrase(self, mock_get):
+        scraper = ECREEEScraper(_make_source(
+            name='ECREEE - Procurement Notices',
+            organization='ECREEE',
+            url='https://www.ecreee.org/category/procurement-notices/',
+        ))
+
+        items = scraper.parse("""
+            <article class="post">
+              <h2><a href="/procurement/regional-energy-consultancy/">Regional energy consultancy</a></h2>
+              <p>The deadline for submission is no later than 13th of August 2026.</p>
+            </article>
+        """)
+
+        self.assertEqual(len(items), 1)
+        self.assertIn('2026-08-13', items[0]['deadline'])
+        self.assertEqual(items[0]['source_metadata']['deadline_text'], '13th of august 2026')
+        self.assertEqual(items[0]['source_metadata']['deadline_source'], 'listing')
+        mock_get.assert_not_called()
+
+    @patch('apps.scraping.scrapers.ecreee_scraper.BaseScraper._http_get')
+    def test_parses_standalone_named_date_as_deadline(self, mock_get):
+        scraper = ECREEEScraper(_make_source(
+            name='ECREEE - Procurement Notices',
+            organization='ECREEE',
+            url='https://www.ecreee.org/category/procurement-notices/',
+        ))
+
+        items = scraper.parse("""
+            <article class="post">
+              <h2><a href="/procurement/solar-market-study/">Solar market study</a></h2>
+              <p>Expressions of interest must be received by 30 July 2026.</p>
+            </article>
+        """)
+
+        self.assertEqual(len(items), 1)
+        self.assertIn('2026-07-30', items[0]['deadline'])
+        self.assertEqual(items[0]['source_metadata']['deadline_text'], '30 july 2026')
+        self.assertEqual(items[0]['source_metadata']['deadline_source'], 'listing')
+        mock_get.assert_not_called()
+
+    @patch('apps.scraping.scrapers.ecreee_scraper.BaseScraper._http_get')
+    def test_parses_submission_deadline_with_weekday(self, mock_get):
+        scraper = ECREEEScraper(_make_source(
+            name='ECREEE - Procurement Notices',
+            organization='ECREEE',
+            url='https://www.ecreee.org/category/procurement-notices/',
+        ))
+
+        items = scraper.parse("""
+            <article class="post">
+              <h2><a href="/procurement/grid-integration-advisory/">Grid integration advisory</a></h2>
+              <p>Submission deadline: Monday, 13 April 2026.</p>
+            </article>
+        """)
+
+        self.assertEqual(len(items), 1)
+        self.assertIn('2026-04-13', items[0]['deadline'])
+        self.assertEqual(items[0]['source_metadata']['deadline_text'], 'monday, 13 april 2026')
+        self.assertEqual(items[0]['source_metadata']['deadline_source'], 'listing')
+        mock_get.assert_not_called()
 
 
 class EUFundingScraperTests(SimpleTestCase):
