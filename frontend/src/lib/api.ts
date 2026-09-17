@@ -227,6 +227,34 @@ export async function apiAcceptInvitation(data: {
   });
 }
 
+export async function apiSelfSignup(data: {
+  organization_name: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+  turnstile_token?: string;
+}): Promise<{ detail: string }> {
+  return apiRequest<{ detail: string }>('/users/signup/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export interface VerifyEmailResponse {
+  access: string;
+  refresh: string;
+  tenant_id: string;
+}
+
+export async function apiVerifyEmail(token: string): Promise<VerifyEmailResponse> {
+  const data = await apiRequest<VerifyEmailResponse>('/users/verify-email/', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+  setTokens(data.access, data.refresh);
+  return data;
+}
+
 export async function apiPatchUser(id: number, data: { role?: string; availability?: string; is_active?: boolean }): Promise<ApiUser> {
   return apiRequest<ApiUser>(`/users/${id}/admin-update/`, { method: 'PATCH', body: JSON.stringify(data) });
 }

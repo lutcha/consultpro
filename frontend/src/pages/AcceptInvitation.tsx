@@ -94,6 +94,8 @@ export function AcceptInvitation() {
                     <Label htmlFor="first_name">Nome *</Label>
                     <Input
                       id="first_name"
+                      name="first_name"
+                      autoComplete="given-name"
                       value={form.first_name}
                       onChange={(e) => setForm(f => ({ ...f, first_name: e.target.value }))}
                       placeholder="João"
@@ -105,6 +107,8 @@ export function AcceptInvitation() {
                     <Label htmlFor="last_name">Apelido</Label>
                     <Input
                       id="last_name"
+                      name="last_name"
+                      autoComplete="family-name"
                       value={form.last_name}
                       onChange={(e) => setForm(f => ({ ...f, last_name: e.target.value }))}
                       placeholder="Ferreira"
@@ -116,7 +120,9 @@ export function AcceptInvitation() {
                   <Label htmlFor="password">Password *</Label>
                   <Input
                     id="password"
+                    name="password"
                     type="password"
+                    autoComplete="new-password"
                     placeholder="••••••••"
                     value={form.password}
                     onChange={(e) => setForm(f => ({ ...f, password: e.target.value }))}
@@ -128,7 +134,9 @@ export function AcceptInvitation() {
                   <Label htmlFor="confirm_password">Confirmar Password *</Label>
                   <Input
                     id="confirm_password"
+                    name="confirm_password"
                     type="password"
+                    autoComplete="new-password"
                     placeholder="••••••••"
                     value={form.confirm_password}
                     onChange={(e) => setForm(f => ({ ...f, confirm_password: e.target.value }))}

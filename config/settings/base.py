@@ -346,6 +346,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
         'user': '1000/hour',
+        'signup': '5/hour',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
@@ -367,6 +368,10 @@ SIMPLE_JWT = {
 # CORS
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://consultpro.cv')
 BETA_CONTACT_EMAIL = os.getenv('BETA_CONTACT_EMAIL', 'info@consultpro.cv')
+
+# Self-service signup (Workstream T9)
+TURNSTILE_SECRET_KEY = os.getenv('TURNSTILE_SECRET_KEY', '')
+SELF_SERVICE_TRIAL_DAYS = int(os.getenv('SELF_SERVICE_TRIAL_DAYS', '15'))
 _frontend_origin = _origin_from_url(FRONTEND_URL)
 _default_cors_origins = [
     "http://localhost:3000",

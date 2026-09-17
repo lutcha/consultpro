@@ -54,6 +54,11 @@ class Tenant(models.Model):
     primary_country = models.CharField(max_length=100, blank=True)
     default_language = models.CharField(max_length=10, default='pt')
     settings = models.JSONField(default=dict, blank=True)
+    trial_ends_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Set only for self-service trial tenants. Null means no automatic trial expiry.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
