@@ -24,7 +24,23 @@ import { useState } from 'react';
 interface SidebarProps {
   className?: string;
   onClose?: () => void;
+  tenantPlan?: string;
+  tenantStatus?: string;
 }
+
+const planLabels: Record<string, string> = {
+  beta: 'Beta',
+  basic: 'Básico',
+  pro: 'Profissional',
+  enterprise: 'Empresarial',
+};
+
+const statusLabels: Record<string, string> = {
+  trialing: 'Período experimental',
+  active: 'Ativo',
+  suspended: 'Suspenso',
+  cancelled: 'Cancelado',
+};
 
 const navigationItems = [
   {
@@ -84,7 +100,7 @@ const navigationItems = [
   },
 ];
 
-export function Sidebar({ className, onClose }: SidebarProps) {
+export function Sidebar({ className, onClose, tenantPlan, tenantStatus }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   
@@ -169,13 +185,14 @@ export function Sidebar({ className, onClose }: SidebarProps) {
             <p className="text-xs font-medium text-muted-foreground mb-1">
               Plano Atual
             </p>
-            <p className="text-sm font-semibold">Professional</p>
-            <div className="mt-2 h-1.5 bg-muted-foreground/20 rounded-full overflow-hidden">
-              <div className="h-full w-3/4 bg-primary rounded-full" />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              12/15 propostas este mês
+            <p className="text-sm font-semibold">
+              {tenantPlan ? planLabels[tenantPlan] ?? tenantPlan : 'A carregar...'}
             </p>
+            {tenantStatus && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {statusLabels[tenantStatus] ?? tenantStatus}
+              </p>
+            )}
           </div>
         </div>
       )}
