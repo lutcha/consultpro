@@ -6,10 +6,11 @@ Does NOT replace ScrapingJob.error_log - runs alongside it.
 import datetime
 import json
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-FAILED_LOG_PATH = Path("logs/failed_scrapes.log")
+FAILED_LOG_PATH = Path(os.getenv("FAILED_SCRAPES_LOG_PATH", "logs/failed_scrapes.log"))
 FAILED_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 _handler = RotatingFileHandler(

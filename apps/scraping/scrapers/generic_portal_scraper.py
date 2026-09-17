@@ -108,8 +108,10 @@ class GenericPortalScraper(BaseScraper):
         if not deadline:
             # Try regex from full text
             dl_patterns = [
+                r'(?:deadline|closing(?:\s+date)?|prazo|due)\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3,12},?\s+\d{4})',
                 r'(?:deadline|closing|prazo|due)\s*[:\-]?\s*(\d{1,2}[\s\/\-][A-Za-z]+[\s\/\-]\d{4})',
                 r'(?:deadline|closing|prazo|due)\s*[:\-]?\s*(\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{4})',
+                r'(\d{1,2}\s+[A-Za-z]{3,12},\s+\d{4})',
                 r'(\d{1,2}\s+[A-Za-z]+\s+\d{4})',
                 r'(\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{4})',
             ]

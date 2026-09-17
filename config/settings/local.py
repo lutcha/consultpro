@@ -19,7 +19,7 @@ DATABASES = {
 # Disable S3/MinIO, use local file storage
 DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.getenv('MEDIA_ROOT', BASE_DIR / 'media'))
 
 # Email console backend
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
