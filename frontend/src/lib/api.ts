@@ -227,6 +227,24 @@ export async function apiAcceptInvitation(data: {
   });
 }
 
+export async function apiSubmitSupportFeedback(data: {
+  name: string;
+  email: string;
+  category: string;
+  message: string;
+}): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE}/support/feedback/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || `Erro ao enviar (${res.status})`);
+  }
+  return body;
+}
+
 export async function apiSelfSignup(data: {
   organization_name: string;
   email: string;
