@@ -19,18 +19,27 @@ def _frontend_url() -> str:
     return str(getattr(settings, 'FRONTEND_URL', 'https://consultpro.cv')).rstrip('/')
 
 
+SENDGRID_API_BACKEND = 'apps.users.mail_backends.SendGridAPIBackend'
+
+
 def validate_smtp_configuration() -> None:
     backend = str(getattr(settings, 'EMAIL_BACKEND', ''))
     host = str(getattr(settings, 'EMAIL_HOST', ''))
     from_email = str(getattr(settings, 'DEFAULT_FROM_EMAIL', ''))
     host_user = str(getattr(settings, 'EMAIL_HOST_USER', ''))
     host_password = str(getattr(settings, 'EMAIL_HOST_PASSWORD', ''))
+    sendgrid_api_key = str(getattr(settings, 'SENDGRID_API_KEY', ''))
 
     if 'console.EmailBackend' in backend:
         raise EmailConfigurationError(
             'EMAIL_BACKEND is console.EmailBackend; configure SMTP before beta validation.'
         )
-    if 'smtp.EmailBackend' in backend:
+    if backend == SENDGRID_API_BACKEND:
+        if not sendgrid_api_key:
+            raise EmailConfigurationError(
+                'SENDGRID_API_KEY is empty; configure the SendGrid API key for the HTTP backend.'
+            )
+    elif 'smtp.EmailBackend' in backend:
         if not host:
             raise EmailConfigurationError('EMAIL_HOST is empty; configure SMTP provider host.')
         if not host_user:
@@ -72,6 +81,21 @@ def send_invitation_email(invitation) -> int:
         f'Clica no link abaixo para activar a tua conta. O convite e valido por 7 dias:\n'
         f'{accept_url}\n\n'
         f'Se nao esperavas este convite, podes ignorar este email.\n\n'
+        f'Equipa ConsultPro'
+    )
+    return _send(subject, message, [invitation.email])
+
+
+def send_self_signup_verification_email(invitation) -> int:
+    verify_url = f'{_frontend_url()}/verify-email/{invitation.token}/'
+    subject = 'Confirma o teu email - ConsultPro'
+    message = (
+        f'Ola,\n\n'
+        f'Recebemos um pedido para criar a conta "{invitation.organization_name}" no ConsultPro.\n\n'
+        f'Clica no link abaixo para confirmar o teu email e ativar o periodo de teste. '
+        f'O link e valido por 48 horas:\n'
+        f'{verify_url}\n\n'
+        f'Se nao pediste esta conta, podes ignorar este email.\n\n'
         f'Equipa ConsultPro'
     )
     return _send(subject, message, [invitation.email])

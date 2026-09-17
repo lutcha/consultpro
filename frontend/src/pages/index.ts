@@ -24,3 +24,5 @@ export { ScrapingPage } from './ScrapingPage';
 export { Analytics } from './Analytics';
 export { AcceptInvitation } from './AcceptInvitation';
 export { TenantOnboarding } from './TenantOnboarding';
+export { SignUp } from './SignUp';
+export { VerifyEmail } from './VerifyEmail';

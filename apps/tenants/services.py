@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
@@ -34,10 +35,18 @@ def _unique_slug(name: str) -> str:
 
 
 @transaction.atomic
-def create_tenant_with_owner(name: str, owner, **tenant_fields) -> Tenant:
+def create_tenant_with_owner(name: str, owner, trial_days: int | None = None, **tenant_fields) -> Tenant:
+    """
+    trial_days is only passed by the self-service signup path. Admin/assisted
+    tenant creation never sets it, so trial_ends_at stays null (no automatic
+    expiry) for every tenant created before this feature and for every
+    manually-provisioned beta client.
+    """
+    trial_ends_at = timezone.now() + timedelta(days=trial_days) if trial_days else None
     tenant = Tenant.objects.create(
         name=name,
         slug=tenant_fields.pop('slug', '') or _unique_slug(name),
+        trial_ends_at=trial_ends_at,
         **tenant_fields,
     )
     TenantMembership.objects.create(
