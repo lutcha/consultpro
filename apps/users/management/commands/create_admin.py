@@ -1,8 +1,9 @@
+import os
+
 from django.core.management.base import BaseCommand
 from apps.users.models import User
 
 ADMIN_EMAIL = 'admin@consultpro.cv'
-ADMIN_PASSWORD = 'Admin@ConsultPro2026!'
 ADMIN_USERNAME = 'platform_admin'
 
 
@@ -29,6 +30,13 @@ class Command(BaseCommand):
                 self.stdout.write(f'  skip  {ADMIN_EMAIL} (already has platform admin access)')
             return
 
+        admin_password = os.environ.get('ADMIN_PASSWORD', '')
+        if not admin_password:
+            self.stdout.write(self.style.WARNING(
+                f'  skip  ADMIN_PASSWORD is not set; platform admin {ADMIN_EMAIL} was not created.'
+            ))
+            return
+
         username = ADMIN_USERNAME
         suffix = 1
         while User.objects.filter(username=username).exists():
@@ -45,6 +53,6 @@ class Command(BaseCommand):
             is_superuser=True,
             is_active=True,
         )
-        user.set_password(ADMIN_PASSWORD)
+        user.set_password(admin_password)
         user.save()
         self.stdout.write(self.style.SUCCESS(f'  created  {ADMIN_EMAIL}'))
