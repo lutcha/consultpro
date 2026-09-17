@@ -2,11 +2,12 @@
 // DASHBOARD LAYOUT - With mobile sidebar support
 // ============================================
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { cn } from '@/lib/utils';
+import { apiGetCurrentTenant, type ApiTenant } from '@/lib/api';
 
 interface DashboardLayoutProps {
   className?: string;
@@ -14,11 +15,32 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ className }: DashboardLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [tenant, setTenant] = useState<ApiTenant | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    apiGetCurrentTenant()
+      .then((currentTenant) => {
+        if (active) setTenant(currentTenant);
+      })
+      .catch(() => {
+        if (active) setTenant(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className={cn('flex min-h-screen bg-background', className)}>
       {/* Desktop Sidebar */}
-      <Sidebar className="hidden lg:flex fixed h-screen" />
+      <Sidebar
+        className="hidden lg:flex fixed h-screen"
+        tenantPlan={tenant?.plan}
+        tenantStatus={tenant?.status}
+      />
 
       {/* Mobile Sidebar Overlay */}
       <Sidebar
@@ -27,6 +49,8 @@ export function DashboardLayout({ className }: DashboardLayoutProps) {
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
         onClose={() => setMobileOpen(false)}
+        tenantPlan={tenant?.plan}
+        tenantStatus={tenant?.status}
       />
 
       {/* Mobile overlay backdrop */}
